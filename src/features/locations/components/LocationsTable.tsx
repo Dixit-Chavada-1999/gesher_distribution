@@ -26,11 +26,10 @@ import { deleteLocation } from '../actions';
 
 interface LocationsTableProps {
   data: LocationTableRow[];
-  pageCount?: number;
   isLoading?: boolean;
 }
 
-export function LocationsTable({ data, pageCount = 1, isLoading = false }: LocationsTableProps) {
+export function LocationsTable({ data, isLoading = false }: LocationsTableProps) {
   const router = useRouter();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [locationToDelete, setLocationToDelete] = useState<LocationTableRow | null>(null);
@@ -88,10 +87,10 @@ export function LocationsTable({ data, pageCount = 1, isLoading = false }: Locat
       <DataTable
         columns={columns}
         data={data}
-        pageCount={pageCount}
-        filterColumn="name"
         filterPlaceholder="Filter locations..."
-        isLoading={isLoading}
+        loading={isLoading}
+        enableGlobalFilter
+        searchableColumns={['name', 'code']}
       />
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

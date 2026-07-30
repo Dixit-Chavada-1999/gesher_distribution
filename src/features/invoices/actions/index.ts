@@ -10,11 +10,11 @@ import { revalidatePath } from 'next/cache';
 import { invoiceService } from '../services/invoice.service';
 import { createClient } from '@/shared/lib/supabase/server';
 import type {
-  InvoiceListParams,
-  CreateInvoiceDTO,
-  UpdateInvoiceDTO,
-  RecordPaymentDTO,
-} from '../types';
+  CreateInvoiceInput,
+  UpdateInvoiceInput,
+  RecordPaymentInput,
+} from '../lib/schemas';
+import type { InvoiceListParams } from '../types';
 
 // ============================================
 // HELPER: Get current user ID
@@ -63,7 +63,7 @@ export async function getInvoice(id: string) {
 // CREATE INVOICE
 // ============================================
 
-export async function createInvoice(data: CreateInvoiceDTO) {
+export async function createInvoice(data: CreateInvoiceInput) {
   const userId = await getCurrentUserId();
   const result = await invoiceService.create(data, userId);
 
@@ -78,7 +78,7 @@ export async function createInvoice(data: CreateInvoiceDTO) {
 // UPDATE INVOICE
 // ============================================
 
-export async function updateInvoice(id: string, data: UpdateInvoiceDTO) {
+export async function updateInvoice(id: string, data: UpdateInvoiceInput) {
   const userId = await getCurrentUserId();
   const result = await invoiceService.update(id, data, userId);
 
@@ -109,7 +109,7 @@ export async function deleteInvoice(id: string) {
 // RECORD PAYMENT
 // ============================================
 
-export async function recordInvoicePayment(id: string, data: RecordPaymentDTO) {
+export async function recordInvoicePayment(id: string, data: RecordPaymentInput) {
   const userId = await getCurrentUserId();
   const result = await invoiceService.recordPayment(id, data, userId);
 

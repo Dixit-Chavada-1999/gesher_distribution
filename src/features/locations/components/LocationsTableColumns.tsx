@@ -143,14 +143,40 @@ export function getLocationsTableColumns(options: ColumnOptions = {}): ColumnDef
     },
     {
       id: 'actions',
-      cell: ({ row }) => (
-        <DataTableRowActions
-          row={row}
-          onView={options.onView ? () => options.onView?.(row.original) : undefined}
-          onEdit={options.onEdit ? () => options.onEdit?.(row.original) : undefined}
-          onDelete={options.onDelete ? () => options.onDelete?.(row.original) : undefined}
-        />
-      ),
+      cell: ({ row }) => {
+        const actions = [];
+
+        if (options.onView) {
+          actions.push({
+            label: 'View',
+            onClick: () => options.onView?.(row.original),
+          });
+        }
+
+        if (options.onEdit) {
+          actions.push({
+            label: 'Edit',
+            onClick: () => options.onEdit?.(row.original),
+          });
+        }
+
+        if (options.onDelete) {
+          actions.push({
+            label: 'Delete',
+            onClick: () => options.onDelete?.(row.original),
+            destructive: true,
+          });
+        }
+
+        if (actions.length === 0) return null;
+
+        return (
+          <DataTableRowActions
+            actions={actions}
+            separatorAfter={options.onDelete && actions.length > 1 ? [actions.length - 2] : undefined}
+          />
+        );
+      },
     },
   ];
 }

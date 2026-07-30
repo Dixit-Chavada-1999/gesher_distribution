@@ -230,7 +230,7 @@ export interface CustomerContactFormValues {
 export const DEFAULT_CUSTOMER_CONTACT_FORM_VALUES: CustomerContactFormValues = {
   firstName: '',
   lastName: '',
-  contactType: 'purchasing',
+  contactType: 'primary',
   email: '',
   phone: '',
   mobile: '',

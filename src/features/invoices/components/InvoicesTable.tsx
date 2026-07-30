@@ -43,7 +43,7 @@ export function InvoicesTable({
           <Table>
             <TableHeader>
               <TableRow>
-                {columns.map((column, index) => (
+                {columns.map((_, index) => (
                   <TableHead key={index}>
                     <Skeleton className="h-4 w-20" />
                   </TableHead>

@@ -286,13 +286,13 @@ export function ViewInvoiceDrawer({
             <Separator />
             <div className="flex gap-2">
               {onEdit && invoice.status === 'draft' && (
-                <Button onClick={onEdit} variant="outline" className="flex-1">
+                <Button onClick={() => onEdit(invoice)} variant="outline" className="flex-1">
                   <Pencil className="mr-2 h-4 w-4" />
                   Edit
                 </Button>
               )}
               {onRecordPayment && ['sent', 'partial', 'overdue'].includes(invoice.status) && (
-                <Button onClick={onRecordPayment} className="flex-1">
+                <Button onClick={() => onRecordPayment(invoice)} className="flex-1">
                   <CreditCard className="mr-2 h-4 w-4" />
                   Record Payment
                 </Button>

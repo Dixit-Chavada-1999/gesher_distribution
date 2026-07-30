@@ -48,7 +48,6 @@ async function LocationsContent({ searchParams }: LocationsPageProps) {
   return (
     <LocationsTable
       data={data.data}
-      pageCount={data.meta.totalPages}
     />
   );
 }
