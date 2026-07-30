@@ -338,8 +338,8 @@ export interface ViewInvoiceDrawerProps {
   open: boolean;
   onClose: () => void;
   invoiceId: string | null;
-  onEdit?: () => void;
-  onRecordPayment?: () => void;
+  onEdit?: (invoice: InvoiceListItem | InvoiceWithItems) => void;
+  onRecordPayment?: (invoice: InvoiceListItem | InvoiceWithItems) => void;
 }
 
 export interface RecordPaymentDrawerProps {
