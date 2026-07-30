@@ -190,7 +190,7 @@ export default function PurchaseOrdersPage() {
 
       {/* View Purchase Order Drawer */}
       <ViewPurchaseOrderDrawer
-        purchaseOrderId={selectedPOId}
+        poId={selectedPOId}
         open={isViewDrawerOpen}
         onClose={handleViewDrawerClose}
         onEdit={handleEdit}

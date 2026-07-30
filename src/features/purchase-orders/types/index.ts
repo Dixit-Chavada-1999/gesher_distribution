@@ -305,5 +305,5 @@ export interface ViewPurchaseOrderDrawerProps {
   open: boolean;
   onClose: () => void;
   poId: string | null;
-  onEdit?: () => void;
+  onEdit?: (po: POListItem | PurchaseOrderWithItems) => void;
 }
