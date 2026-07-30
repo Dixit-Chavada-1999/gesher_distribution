@@ -60,13 +60,15 @@ const ALL_STATUSES = 'all';
 interface UsersTableProps {
   /** Called after any mutation, so the page can refresh its stat cards */
   onDataChange?: () => void;
+  /** Initial data from server for React Query hydration */
+  initialData?: unknown;
 }
 
 // ============================================
 // COMPONENT
 // ============================================
 
-function UsersTableComponent({ onDataChange }: UsersTableProps) {
+function UsersTableComponent({ onDataChange, initialData }: UsersTableProps) {
   const currentUserId = useAuthStore((state) => state.appUser?.id);
 
   // Query state
@@ -76,13 +78,19 @@ function UsersTableComponent({ onDataChange }: UsersTableProps) {
   const [status, setStatus] = useState<string>(ALL_STATUSES);
   const [includeDeleted, setIncludeDeleted] = useState(false);
 
-  const { users, meta, loading, refetch } = useUsers({
-    page,
-    limit,
-    search: search || undefined,
-    status: status === ALL_STATUSES ? undefined : (status as UserStatus),
-    includeDeleted,
-  });
+  // Only use initialData for the first page with default filters
+  const isInitialQuery = page === 1 && !search && status === ALL_STATUSES && !includeDeleted;
+
+  const { users, meta, loading, refetch } = useUsers(
+    {
+      page,
+      limit,
+      search: search || undefined,
+      status: status === ALL_STATUSES ? undefined : (status as UserStatus),
+      includeDeleted,
+    },
+    isInitialQuery ? initialData : undefined
+  );
 
   // Dialog state
   const [formOpen, setFormOpen] = useState(false);

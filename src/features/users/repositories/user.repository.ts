@@ -195,7 +195,7 @@ export const userRepository = {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null; // Not found
+      if (error.code === 'PGRST116') {return null;} // Not found
       throw new Error(`Failed to fetch user: ${error.message}`);
     }
 
@@ -223,7 +223,7 @@ export const userRepository = {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null; // Not found
+      if (error.code === 'PGRST116') {return null;} // Not found
       throw new Error(`Failed to fetch user: ${error.message}`);
     }
 
@@ -251,7 +251,7 @@ export const userRepository = {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null; // Not found
+      if (error.code === 'PGRST116') {return null;} // Not found
       throw new Error(`Failed to fetch user: ${error.message}`);
     }
 
@@ -329,12 +329,12 @@ export const userRepository = {
       updated_at: new Date().toISOString(),
     };
 
-    if (data.firstName !== undefined) updateData.first_name = data.firstName;
-    if (data.lastName !== undefined) updateData.last_name = data.lastName;
-    if (data.phone !== undefined) updateData.phone = data.phone;
-    if (data.avatarUrl !== undefined) updateData.avatar_url = data.avatarUrl;
-    if (data.roleId !== undefined) updateData.role_id = data.roleId;
-    if (data.status !== undefined) updateData.status = data.status;
+    if (data.firstName !== undefined) {updateData.first_name = data.firstName;}
+    if (data.lastName !== undefined) {updateData.last_name = data.lastName;}
+    if (data.phone !== undefined) {updateData.phone = data.phone;}
+    if (data.avatarUrl !== undefined) {updateData.avatar_url = data.avatarUrl;}
+    if (data.roleId !== undefined) {updateData.role_id = data.roleId;}
+    if (data.status !== undefined) {updateData.status = data.status;}
 
     const { data: result, error } = await db
       .from('users')

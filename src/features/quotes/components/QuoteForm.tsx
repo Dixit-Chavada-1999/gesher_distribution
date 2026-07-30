@@ -25,11 +25,6 @@ import { QuoteNotesSection } from './QuoteNotesSection';
 
 import { quoteFormSchema, type QuoteFormInput } from '../lib/schemas';
 import { getCustomerAddresses, getProductPrice } from '../actions';
-import type {
-  Customer as CustomerType,
-  Product as ProductType,
-  SalesRep as SalesRepType,
-} from '../types';
 
 // ============================================
 // TYPES
@@ -253,7 +248,7 @@ function QuoteFormComponent({
     itemIndex: number,
     productId: string
   ) => {
-    if (!productId) return;
+    if (!productId) {return;}
 
     try {
       const result = await getProductPrice(productId);
@@ -351,10 +346,10 @@ function QuoteFormComponent({
 
   const itemErrors = useMemo(() => {
     const itemsErrors = errors.items;
-    if (!itemsErrors || !Array.isArray(itemsErrors)) return [];
+    if (!itemsErrors || !Array.isArray(itemsErrors)) {return [];}
 
     return itemsErrors.map((itemError) => {
-      if (!itemError || typeof itemError !== 'object') return {};
+      if (!itemError || typeof itemError !== 'object') {return {};}
 
       const result: Record<string, string> = {};
 

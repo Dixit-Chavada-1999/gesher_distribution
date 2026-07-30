@@ -105,8 +105,8 @@ export function FormDatePicker<
                 selected={field.value}
                 onSelect={field.onChange}
                 disabled={(date) => {
-                  if (fromDate && date < fromDate) return true;
-                  if (toDate && date > toDate) return true;
+                  if (fromDate && date < fromDate) {return true;}
+                  if (toDate && date > toDate) {return true;}
                   return false;
                 }}
                 autoFocus

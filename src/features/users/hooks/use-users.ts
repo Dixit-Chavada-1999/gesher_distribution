@@ -63,14 +63,14 @@ interface UseUserStatusCountsResult {
 async function fetchUsers(params: UserListParams): Promise<UsersData> {
   const query = new URLSearchParams();
 
-  if (params.page) query.set('page', String(params.page));
-  if (params.limit) query.set('limit', String(params.limit));
-  if (params.search) query.set('search', params.search);
-  if (params.status) query.set('status', params.status);
-  if (params.roleId) query.set('roleId', params.roleId);
-  if (params.sortBy) query.set('sortBy', params.sortBy);
-  if (params.sortOrder) query.set('sortOrder', params.sortOrder);
-  if (params.includeDeleted) query.set('includeDeleted', 'true');
+  if (params.page) {query.set('page', String(params.page));}
+  if (params.limit) {query.set('limit', String(params.limit));}
+  if (params.search) {query.set('search', params.search);}
+  if (params.status) {query.set('status', params.status);}
+  if (params.roleId) {query.set('roleId', params.roleId);}
+  if (params.sortBy) {query.set('sortBy', params.sortBy);}
+  if (params.sortOrder) {query.set('sortOrder', params.sortOrder);}
+  if (params.includeDeleted) {query.set('includeDeleted', 'true');}
 
   const response = await fetch(`/api/users?${query.toString()}`);
   const data = await response.json();
@@ -134,13 +134,29 @@ async function fetchUserStatusCounts(): Promise<UserStatusCounts> {
  * holds the current page, so the list stays fast as the user count grows.
  *
  * @param params - Pagination, filtering, and sorting parameters
+ * @param initialData - Server-side fetched data for hydration (improves FCP/LCP)
  */
-export function useUsers(params: UserListParams = {}): UseUsersResult {
+export function useUsers(params: UserListParams = {}, initialData?: unknown): UseUsersResult {
+  // Transform server-side data to match client format if provided
+  const serverData = initialData as { data?: UserTableRow[]; meta?: ListMeta } | undefined;
+  const transformedInitialData: UsersData | undefined = serverData?.data
+    ? {
+        users: serverData.data.map((row) => ({
+          ...row,
+          lastLoginAt: row.lastLoginAt ? new Date(row.lastLoginAt) : null,
+          createdAt: new Date(row.createdAt),
+        })),
+        meta: serverData.meta ?? null,
+      }
+    : undefined;
+
   const query = useQuery({
     queryKey: queryKeys.users.list(params),
     queryFn: () => fetchUsers(params),
     // Users list changes frequently - shorter cache time
     staleTime: 30 * 1000,
+    // Use server-fetched data as initial data (no loading state on first render)
+    initialData: transformedInitialData,
   });
 
   const refetch = useCallback(async () => {
@@ -190,13 +206,17 @@ export function useUser(id: string | null): UseUserResult {
  *
  * Uses React Query for caching. Dashboard stats are cached briefly
  * to avoid excessive refreshes while still staying relatively current.
+ *
+ * @param initialData - Server-side fetched counts for hydration (improves FCP/LCP)
  */
-export function useUserStatusCounts(): UseUserStatusCountsResult {
+export function useUserStatusCounts(initialData?: UserStatusCounts | null): UseUserStatusCountsResult {
   const query = useQuery({
     queryKey: queryKeys.users.counts(),
     queryFn: fetchUserStatusCounts,
     // Counts change with user operations - cache for 30 seconds
     staleTime: 30 * 1000,
+    // Use server-fetched data as initial data (no loading state on first render)
+    initialData: initialData ?? undefined,
   });
 
   const refetch = useCallback(async () => {

@@ -199,19 +199,19 @@ export const customerContactService = {
 
       // Convert to DTO
       const dto: UpdateCustomerContactDTO = {};
-      if (validation.data.firstName !== undefined) dto.firstName = validation.data.firstName;
-      if (validation.data.lastName !== undefined) dto.lastName = validation.data.lastName;
-      if (validation.data.title !== undefined) dto.title = validation.data.title;
-      if (validation.data.contactType !== undefined) dto.contactType = validation.data.contactType;
-      if (validation.data.email !== undefined) dto.email = validation.data.email;
-      if (validation.data.phone !== undefined) dto.phone = validation.data.phone;
-      if (validation.data.mobile !== undefined) dto.mobile = validation.data.mobile;
-      if (validation.data.fax !== undefined) dto.fax = validation.data.fax;
-      if (validation.data.isPrimary !== undefined) dto.isPrimary = validation.data.isPrimary;
-      if (validation.data.receivesInvoices !== undefined) dto.receivesInvoices = validation.data.receivesInvoices;
-      if (validation.data.receivesStatements !== undefined) dto.receivesStatements = validation.data.receivesStatements;
-      if (validation.data.receivesMarketing !== undefined) dto.receivesMarketing = validation.data.receivesMarketing;
-      if (validation.data.notes !== undefined) dto.notes = validation.data.notes;
+      if (validation.data.firstName !== undefined) {dto.firstName = validation.data.firstName;}
+      if (validation.data.lastName !== undefined) {dto.lastName = validation.data.lastName;}
+      if (validation.data.title !== undefined) {dto.title = validation.data.title;}
+      if (validation.data.contactType !== undefined) {dto.contactType = validation.data.contactType;}
+      if (validation.data.email !== undefined) {dto.email = validation.data.email;}
+      if (validation.data.phone !== undefined) {dto.phone = validation.data.phone;}
+      if (validation.data.mobile !== undefined) {dto.mobile = validation.data.mobile;}
+      if (validation.data.fax !== undefined) {dto.fax = validation.data.fax;}
+      if (validation.data.isPrimary !== undefined) {dto.isPrimary = validation.data.isPrimary;}
+      if (validation.data.receivesInvoices !== undefined) {dto.receivesInvoices = validation.data.receivesInvoices;}
+      if (validation.data.receivesStatements !== undefined) {dto.receivesStatements = validation.data.receivesStatements;}
+      if (validation.data.receivesMarketing !== undefined) {dto.receivesMarketing = validation.data.receivesMarketing;}
+      if (validation.data.notes !== undefined) {dto.notes = validation.data.notes;}
 
       const contact = await customerContactRepository.update(id, dto, userId);
 

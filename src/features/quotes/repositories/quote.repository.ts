@@ -235,11 +235,11 @@ class QuoteRepositoryImpl {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch quote: ${error.message}`);
     }
 
-    if (!quote) return null;
+    if (!quote) {return null;}
 
     // Fetch items
     const items = await this.findItemsByQuoteId(id);
@@ -274,11 +274,11 @@ class QuoteRepositoryImpl {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch quote: ${error.message}`);
     }
 
-    if (!data) return null;
+    if (!data) {return null;}
 
     return this.findById(data.id);
   }
@@ -308,7 +308,7 @@ class QuoteRepositoryImpl {
    * Get item counts for multiple quotes
    */
   private async getItemCounts(quoteIds: string[]): Promise<Record<string, number>> {
-    if (quoteIds.length === 0) return {};
+    if (quoteIds.length === 0) {return {};}
 
     const { data, error } = await db
       .from('quote_items')
@@ -475,9 +475,9 @@ class QuoteRepositoryImpl {
     if (data.validUntil !== undefined) {
       updateData.valid_until = data.validUntil?.toISOString().split('T')[0] || null;
     }
-    if (data.customerId !== undefined) updateData.customer_id = data.customerId;
-    if (data.salesRepId !== undefined) updateData.sales_rep_id = data.salesRepId;
-    if (data.currencyCode !== undefined) updateData.currency_code = data.currencyCode;
+    if (data.customerId !== undefined) {updateData.customer_id = data.customerId;}
+    if (data.salesRepId !== undefined) {updateData.sales_rep_id = data.salesRepId;}
+    if (data.currencyCode !== undefined) {updateData.currency_code = data.currencyCode;}
     if (data.billingAddress !== undefined) {
       updateData.billing_address_street = data.billingAddress.street;
       updateData.billing_address_city = data.billingAddress.city;
@@ -492,9 +492,9 @@ class QuoteRepositoryImpl {
       updateData.shipping_address_postal_code = data.shippingAddress.postalCode;
       updateData.shipping_address_country = data.shippingAddress.country;
     }
-    if (data.customerNotes !== undefined) updateData.customer_notes = data.customerNotes;
-    if (data.internalNotes !== undefined) updateData.internal_notes = data.internalNotes;
-    if (data.termsAndConditions !== undefined) updateData.terms_and_conditions = data.termsAndConditions;
+    if (data.customerNotes !== undefined) {updateData.customer_notes = data.customerNotes;}
+    if (data.internalNotes !== undefined) {updateData.internal_notes = data.internalNotes;}
+    if (data.termsAndConditions !== undefined) {updateData.terms_and_conditions = data.termsAndConditions;}
 
     const { data: result, error } = await db
       .from('quotes')
@@ -742,7 +742,7 @@ class QuoteRepositoryImpl {
       .eq('id', customerId)
       .single();
 
-    if (error || !data) return null;
+    if (error || !data) {return null;}
 
     const customer = data as DbCustomer;
     return {
@@ -761,7 +761,7 @@ class QuoteRepositoryImpl {
       .eq('id', userId)
       .single();
 
-    if (error || !data) return null;
+    if (error || !data) {return null;}
 
     const user = data as DbUser;
     return {
@@ -779,7 +779,7 @@ class QuoteRepositoryImpl {
       .eq('id', salesOrderId)
       .single();
 
-    if (error || !data) return null;
+    if (error || !data) {return null;}
 
     const order = data as DbSalesOrder;
     return {

@@ -638,9 +638,9 @@ export async function getQuoteMasterData(): Promise<ActionResult<{
         .order('first_name'),
     ]);
 
-    if (!customersResult.success) throw new Error(customersResult.error);
-    if (productsResult.error) throw productsResult.error;
-    if (usersResult.error) throw usersResult.error;
+    if (!customersResult.success) {throw new Error(customersResult.error);}
+    if (productsResult.error) {throw productsResult.error;}
+    if (usersResult.error) {throw usersResult.error;}
 
     return {
       success: true,

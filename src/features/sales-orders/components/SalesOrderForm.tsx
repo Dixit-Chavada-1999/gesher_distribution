@@ -160,7 +160,7 @@ function SalesOrderFormComponent({
     itemIndex: number,
     productId: string
   ) => {
-    if (!productId) return;
+    if (!productId) {return;}
 
     try {
       const result = await getProductPrice(productId);

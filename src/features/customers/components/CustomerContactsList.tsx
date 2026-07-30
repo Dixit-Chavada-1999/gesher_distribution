@@ -134,7 +134,7 @@ export function CustomerContactsList({ customerId }: CustomerContactsListProps) 
   };
 
   const handleEditSubmit = useCallback(async (data: ContactFormInput) => {
-    if (!editingContact) return;
+    if (!editingContact) {return;}
 
     setIsSubmitting(true);
     try {
@@ -170,7 +170,7 @@ export function CustomerContactsList({ customerId }: CustomerContactsListProps) 
   };
 
   const handleDeleteConfirm = useCallback(async () => {
-    if (!deletingContact) return;
+    if (!deletingContact) {return;}
 
     setIsSubmitting(true);
     try {

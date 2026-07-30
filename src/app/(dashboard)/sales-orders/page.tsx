@@ -142,7 +142,7 @@ export default function SalesOrdersPage() {
   }, []);
 
   const handleDeleteConfirm = async () => {
-    if (!orderToDelete) return;
+    if (!orderToDelete) {return;}
 
     setIsDeleting(true);
     try {
@@ -153,7 +153,7 @@ export default function SalesOrdersPage() {
       } else {
         toast.error(result.error || 'Failed to delete order');
       }
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete order');
     } finally {
       setIsDeleting(false);

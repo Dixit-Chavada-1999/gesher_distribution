@@ -131,12 +131,12 @@ export class CustomerContactRepository {
       updated_by: userId || null,
     };
 
-    if (data.firstName !== undefined) updateData.first_name = data.firstName;
-    if (data.lastName !== undefined) updateData.last_name = data.lastName;
-    if (data.contactType !== undefined) updateData.contact_type = data.contactType;
-    if (data.email !== undefined) updateData.email = data.email;
-    if (data.phone !== undefined) updateData.phone = data.phone;
-    if (data.mobile !== undefined) updateData.mobile = data.mobile;
+    if (data.firstName !== undefined) {updateData.first_name = data.firstName;}
+    if (data.lastName !== undefined) {updateData.last_name = data.lastName;}
+    if (data.contactType !== undefined) {updateData.contact_type = data.contactType;}
+    if (data.email !== undefined) {updateData.email = data.email;}
+    if (data.phone !== undefined) {updateData.phone = data.phone;}
+    if (data.mobile !== undefined) {updateData.mobile = data.mobile;}
 
     const { data: result, error } = await db
       .from('customer_contacts')

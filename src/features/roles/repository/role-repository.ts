@@ -67,7 +67,7 @@ class RoleRepositoryImpl {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch role: ${error.message}`);
     }
 
@@ -86,7 +86,7 @@ class RoleRepositoryImpl {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch role: ${error.message}`);
     }
 
@@ -123,11 +123,11 @@ class RoleRepositoryImpl {
 
     // Check for role errors
     if (roleResult.error) {
-      if (roleResult.error.code === 'PGRST116') return null;
+      if (roleResult.error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch role: ${roleResult.error.message}`);
     }
 
-    if (!roleResult.data) return null;
+    if (!roleResult.data) {return null;}
 
     // Check for permissions error
     if (permsResult.error) {
@@ -347,10 +347,10 @@ class RoleRepositoryImpl {
       updated_at: new Date().toISOString(),
     };
 
-    if (roleData.name !== undefined) updateData.name = roleData.name;
-    if (roleData.displayName !== undefined) updateData.display_name = roleData.displayName;
-    if (roleData.description !== undefined) updateData.description = roleData.description;
-    if (roleData.level !== undefined) updateData.level = roleData.level;
+    if (roleData.name !== undefined) {updateData.name = roleData.name;}
+    if (roleData.displayName !== undefined) {updateData.display_name = roleData.displayName;}
+    if (roleData.description !== undefined) {updateData.description = roleData.description;}
+    if (roleData.level !== undefined) {updateData.level = roleData.level;}
 
     // Update role
     const { error: updateError } = await db
@@ -423,7 +423,7 @@ class RoleRepositoryImpl {
 
     return (data || []).map((r) => {
       const perm = r.permissions as { name: string } | { name: string }[] | null;
-      if (Array.isArray(perm)) return perm[0]?.name;
+      if (Array.isArray(perm)) {return perm[0]?.name;}
       return perm?.name;
     }).filter((name): name is string => Boolean(name));
   }

@@ -64,7 +64,7 @@ export function CustomersTable({
   };
 
   const handleDeleteConfirm = async () => {
-    if (!customerToDelete) return;
+    if (!customerToDelete) {return;}
 
     setIsDeleting(true);
     try {

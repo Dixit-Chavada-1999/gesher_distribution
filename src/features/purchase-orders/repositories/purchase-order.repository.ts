@@ -14,7 +14,6 @@ import type {
   POListParams,
   CreatePurchaseOrderDTO,
   UpdatePurchaseOrderDTO,
-  CreatePOItemDTO,
   POStatus,
   PaginatedResult,
   SalesOrderSummary,
@@ -195,11 +194,11 @@ class PurchaseOrderRepositoryImpl {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch purchase order: ${error.message}`);
     }
 
-    if (!po) return null;
+    if (!po) {return null;}
 
     const items = await this.findItemsByPOId(id);
 
@@ -237,7 +236,7 @@ class PurchaseOrderRepositoryImpl {
    * Get item counts for multiple POs
    */
   private async getItemCounts(poIds: string[]): Promise<Record<string, number>> {
-    if (poIds.length === 0) return {};
+    if (poIds.length === 0) {return {};}
 
     const { data, error } = await db
       .from('purchase_order_items')
@@ -358,8 +357,8 @@ class PurchaseOrderRepositoryImpl {
     if (data.expectedDeliveryDate !== undefined) {
       updateData.expected_delivery_date = data.expectedDeliveryDate?.toISOString().split('T')[0] || null;
     }
-    if (data.warehouseId !== undefined) updateData.warehouse_id = data.warehouseId;
-    if (data.currencyCode !== undefined) updateData.currency_code = data.currencyCode;
+    if (data.warehouseId !== undefined) {updateData.warehouse_id = data.warehouseId;}
+    if (data.currencyCode !== undefined) {updateData.currency_code = data.currencyCode;}
     if (data.vendorAddress !== undefined) {
       updateData.vendor_address_street = data.vendorAddress.street;
       updateData.vendor_address_city = data.vendorAddress.city;
@@ -374,8 +373,8 @@ class PurchaseOrderRepositoryImpl {
       updateData.ship_to_address_postal_code = data.shipToAddress.postalCode;
       updateData.ship_to_address_country = data.shipToAddress.country;
     }
-    if (data.vendorNotes !== undefined) updateData.vendor_notes = data.vendorNotes;
-    if (data.internalNotes !== undefined) updateData.internal_notes = data.internalNotes;
+    if (data.vendorNotes !== undefined) {updateData.vendor_notes = data.vendorNotes;}
+    if (data.internalNotes !== undefined) {updateData.internal_notes = data.internalNotes;}
 
     const { data: result, error } = await db
       .from('purchase_orders')
@@ -453,7 +452,7 @@ class PurchaseOrderRepositoryImpl {
       .eq('id', soId)
       .single();
 
-    if (error || !data) return null;
+    if (error || !data) {return null;}
 
     return {
       id: data.id,
@@ -469,7 +468,7 @@ class PurchaseOrderRepositoryImpl {
       .eq('id', locationId)
       .single();
 
-    if (error || !data) return null;
+    if (error || !data) {return null;}
 
     return {
       id: data.id,

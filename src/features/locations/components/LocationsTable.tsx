@@ -56,7 +56,7 @@ export function LocationsTable({ data, pageCount = 1, isLoading = false }: Locat
   }, []);
 
   const handleDeleteConfirm = async () => {
-    if (!locationToDelete) return;
+    if (!locationToDelete) {return;}
 
     setIsDeleting(true);
     try {

@@ -13,7 +13,6 @@ import type {
   ShipmentListParams,
   CreateShipmentDTO,
   UpdateShipmentDTO,
-  CreateShipmentItemDTO,
   ShipmentStatus,
   PaginatedResult,
   SalesOrderSummary,
@@ -195,11 +194,11 @@ class ShipmentRepositoryImpl {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch shipment: ${error.message}`);
     }
 
-    if (!shipment) return null;
+    if (!shipment) {return null;}
 
     const items = await this.findItemsByShipmentId(id);
 
@@ -239,7 +238,7 @@ class ShipmentRepositoryImpl {
    * Get item counts for multiple shipments
    */
   private async getItemCounts(shipmentIds: string[]): Promise<Record<string, number>> {
-    if (shipmentIds.length === 0) return {};
+    if (shipmentIds.length === 0) {return {};}
 
     const { data, error } = await db
       .from('shipment_items')
@@ -391,11 +390,11 @@ class ShipmentRepositoryImpl {
     if (data.actualArrival !== undefined) {
       updateData.actual_arrival = data.actualArrival?.toISOString().split('T')[0] || null;
     }
-    if (data.carrier !== undefined) updateData.carrier = data.carrier;
-    if (data.trackingNumber !== undefined) updateData.tracking_number = data.trackingNumber;
-    if (data.serviceType !== undefined) updateData.service_type = data.serviceType;
-    if (data.fromLocationId !== undefined) updateData.from_location_id = data.fromLocationId;
-    if (data.shipToName !== undefined) updateData.ship_to_name = data.shipToName;
+    if (data.carrier !== undefined) {updateData.carrier = data.carrier;}
+    if (data.trackingNumber !== undefined) {updateData.tracking_number = data.trackingNumber;}
+    if (data.serviceType !== undefined) {updateData.service_type = data.serviceType;}
+    if (data.fromLocationId !== undefined) {updateData.from_location_id = data.fromLocationId;}
+    if (data.shipToName !== undefined) {updateData.ship_to_name = data.shipToName;}
     if (data.shipToAddress !== undefined) {
       updateData.ship_to_address_street = data.shipToAddress.street;
       updateData.ship_to_address_city = data.shipToAddress.city;
@@ -403,11 +402,11 @@ class ShipmentRepositoryImpl {
       updateData.ship_to_address_postal_code = data.shipToAddress.postalCode;
       updateData.ship_to_address_country = data.shipToAddress.country;
     }
-    if (data.totalWeight !== undefined) updateData.total_weight = data.totalWeight;
-    if (data.weightUnit !== undefined) updateData.weight_unit = data.weightUnit;
-    if (data.totalPackages !== undefined) updateData.total_packages = data.totalPackages;
-    if (data.notes !== undefined) updateData.notes = data.notes;
-    if (data.deliveryInstructions !== undefined) updateData.delivery_instructions = data.deliveryInstructions;
+    if (data.totalWeight !== undefined) {updateData.total_weight = data.totalWeight;}
+    if (data.weightUnit !== undefined) {updateData.weight_unit = data.weightUnit;}
+    if (data.totalPackages !== undefined) {updateData.total_packages = data.totalPackages;}
+    if (data.notes !== undefined) {updateData.notes = data.notes;}
+    if (data.deliveryInstructions !== undefined) {updateData.delivery_instructions = data.deliveryInstructions;}
 
     const { data: result, error } = await db
       .from('shipments')
@@ -484,7 +483,7 @@ class ShipmentRepositoryImpl {
       .eq('id', soId)
       .single();
 
-    if (error || !data) return null;
+    if (error || !data) {return null;}
 
     return {
       id: data.id,
@@ -500,7 +499,7 @@ class ShipmentRepositoryImpl {
       .eq('id', poId)
       .single();
 
-    if (error || !data) return null;
+    if (error || !data) {return null;}
 
     return {
       id: data.id,
@@ -516,7 +515,7 @@ class ShipmentRepositoryImpl {
       .eq('id', locationId)
       .single();
 
-    if (error || !data) return null;
+    if (error || !data) {return null;}
 
     return {
       id: data.id,

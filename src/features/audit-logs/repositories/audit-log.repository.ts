@@ -163,7 +163,7 @@ export const auditLogRepository = {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null; // Not found
+      if (error.code === 'PGRST116') {return null;} // Not found
       throw new Error(`Failed to fetch audit log: ${error.message}`);
     }
 
@@ -204,7 +204,7 @@ export const auditLogRepository = {
     // Get unique modules
     const modules = new Set<string>();
     (data || []).forEach((row) => {
-      if (row.module) modules.add(row.module);
+      if (row.module) {modules.add(row.module);}
     });
 
     return Array.from(modules);

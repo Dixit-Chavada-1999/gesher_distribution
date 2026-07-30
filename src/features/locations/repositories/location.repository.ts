@@ -148,7 +148,7 @@ class LocationRepositoryImpl {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch location: ${error.message}`);
     }
 
@@ -167,7 +167,7 @@ class LocationRepositoryImpl {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch location: ${error.message}`);
     }
 
@@ -209,7 +209,7 @@ class LocationRepositoryImpl {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch default location: ${error.message}`);
     }
 
@@ -259,20 +259,20 @@ class LocationRepositoryImpl {
       updated_at: new Date().toISOString(),
     };
 
-    if (data.locationCode !== undefined) updateData.location_code = data.locationCode;
-    if (data.name !== undefined) updateData.name = data.name;
-    if (data.locationType !== undefined) updateData.location_type = data.locationType;
-    if (data.address1 !== undefined) updateData.address_1 = data.address1;
-    if (data.address2 !== undefined) updateData.address_2 = data.address2;
-    if (data.city !== undefined) updateData.city = data.city;
-    if (data.state !== undefined) updateData.state = data.state;
-    if (data.zip !== undefined) updateData.zip = data.zip;
-    if (data.country !== undefined) updateData.country = data.country;
-    if (data.contactName !== undefined) updateData.contact_name = data.contactName;
-    if (data.contactPhone !== undefined) updateData.contact_phone = data.contactPhone;
-    if (data.contactEmail !== undefined) updateData.contact_email = data.contactEmail;
-    if (data.isActive !== undefined) updateData.is_active = data.isActive;
-    if (data.isDefault !== undefined) updateData.is_default = data.isDefault;
+    if (data.locationCode !== undefined) {updateData.location_code = data.locationCode;}
+    if (data.name !== undefined) {updateData.name = data.name;}
+    if (data.locationType !== undefined) {updateData.location_type = data.locationType;}
+    if (data.address1 !== undefined) {updateData.address_1 = data.address1;}
+    if (data.address2 !== undefined) {updateData.address_2 = data.address2;}
+    if (data.city !== undefined) {updateData.city = data.city;}
+    if (data.state !== undefined) {updateData.state = data.state;}
+    if (data.zip !== undefined) {updateData.zip = data.zip;}
+    if (data.country !== undefined) {updateData.country = data.country;}
+    if (data.contactName !== undefined) {updateData.contact_name = data.contactName;}
+    if (data.contactPhone !== undefined) {updateData.contact_phone = data.contactPhone;}
+    if (data.contactEmail !== undefined) {updateData.contact_email = data.contactEmail;}
+    if (data.isActive !== undefined) {updateData.is_active = data.isActive;}
+    if (data.isDefault !== undefined) {updateData.is_default = data.isDefault;}
 
     const { data: result, error } = await db
       .from('locations')

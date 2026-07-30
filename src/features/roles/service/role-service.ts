@@ -98,7 +98,7 @@ class RoleServiceImpl {
    */
   async getRoleById(id: string): Promise<RoleDetail | null> {
     const role = await roleRepository.findByIdWithPermissions(id);
-    if (!role) return null;
+    if (!role) {return null;}
 
     return {
       id: role.id,

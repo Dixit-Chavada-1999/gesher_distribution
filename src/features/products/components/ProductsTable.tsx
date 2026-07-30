@@ -56,7 +56,7 @@ export function ProductsTable({ data, pageCount = 1, isLoading = false }: Produc
   }, []);
 
   const handleDeleteConfirm = async () => {
-    if (!productToDelete) return;
+    if (!productToDelete) {return;}
 
     setIsDeleting(true);
     try {

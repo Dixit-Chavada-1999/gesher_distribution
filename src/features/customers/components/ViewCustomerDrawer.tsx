@@ -57,7 +57,7 @@ interface ViewCustomerDrawerProps {
 // ============================================
 
 function InfoItem({ label, value, icon }: { label: string; value: React.ReactNode; icon?: React.ReactNode }) {
-  if (!value) return null;
+  if (!value) {return null;}
   return (
     <div className="flex items-start gap-3">
       {icon && <div className="text-muted-foreground mt-0.5 flex-shrink-0">{icon}</div>}
@@ -97,7 +97,7 @@ function AddressCard({ label, address, icon }: {
   }
 }) {
   const hasAddress = address.address1 || address.city || address.state;
-  if (!hasAddress) return null;
+  if (!hasAddress) {return null;}
 
   const lines = [
     address.address1,
@@ -335,7 +335,7 @@ export function ViewCustomerDrawer({
   // ----------------------------------------
 
   const fetchCustomer = async () => {
-    if (!customerId) return;
+    if (!customerId) {return;}
 
     setIsLoading(true);
     setError(null);

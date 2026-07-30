@@ -39,7 +39,7 @@ export const priceFromStringSchema = z
   .transform((val) => {
     const cleaned = val.replace(/[^0-9.]/g, '');
     const dollars = parseFloat(cleaned);
-    if (isNaN(dollars)) return 0;
+    if (isNaN(dollars)) {return 0;}
     return Math.round(dollars * 100); // Convert to cents
   })
   .pipe(priceInCentsSchema);

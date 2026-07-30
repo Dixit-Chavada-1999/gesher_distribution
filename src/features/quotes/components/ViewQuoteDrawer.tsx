@@ -58,7 +58,7 @@ function formatCurrency(cents: number): string {
 }
 
 function formatDate(date: Date | string | null): string {
-  if (!date) return '-';
+  if (!date) {return '-';}
   const d = typeof date === 'string' ? new Date(date) : date;
   return d.toLocaleDateString('en-US', {
     year: 'numeric',
@@ -72,7 +72,7 @@ function formatDate(date: Date | string | null): string {
 // ============================================
 
 function InfoItem({ label, value, icon }: { label: string; value: React.ReactNode; icon?: React.ReactNode }) {
-  if (!value || value === '-') return null;
+  if (!value || value === '-') {return null;}
   return (
     <div className="flex items-start gap-3">
       {icon && <div className="text-muted-foreground mt-0.5 flex-shrink-0">{icon}</div>}
@@ -110,7 +110,7 @@ function AddressDisplay({ label, address }: {
   }
 }) {
   const hasAddress = address.street || address.city || address.state;
-  if (!hasAddress) return null;
+  if (!hasAddress) {return null;}
 
   const lines = [
     address.street,
@@ -168,7 +168,7 @@ export function ViewQuoteDrawer({
   // ----------------------------------------
 
   const fetchQuote = async () => {
-    if (!quoteId) return;
+    if (!quoteId) {return;}
 
     setIsLoading(true);
     setError(null);
@@ -180,7 +180,7 @@ export function ViewQuoteDrawer({
       } else {
         setError(result.error || 'Failed to load quote');
       }
-    } catch (err) {
+    } catch {
       setError('Failed to load quote');
     } finally {
       setIsLoading(false);

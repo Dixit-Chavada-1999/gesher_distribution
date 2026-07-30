@@ -661,10 +661,10 @@ export async function getSalesOrderMasterData(): Promise<ActionResult<{
         .order('first_name'),
     ]);
 
-    if (!customersResult.success) throw new Error(customersResult.error);
-    if (productsResult.error) throw productsResult.error;
-    if (warehousesResult.error) throw warehousesResult.error;
-    if (usersResult.error) throw usersResult.error;
+    if (!customersResult.success) {throw new Error(customersResult.error);}
+    if (productsResult.error) {throw productsResult.error;}
+    if (warehousesResult.error) {throw warehousesResult.error;}
+    if (usersResult.error) {throw usersResult.error;}
 
     return {
       success: true,

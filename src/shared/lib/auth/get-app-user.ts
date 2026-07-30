@@ -54,7 +54,7 @@ async function fetchAppUserByAuthId(authUserId: string): Promise<AppUser | null>
       .single();
 
     if (userError) {
-      if (userError.code === 'PGRST116') return null; // Not found
+      if (userError.code === 'PGRST116') {return null;} // Not found
       console.error('[getAppUserByAuthId] Database error:', userError);
       return null;
     }
@@ -96,7 +96,7 @@ async function fetchAppUserByAuthId(authUserId: string): Promise<AppUser | null>
         permissionNames = (permsResult.data || [])
           .map((rp) => {
             const perm = rp.permissions as { name: string } | { name: string }[] | null;
-            if (Array.isArray(perm)) return perm[0]?.name;
+            if (Array.isArray(perm)) {return perm[0]?.name;}
             return perm?.name;
           })
           .filter((name): name is string => Boolean(name));

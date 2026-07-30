@@ -4,14 +4,30 @@
  * /customers/[id]
  *
  * Full page view for customer details with tabs for Details, Contacts, and Documents.
+ *
+ * Performance Optimizations:
+ * - Uses React cache() to deduplicate getCustomer() calls between page and generateMetadata
  */
 
+import { cache } from 'react';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { Loader2 } from 'lucide-react';
 
 import { getCustomer } from '@/features/customers/actions';
 import { CustomerDetailView } from '@/features/customers/components/CustomerDetailView';
+
+// ============================================
+// CACHED DATA FETCHING
+// ============================================
+
+/**
+ * Cached version of getCustomer - deduplicates calls within the same render pass.
+ * Both page component and generateMetadata use this, but only 1 actual API call happens.
+ */
+const getCachedCustomer = cache(async (id: string) => {
+  return await getCustomer(id);
+});
 
 // ============================================
 // TYPES
@@ -28,8 +44,8 @@ interface CustomerDetailPageProps {
 export default async function CustomerDetailPage({ params }: CustomerDetailPageProps) {
   const { id } = await params;
 
-  // Fetch customer data
-  const result = await getCustomer(id);
+  // Fetch customer data (uses cached version - deduplicated with generateMetadata)
+  const result = await getCachedCustomer(id);
 
   if (!result.success || !result.data) {
     notFound();
@@ -54,7 +70,8 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageP
 
 export async function generateMetadata({ params }: CustomerDetailPageProps) {
   const { id } = await params;
-  const result = await getCustomer(id);
+  // Uses cached result from page component - no duplicate API call
+  const result = await getCachedCustomer(id);
 
   if (!result.success || !result.data) {
     return {

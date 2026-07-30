@@ -115,7 +115,7 @@ export function UploadDocumentDrawer({
   // ----------------------------------------
 
   const handleClose = () => {
-    if (isSubmitting) return;
+    if (isSubmitting) {return;}
     resetForm();
     onClose();
   };
@@ -171,8 +171,8 @@ export function UploadDocumentDrawer({
 
       if (mode === 'replace' && documentToReplace) {
         formData.append('documentId', documentToReplace.id);
-        if (expiryDate) formData.append('expiryDate', expiryDate);
-        if (remarks) formData.append('remarks', remarks);
+        if (expiryDate) {formData.append('expiryDate', expiryDate);}
+        if (remarks) {formData.append('remarks', remarks);}
 
         const result = await replaceDocument(formData);
 
@@ -187,8 +187,8 @@ export function UploadDocumentDrawer({
       } else {
         formData.append('customerId', customerId);
         formData.append('documentTypeId', documentTypeId);
-        if (expiryDate) formData.append('expiryDate', expiryDate);
-        if (remarks) formData.append('remarks', remarks);
+        if (expiryDate) {formData.append('expiryDate', expiryDate);}
+        if (remarks) {formData.append('remarks', remarks);}
 
         const result = await uploadDocument(formData);
 

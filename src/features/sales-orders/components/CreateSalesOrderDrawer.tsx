@@ -55,7 +55,7 @@ export function CreateSalesOrderDrawer({
   // ----------------------------------------
 
   const handleCancel = () => {
-    if (isSubmitting || isSavingDraft) return;
+    if (isSubmitting || isSavingDraft) {return;}
     onClose();
   };
 

@@ -46,7 +46,7 @@ export function DocumentPreviewDialog({
   }, [open, document?.id]);
 
   const fetchUrl = async () => {
-    if (!document) return;
+    if (!document) {return;}
 
     setIsLoading(true);
     setError(null);
@@ -80,7 +80,7 @@ export function DocumentPreviewDialog({
     }
   };
 
-  if (!document) return null;
+  if (!document) {return null;}
 
   const canPreview = isPreviewable(document.mimeType);
   const fileTypeLabel = MIME_TYPE_LABELS[document.mimeType] || document.mimeType;

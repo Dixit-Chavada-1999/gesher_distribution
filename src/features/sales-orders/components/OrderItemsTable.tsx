@@ -278,11 +278,11 @@ function OrderItemsTableComponent({
     value: string | number
   ) => {
     const itemIndex = items.findIndex((item) => item.id === itemId);
-    if (itemIndex === -1) return;
+    if (itemIndex === -1) {return;}
 
     onItemsChange(
       items.map((item, index) => {
-        if (item.id !== itemId) return item;
+        if (item.id !== itemId) {return item;}
 
         const updatedItem = { ...item, [field]: value };
 
@@ -367,7 +367,7 @@ function OrderItemsTableComponent({
                   colSpan={10}
                   className="h-24 text-center text-muted-foreground"
                 >
-                  No items added. Click "Add Line" to add products.
+                  No items added. Click &quot;Add Line&quot; to add products.
                 </TableCell>
               </TableRow>
             ) : (

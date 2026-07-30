@@ -94,11 +94,11 @@ class CostComponentRepositoryImpl {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch cost component: ${error.message}`);
     }
 
-    if (!data) return null;
+    if (!data) {return null;}
 
     return this.mapToCostComponentWithDetails(data);
   }
@@ -138,10 +138,10 @@ class CostComponentRepositoryImpl {
       updated_at: new Date().toISOString(),
     };
 
-    if (data.componentType !== undefined) updateData.component_type = data.componentType;
-    if (data.description !== undefined) updateData.description = data.description;
-    if (data.amount !== undefined) updateData.amount = data.amount;
-    if (data.currencyCode !== undefined) updateData.currency_code = data.currencyCode;
+    if (data.componentType !== undefined) {updateData.component_type = data.componentType;}
+    if (data.description !== undefined) {updateData.description = data.description;}
+    if (data.amount !== undefined) {updateData.amount = data.amount;}
+    if (data.currencyCode !== undefined) {updateData.currency_code = data.currencyCode;}
 
     const { data: result, error } = await db
       .from('cost_components')

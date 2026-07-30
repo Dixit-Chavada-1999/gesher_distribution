@@ -21,7 +21,7 @@ export function AuthHydrator({ appUser, children }: AuthHydratorProps) {
 
   useEffect(() => {
     // Only hydrate once
-    if (hasHydrated.current) return;
+    if (hasHydrated.current) {return;}
     hasHydrated.current = true;
 
     if (appUser) {

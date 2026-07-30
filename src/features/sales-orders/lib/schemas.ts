@@ -357,7 +357,7 @@ function getTaxRateFromId(taxRateId: string): number {
 
 function getTaxRateId(taxRate: number): string {
   for (const [id, rate] of Object.entries(TAX_RATES)) {
-    if (rate === taxRate) return id;
+    if (rate === taxRate) {return id;}
   }
   return 'tax-003'; // Default to tax exempt
 }

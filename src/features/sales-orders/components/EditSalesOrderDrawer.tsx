@@ -80,7 +80,7 @@ export function EditSalesOrderDrawer({
   // ----------------------------------------
 
   const fetchOrder = async () => {
-    if (!orderId) return;
+    if (!orderId) {return;}
 
     setIsLoading(true);
     setError(null);
@@ -98,7 +98,7 @@ export function EditSalesOrderDrawer({
       } else {
         setError(result.error || 'Failed to load order');
       }
-    } catch (err) {
+    } catch {
       setError('Failed to load order');
     } finally {
       setIsLoading(false);
@@ -110,13 +110,13 @@ export function EditSalesOrderDrawer({
   // ----------------------------------------
 
   const handleCancel = () => {
-    if (isSubmitting) return;
+    if (isSubmitting) {return;}
     onClose();
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleUpdate = async (formData: any) => {
-    if (!orderId || !order) return;
+    if (!orderId || !order) {return;}
 
     setIsSubmitting(true);
 

@@ -15,7 +15,7 @@ export default function CustomerNotFound() {
       <FileQuestion className="h-16 w-16 text-muted-foreground/50 mb-6" />
       <h1 className="text-2xl font-semibold mb-2">Customer Not Found</h1>
       <p className="text-muted-foreground mb-6 max-w-md">
-        The customer you're looking for doesn't exist or may have been deleted.
+        The customer you&apos;re looking for doesn&apos;t exist or may have been deleted.
       </p>
       <Button asChild>
         <Link href="/customers">Back to Customers</Link>

@@ -222,16 +222,16 @@ export function formatAddress(location: {
 }): string {
   const parts: string[] = [];
 
-  if (location.address1) parts.push(location.address1);
-  if (location.address2) parts.push(location.address2);
+  if (location.address1) {parts.push(location.address1);}
+  if (location.address2) {parts.push(location.address2);}
 
   const cityStateZip: string[] = [];
-  if (location.city) cityStateZip.push(location.city);
-  if (location.state) cityStateZip.push(location.state);
-  if (location.zip) cityStateZip.push(location.zip);
+  if (location.city) {cityStateZip.push(location.city);}
+  if (location.state) {cityStateZip.push(location.state);}
+  if (location.zip) {cityStateZip.push(location.zip);}
 
-  if (cityStateZip.length > 0) parts.push(cityStateZip.join(', '));
-  if (location.country && location.country !== 'US') parts.push(location.country);
+  if (cityStateZip.length > 0) {parts.push(cityStateZip.join(', '));}
+  if (location.country && location.country !== 'US') {parts.push(location.country);}
 
   return parts.join('\n');
 }

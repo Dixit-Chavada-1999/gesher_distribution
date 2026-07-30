@@ -409,7 +409,7 @@ export class PipedriveProvider implements ICrmProvider {
         `persons/${externalId}`
       );
 
-      if (!response.data) return null;
+      if (!response.data) {return null;}
       return this.mapPipedriveContact(response.data);
     } catch {
       return null;
@@ -551,7 +551,7 @@ export class PipedriveProvider implements ICrmProvider {
         `organizations/${externalId}`
       );
 
-      if (!response.data) return null;
+      if (!response.data) {return null;}
       return this.mapPipedriveOrganization(response.data);
     } catch {
       return null;
@@ -591,8 +591,8 @@ export class PipedriveProvider implements ICrmProvider {
     }
 
     const pipedriveOrg: Partial<PipedriveOrganization> = {};
-    if (organization.name) pipedriveOrg.name = organization.name;
-    if (organization.address?.street) pipedriveOrg.address = organization.address.street;
+    if (organization.name) {pipedriveOrg.name = organization.name;}
+    if (organization.address?.street) {pipedriveOrg.address = organization.address.street;}
 
     const response = await this.apiRequest<PipedriveOrganization>(
       tokenInfo.environment,
@@ -689,7 +689,7 @@ export class PipedriveProvider implements ICrmProvider {
         `deals/${externalId}`
       );
 
-      if (!response.data) return null;
+      if (!response.data) {return null;}
       return this.mapPipedriveDeal(response.data);
     } catch {
       return null;
@@ -732,10 +732,10 @@ export class PipedriveProvider implements ICrmProvider {
     }
 
     const pipedriveDeal: Partial<PipedriveDeal> = {};
-    if (deal.title) pipedriveDeal.title = deal.title;
-    if (deal.value !== undefined) pipedriveDeal.value = deal.value;
-    if (deal.stageId) pipedriveDeal.stage_id = parseInt(deal.stageId);
-    if (deal.status) pipedriveDeal.status = deal.status;
+    if (deal.title) {pipedriveDeal.title = deal.title;}
+    if (deal.value !== undefined) {pipedriveDeal.value = deal.value;}
+    if (deal.stageId) {pipedriveDeal.stage_id = parseInt(deal.stageId);}
+    if (deal.status) {pipedriveDeal.status = deal.status;}
 
     const response = await this.apiRequest<PipedriveDeal>(
       tokenInfo.environment,
@@ -855,9 +855,9 @@ export class PipedriveProvider implements ICrmProvider {
     }
 
     const pipedriveActivity: Partial<PipedriveActivity> = {};
-    if (activity.subject) pipedriveActivity.subject = activity.subject;
-    if (activity.description) pipedriveActivity.note = activity.description;
-    if (activity.done !== undefined) pipedriveActivity.done = activity.done;
+    if (activity.subject) {pipedriveActivity.subject = activity.subject;}
+    if (activity.description) {pipedriveActivity.note = activity.description;}
+    if (activity.done !== undefined) {pipedriveActivity.done = activity.done;}
 
     const response = await this.apiRequest<PipedriveActivity>(
       tokenInfo.environment,
@@ -952,8 +952,8 @@ export class PipedriveProvider implements ICrmProvider {
     }
 
     const pipedriveNote: Partial<PipedriveNote> = {};
-    if (note.content) pipedriveNote.content = note.content;
-    if (note.pinnedToTop !== undefined) pipedriveNote.pinned_to_deal_flag = note.pinnedToTop;
+    if (note.content) {pipedriveNote.content = note.content;}
+    if (note.pinnedToTop !== undefined) {pipedriveNote.pinned_to_deal_flag = note.pinnedToTop;}
 
     const response = await this.apiRequest<PipedriveNote>(
       tokenInfo.environment,

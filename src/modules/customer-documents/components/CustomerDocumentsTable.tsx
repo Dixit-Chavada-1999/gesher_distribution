@@ -67,7 +67,7 @@ function FileTypeIcon({ mimeType }: { mimeType: string }) {
 }
 
 function ExpiryBadge({ expiryDate }: { expiryDate: string | null }) {
-  if (!expiryDate) return <span className="text-muted-foreground">-</span>;
+  if (!expiryDate) {return <span className="text-muted-foreground">-</span>;}
 
   const date = new Date(expiryDate);
   const isExpired = isPast(date);

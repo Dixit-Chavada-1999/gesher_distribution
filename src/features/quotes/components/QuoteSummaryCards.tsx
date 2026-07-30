@@ -32,21 +32,6 @@ interface QuoteSummaryCardsProps {
 // HELPER FUNCTIONS
 // ============================================
 
-// Cached formatter for better performance
-const currencyFormatters = new Map<string, Intl.NumberFormat>();
-
-function getCurrencyFormatter(currency: string = 'USD'): Intl.NumberFormat {
-  if (!currencyFormatters.has(currency)) {
-    currencyFormatters.set(currency, new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }));
-  }
-  return currencyFormatters.get(currency)!;
-}
-
 function formatCurrency(value: number, symbol: string = '$'): string {
   // Simple format with symbol
   return `${symbol}${Math.abs(value).toFixed(2)}`;

@@ -12,7 +12,7 @@
  * - Optimized row rendering
  */
 
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
@@ -319,7 +319,7 @@ function QuoteItemsTableComponent({
     value: string | number
   ) => {
     const updatedItems = items.map((item, i) => {
-      if (i !== index) return item;
+      if (i !== index) {return item;}
 
       const updatedItem = { ...item, [field]: value };
 

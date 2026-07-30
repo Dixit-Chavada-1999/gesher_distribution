@@ -135,7 +135,7 @@ export function CustomerForm({
   initialData,
   onSubmit,
   onCancel: _onCancel,
-  isLoading = false,
+  isLoading: _isLoading = false,
   mode: _mode = 'create',
   serverErrors,
 }: CustomerFormProps) {

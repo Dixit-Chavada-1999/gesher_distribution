@@ -157,7 +157,7 @@ export function useCustomerById(customerId: string | undefined) {
   const { data } = useSalesOrderMasterData();
 
   return useMemo(() => {
-    if (!customerId) return null;
+    if (!customerId) {return null;}
     return data.customers.find((c) => c.id === customerId) ?? null;
   }, [data.customers, customerId]);
 }
@@ -169,7 +169,7 @@ export function useProductById(productId: string | undefined) {
   const { data } = useSalesOrderMasterData();
 
   return useMemo(() => {
-    if (!productId) return null;
+    if (!productId) {return null;}
     return data.products.find((p) => p.id === productId) ?? null;
   }, [data.products, productId]);
 }

@@ -14,7 +14,6 @@ import type {
   InvoiceListParams,
   CreateInvoiceDTO,
   UpdateInvoiceDTO,
-  CreateInvoiceItemDTO,
   RecordPaymentDTO,
   InvoiceStatus,
   PaginatedResult,
@@ -230,11 +229,11 @@ class InvoiceRepositoryImpl {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch invoice: ${error.message}`);
     }
 
-    if (!invoice) return null;
+    if (!invoice) {return null;}
 
     const [items, payments, customer, salesOrder, shipment] = await Promise.all([
       this.findItemsByInvoiceId(id),
@@ -292,7 +291,7 @@ class InvoiceRepositoryImpl {
    * Get item counts for multiple invoices
    */
   private async getItemCounts(invoiceIds: string[]): Promise<Record<string, number>> {
-    if (invoiceIds.length === 0) return {};
+    if (invoiceIds.length === 0) {return {};}
 
     const { data, error } = await db
       .from('invoice_items')
@@ -411,9 +410,9 @@ class InvoiceRepositoryImpl {
     if (data.dueDate !== undefined) {
       updateData.due_date = data.dueDate?.toISOString().split('T')[0] || null;
     }
-    if (data.customerId !== undefined) updateData.customer_id = data.customerId;
-    if (data.currencyCode !== undefined) updateData.currency_code = data.currencyCode;
-    if (data.paymentTerms !== undefined) updateData.payment_terms = data.paymentTerms;
+    if (data.customerId !== undefined) {updateData.customer_id = data.customerId;}
+    if (data.currencyCode !== undefined) {updateData.currency_code = data.currencyCode;}
+    if (data.paymentTerms !== undefined) {updateData.payment_terms = data.paymentTerms;}
     if (data.billingAddress !== undefined) {
       updateData.billing_address_street = data.billingAddress.street;
       updateData.billing_address_city = data.billingAddress.city;
@@ -421,9 +420,9 @@ class InvoiceRepositoryImpl {
       updateData.billing_address_postal_code = data.billingAddress.postalCode;
       updateData.billing_address_country = data.billingAddress.country;
     }
-    if (data.customerNotes !== undefined) updateData.customer_notes = data.customerNotes;
-    if (data.internalNotes !== undefined) updateData.internal_notes = data.internalNotes;
-    if (data.paymentNotes !== undefined) updateData.payment_notes = data.paymentNotes;
+    if (data.customerNotes !== undefined) {updateData.customer_notes = data.customerNotes;}
+    if (data.internalNotes !== undefined) {updateData.internal_notes = data.internalNotes;}
+    if (data.paymentNotes !== undefined) {updateData.payment_notes = data.paymentNotes;}
 
     const { data: result, error } = await db
       .from('invoices')
@@ -553,7 +552,7 @@ class InvoiceRepositoryImpl {
       .eq('id', customerId)
       .single();
 
-    if (error || !data) return null;
+    if (error || !data) {return null;}
 
     return {
       id: data.id,
@@ -571,7 +570,7 @@ class InvoiceRepositoryImpl {
       .eq('id', soId)
       .single();
 
-    if (error || !data) return null;
+    if (error || !data) {return null;}
 
     return {
       id: data.id,
@@ -587,7 +586,7 @@ class InvoiceRepositoryImpl {
       .eq('id', shipmentId)
       .single();
 
-    if (error || !data) return null;
+    if (error || !data) {return null;}
 
     return {
       id: data.id,

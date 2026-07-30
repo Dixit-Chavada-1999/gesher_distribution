@@ -68,7 +68,7 @@ export function CreateQuoteDrawer({ open, onClose, onSuccess }: CreateQuoteDrawe
   const [masterData, setMasterData] = useState<MasterData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [isSavingDraft, _setIsSavingDraft] = useState(false);
   const [serverErrors, setServerErrors] = useState<Record<string, string[]> | undefined>(undefined);
 
   // Fetch master data when drawer opens

@@ -222,7 +222,7 @@ export function Sidebar() {
   };
 
   const isActive = (href: string) => {
-    if (href === '/dashboard') return pathname === href;
+    if (href === '/dashboard') {return pathname === href;}
     return pathname.startsWith(href);
   };
 
@@ -236,7 +236,7 @@ export function Sidebar() {
               (item) => !item.permission || hasPermission(item.permission)
             );
 
-            if (filteredItems.length === 0) return null;
+            if (filteredItems.length === 0) {return null;}
 
             return (
               <div key={section.title}>

@@ -190,7 +190,7 @@ export async function deleteFile(storagePath: string): Promise<void> {
  * Delete multiple files from storage
  */
 export async function deleteFiles(storagePaths: string[]): Promise<void> {
-  if (storagePaths.length === 0) return;
+  if (storagePaths.length === 0) {return;}
 
   const { error } = await db.storage
     .from(BUCKET_NAME)

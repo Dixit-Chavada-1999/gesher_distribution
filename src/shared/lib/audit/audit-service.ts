@@ -81,7 +81,7 @@ class AuditServiceImpl {
    * Sanitize values by removing sensitive fields
    */
   private sanitizeValues(values?: Record<string, unknown>): Record<string, unknown> | undefined {
-    if (!values) return undefined;
+    if (!values) {return undefined;}
 
     const sanitized: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(values)) {
@@ -103,7 +103,7 @@ class AuditServiceImpl {
     previous?: Record<string, unknown>,
     current?: Record<string, unknown>
   ): Record<string, { from: unknown; to: unknown }> | undefined {
-    if (!previous || !current) return undefined;
+    if (!previous || !current) {return undefined;}
 
     const changes: Record<string, { from: unknown; to: unknown }> = {};
     const allKeys = new Set([...Object.keys(previous), ...Object.keys(current)]);
@@ -440,13 +440,13 @@ class AuditServiceImpl {
       .select('*', { count: 'exact' });
 
     // Apply filters
-    if (entityType) query = query.eq('entity_type', entityType);
-    if (entityId) query = query.eq('entity_id', entityId);
-    if (module) query = query.eq('module', module);
-    if (action) query = query.eq('action', action);
-    if (userId) query = query.eq('user_id', userId);
-    if (fromDate) query = query.gte('created_at', fromDate.toISOString());
-    if (toDate) query = query.lte('created_at', toDate.toISOString());
+    if (entityType) {query = query.eq('entity_type', entityType);}
+    if (entityId) {query = query.eq('entity_id', entityId);}
+    if (module) {query = query.eq('module', module);}
+    if (action) {query = query.eq('action', action);}
+    if (userId) {query = query.eq('user_id', userId);}
+    if (fromDate) {query = query.gte('created_at', fromDate.toISOString());}
+    if (toDate) {query = query.lte('created_at', toDate.toISOString());}
 
     // Apply sorting and pagination
     query = query

@@ -114,7 +114,7 @@ export function CustomerDocumentsTab({ customerId }: CustomerDocumentsTabProps) 
   };
 
   const handleArchiveConfirm = useCallback(async () => {
-    if (!archiveTarget) return;
+    if (!archiveTarget) {return;}
 
     setIsArchiving(true);
     try {

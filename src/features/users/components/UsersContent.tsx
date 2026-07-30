@@ -8,6 +8,7 @@
  * Performance Optimizations:
  * - Uses React.memo to prevent unnecessary re-renders
  * - Memoized cards array with useMemo
+ * - Server-side initial data hydration for faster FCP/LCP
  */
 
 import { memo, useMemo } from 'react';
@@ -15,6 +16,18 @@ import { Card, CardContent } from '@/shared/components/ui/card';
 
 import { useUserStatusCounts } from '../hooks/use-users';
 import { UsersTable } from './UsersTable';
+import type { UserStatusCounts } from '../types';
+
+// ============================================
+// TYPES
+// ============================================
+
+interface UsersContentProps {
+  /** Initial users data from server (for React Query hydration) */
+  initialUsers?: unknown;
+  /** Initial counts data from server (for React Query hydration) */
+  initialCounts?: UserStatusCounts | null;
+}
 
 // ============================================
 // STAT CARD COMPONENT
@@ -43,8 +56,8 @@ const StatCard = memo(function StatCard({ label, value, loading }: StatCardProps
 // COMPONENT
 // ============================================
 
-function UsersContentComponent() {
-  const { counts, loading, refetch } = useUserStatusCounts();
+function UsersContentComponent({ initialUsers, initialCounts }: UsersContentProps) {
+  const { counts, loading, refetch } = useUserStatusCounts(initialCounts);
 
   // Memoized cards data
   const cards = useMemo(() => [
@@ -67,7 +80,7 @@ function UsersContentComponent() {
         ))}
       </div>
 
-      <UsersTable onDataChange={refetch} />
+      <UsersTable onDataChange={refetch} initialData={initialUsers} />
     </div>
   );
 }

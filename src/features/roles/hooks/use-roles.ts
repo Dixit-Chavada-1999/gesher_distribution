@@ -24,8 +24,8 @@ async function fetchRoles(filters?: {
   isSystem?: boolean;
 }): Promise<RoleListItem[]> {
   const params = new URLSearchParams();
-  if (filters?.search) params.set('search', filters.search);
-  if (filters?.isSystem !== undefined) params.set('isSystem', String(filters.isSystem));
+  if (filters?.search) {params.set('search', filters.search);}
+  if (filters?.isSystem !== undefined) {params.set('isSystem', String(filters.isSystem));}
 
   const response = await fetch(`/api/roles?${params.toString()}`);
   const data = await response.json();

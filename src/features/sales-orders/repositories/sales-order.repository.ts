@@ -249,11 +249,11 @@ class SalesOrderRepositoryImpl {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch sales order: ${error.message}`);
     }
 
-    if (!order) return null;
+    if (!order) {return null;}
 
     // Fetch items
     const items = await this.findItemsByOrderId(id);
@@ -286,11 +286,11 @@ class SalesOrderRepositoryImpl {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch sales order: ${error.message}`);
     }
 
-    if (!data) return null;
+    if (!data) {return null;}
 
     return this.findById(data.id);
   }
@@ -320,7 +320,7 @@ class SalesOrderRepositoryImpl {
    * Get item counts for multiple orders
    */
   private async getItemCounts(orderIds: string[]): Promise<Record<string, number>> {
-    if (orderIds.length === 0) return {};
+    if (orderIds.length === 0) {return {};}
 
     const { data, error } = await db
       .from('sales_order_items')
@@ -494,11 +494,11 @@ class SalesOrderRepositoryImpl {
     if (data.requestedDeliveryDate !== undefined) {
       updateData.requested_delivery_date = data.requestedDeliveryDate?.toISOString().split('T')[0] || null;
     }
-    if (data.customerId !== undefined) updateData.customer_id = data.customerId;
-    if (data.salesRepId !== undefined) updateData.sales_rep_id = data.salesRepId;
-    if (data.warehouseId !== undefined) updateData.warehouse_id = data.warehouseId;
-    if (data.currencyCode !== undefined) updateData.currency_code = data.currencyCode;
-    if (data.customerPoNumber !== undefined) updateData.customer_po_number = data.customerPoNumber;
+    if (data.customerId !== undefined) {updateData.customer_id = data.customerId;}
+    if (data.salesRepId !== undefined) {updateData.sales_rep_id = data.salesRepId;}
+    if (data.warehouseId !== undefined) {updateData.warehouse_id = data.warehouseId;}
+    if (data.currencyCode !== undefined) {updateData.currency_code = data.currencyCode;}
+    if (data.customerPoNumber !== undefined) {updateData.customer_po_number = data.customerPoNumber;}
     if (data.billingAddress !== undefined) {
       updateData.billing_address_street = data.billingAddress.street;
       updateData.billing_address_city = data.billingAddress.city;
@@ -513,9 +513,9 @@ class SalesOrderRepositoryImpl {
       updateData.shipping_address_postal_code = data.shippingAddress.postalCode;
       updateData.shipping_address_country = data.shippingAddress.country;
     }
-    if (data.shippingMethod !== undefined) updateData.shipping_method = data.shippingMethod;
-    if (data.customerNotes !== undefined) updateData.customer_notes = data.customerNotes;
-    if (data.internalNotes !== undefined) updateData.internal_notes = data.internalNotes;
+    if (data.shippingMethod !== undefined) {updateData.shipping_method = data.shippingMethod;}
+    if (data.customerNotes !== undefined) {updateData.customer_notes = data.customerNotes;}
+    if (data.internalNotes !== undefined) {updateData.internal_notes = data.internalNotes;}
 
     const { data: result, error } = await db
       .from('sales_orders')
@@ -717,17 +717,17 @@ class SalesOrderRepositoryImpl {
       updated_at: new Date().toISOString(),
     };
 
-    if (data.productId !== undefined) updateData.product_id = data.productId;
-    if (data.sku !== undefined) updateData.sku = data.sku;
-    if (data.description !== undefined) updateData.description = data.description;
-    if (data.quantity !== undefined) updateData.quantity = data.quantity;
-    if (data.unitCode !== undefined) updateData.unit_code = data.unitCode;
-    if (data.unitPrice !== undefined) updateData.unit_price = data.unitPrice;
-    if (data.discountPercent !== undefined) updateData.discount_percent = data.discountPercent;
-    if (data.taxRate !== undefined) updateData.tax_rate = data.taxRate;
-    if (data.warehouseId !== undefined) updateData.warehouse_id = data.warehouseId;
-    if (data.batchNumber !== undefined) updateData.batch_number = data.batchNumber;
-    if (data.serialNumber !== undefined) updateData.serial_number = data.serialNumber;
+    if (data.productId !== undefined) {updateData.product_id = data.productId;}
+    if (data.sku !== undefined) {updateData.sku = data.sku;}
+    if (data.description !== undefined) {updateData.description = data.description;}
+    if (data.quantity !== undefined) {updateData.quantity = data.quantity;}
+    if (data.unitCode !== undefined) {updateData.unit_code = data.unitCode;}
+    if (data.unitPrice !== undefined) {updateData.unit_price = data.unitPrice;}
+    if (data.discountPercent !== undefined) {updateData.discount_percent = data.discountPercent;}
+    if (data.taxRate !== undefined) {updateData.tax_rate = data.taxRate;}
+    if (data.warehouseId !== undefined) {updateData.warehouse_id = data.warehouseId;}
+    if (data.batchNumber !== undefined) {updateData.batch_number = data.batchNumber;}
+    if (data.serialNumber !== undefined) {updateData.serial_number = data.serialNumber;}
 
     // Recalculate line total
     const quantity = data.quantity ?? currentItem.quantity;
@@ -844,7 +844,7 @@ class SalesOrderRepositoryImpl {
       .eq('id', customerId)
       .single();
 
-    if (error || !data) return null;
+    if (error || !data) {return null;}
 
     const customer = data as DbCustomer;
     return {
@@ -863,7 +863,7 @@ class SalesOrderRepositoryImpl {
       .eq('id', userId)
       .single();
 
-    if (error || !data) return null;
+    if (error || !data) {return null;}
 
     const user = data as DbUser;
     return {
@@ -881,7 +881,7 @@ class SalesOrderRepositoryImpl {
       .eq('id', locationId)
       .single();
 
-    if (error || !data) return null;
+    if (error || !data) {return null;}
 
     const location = data as DbLocation;
     return {

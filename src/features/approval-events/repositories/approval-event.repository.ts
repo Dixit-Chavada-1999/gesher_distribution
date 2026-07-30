@@ -14,7 +14,6 @@ import type {
   ApprovalEventType,
   ApprovalStatus,
   PaginatedResult,
-  UserSummary,
 } from '../types';
 
 // ============================================
@@ -184,11 +183,11 @@ class ApprovalEventRepositoryImpl {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch approval event: ${error.message}`);
     }
 
-    if (!data) return null;
+    if (!data) {return null;}
 
     return this.mapToApprovalEventWithDetails(data);
   }

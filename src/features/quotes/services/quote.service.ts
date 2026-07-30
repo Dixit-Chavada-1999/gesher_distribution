@@ -469,7 +469,6 @@ export const quoteService = {
       );
 
       // Update the sales order with quote reference
-      const { salesOrderRepository } = await import('@/features/sales-orders/repositories');
       const { db } = await import('@/shared/lib/supabase/database');
       await db
         .from('sales_orders')

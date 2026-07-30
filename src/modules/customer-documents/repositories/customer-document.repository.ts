@@ -217,13 +217,13 @@ export const customerDocumentRepository = {
   async update(
     id: string,
     data: UpdateDocumentDTO,
-    userId?: string
+    _userId?: string
   ): Promise<CustomerDocument> {
     const updateData: Record<string, unknown> = {};
 
-    if (data.expiryDate !== undefined) updateData.expiry_date = data.expiryDate;
-    if (data.status !== undefined) updateData.status = data.status;
-    if (data.remarks !== undefined) updateData.remarks = data.remarks;
+    if (data.expiryDate !== undefined) {updateData.expiry_date = data.expiryDate;}
+    if (data.status !== undefined) {updateData.status = data.status;}
+    if (data.remarks !== undefined) {updateData.remarks = data.remarks;}
 
     // Always update updated_at (trigger will handle this, but being explicit)
     updateData.updated_at = new Date().toISOString();
@@ -254,7 +254,7 @@ export const customerDocumentRepository = {
   /**
    * Soft delete a document
    */
-  async softDelete(id: string, userId?: string): Promise<void> {
+  async softDelete(id: string, _userId?: string): Promise<void> {
     const { error } = await db
       .from('customer_documents')
       .update({
@@ -275,7 +275,7 @@ export const customerDocumentRepository = {
   async getVersionHistory(documentId: string): Promise<CustomerDocumentListItem[]> {
     // First get the document to find the chain
     const document = await this.getById(documentId);
-    if (!document) return [];
+    if (!document) {return [];}
 
     // Get all documents in the version chain
     const { data, error } = await db

@@ -26,7 +26,7 @@ async function getCurrentUserId(): Promise<string | undefined> {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user) return undefined;
+    if (!user) {return undefined;}
 
     const { data } = await supabase
       .from('users')

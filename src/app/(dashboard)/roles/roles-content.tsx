@@ -295,7 +295,7 @@ function RolesPageContentComponent() {
 
   // Get selected role's permission IDs as a Set for quick lookup
   const selectedRolePermissionIds = useMemo(() => {
-    if (!selectedRole?.permissions) return new Set<string>();
+    if (!selectedRole?.permissions) {return new Set<string>();}
     return new Set(selectedRole.permissions.map(p => p.id));
   }, [selectedRole]);
 
@@ -360,7 +360,7 @@ function RolesPageContentComponent() {
   }, []);
 
   const handlePermissionToggle = useCallback(async (permission: Permission, isEnabled: boolean) => {
-    if (!selectedRole || !selectedRoleId) return;
+    if (!selectedRole || !selectedRoleId) {return;}
 
     try {
       const currentPermissionIds = selectedRole.permissions.map(p => p.id);

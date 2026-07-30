@@ -73,7 +73,7 @@ interface CustomerDetailViewProps {
 // ============================================
 
 function InfoItem({ label, value, icon }: { label: string; value: React.ReactNode; icon?: React.ReactNode }) {
-  if (!value) return null;
+  if (!value) {return null;}
   return (
     <div>
       <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1.5">

@@ -154,7 +154,7 @@ class ProductRepositoryImpl {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch product: ${error.message}`);
     }
 
@@ -173,7 +173,7 @@ class ProductRepositoryImpl {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch product: ${error.message}`);
     }
 
@@ -245,19 +245,19 @@ class ProductRepositoryImpl {
       updated_at: new Date().toISOString(),
     };
 
-    if (data.sku !== undefined) updateData.sku = data.sku;
-    if (data.name !== undefined) updateData.name = data.name;
-    if (data.description !== undefined) updateData.description = data.description;
-    if (data.shortDescription !== undefined) updateData.short_description = data.shortDescription;
-    if (data.category !== undefined) updateData.category = data.category;
-    if (data.rimSize !== undefined) updateData.rim_size = data.rimSize;
-    if (data.tireSize !== undefined) updateData.tire_size = data.tireSize;
-    if (data.weightLbs !== undefined) updateData.weight_lbs = data.weightLbs?.toString() ?? null;
-    if (data.baseCost !== undefined) updateData.base_cost = data.baseCost;
-    if (data.basePrice !== undefined) updateData.base_price = data.basePrice;
-    if (data.status !== undefined) updateData.status = data.status;
-    if (data.isSellable !== undefined) updateData.is_sellable = data.isSellable;
-    if (data.imageUrl !== undefined) updateData.image_url = data.imageUrl;
+    if (data.sku !== undefined) {updateData.sku = data.sku;}
+    if (data.name !== undefined) {updateData.name = data.name;}
+    if (data.description !== undefined) {updateData.description = data.description;}
+    if (data.shortDescription !== undefined) {updateData.short_description = data.shortDescription;}
+    if (data.category !== undefined) {updateData.category = data.category;}
+    if (data.rimSize !== undefined) {updateData.rim_size = data.rimSize;}
+    if (data.tireSize !== undefined) {updateData.tire_size = data.tireSize;}
+    if (data.weightLbs !== undefined) {updateData.weight_lbs = data.weightLbs?.toString() ?? null;}
+    if (data.baseCost !== undefined) {updateData.base_cost = data.baseCost;}
+    if (data.basePrice !== undefined) {updateData.base_price = data.basePrice;}
+    if (data.status !== undefined) {updateData.status = data.status;}
+    if (data.isSellable !== undefined) {updateData.is_sellable = data.isSellable;}
+    if (data.imageUrl !== undefined) {updateData.image_url = data.imageUrl;}
 
     const { data: result, error } = await db
       .from('products')

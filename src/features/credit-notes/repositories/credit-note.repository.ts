@@ -189,11 +189,11 @@ class CreditNoteRepositoryImpl {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch credit note: ${error.message}`);
     }
 
-    if (!cn) return null;
+    if (!cn) {return null;}
 
     const items = await this.findItemsByCreditNoteId(id);
 
@@ -233,7 +233,7 @@ class CreditNoteRepositoryImpl {
    * Get item counts for multiple credit notes
    */
   private async getItemCounts(cnIds: string[]): Promise<Record<string, number>> {
-    if (cnIds.length === 0) return {};
+    if (cnIds.length === 0) {return {};}
 
     const { data, error } = await db
       .from('credit_note_items')
@@ -337,10 +337,10 @@ class CreditNoteRepositoryImpl {
     if (data.creditNoteDate !== undefined) {
       updateData.credit_note_date = data.creditNoteDate.toISOString().split('T')[0];
     }
-    if (data.reason !== undefined) updateData.reason = data.reason;
-    if (data.reasonDescription !== undefined) updateData.reason_description = data.reasonDescription;
-    if (data.customerNotes !== undefined) updateData.customer_notes = data.customerNotes;
-    if (data.internalNotes !== undefined) updateData.internal_notes = data.internalNotes;
+    if (data.reason !== undefined) {updateData.reason = data.reason;}
+    if (data.reasonDescription !== undefined) {updateData.reason_description = data.reasonDescription;}
+    if (data.customerNotes !== undefined) {updateData.customer_notes = data.customerNotes;}
+    if (data.internalNotes !== undefined) {updateData.internal_notes = data.internalNotes;}
 
     const { data: result, error } = await db
       .from('credit_notes')
@@ -428,7 +428,7 @@ class CreditNoteRepositoryImpl {
       .eq('id', customerId)
       .single();
 
-    if (error || !data) return null;
+    if (error || !data) {return null;}
 
     return {
       id: data.id,
@@ -444,7 +444,7 @@ class CreditNoteRepositoryImpl {
       .eq('id', invoiceId)
       .single();
 
-    if (error || !data) return null;
+    if (error || !data) {return null;}
 
     return {
       id: data.id,
@@ -459,7 +459,7 @@ class CreditNoteRepositoryImpl {
       .eq('id', soId)
       .single();
 
-    if (error || !data) return null;
+    if (error || !data) {return null;}
 
     return {
       id: data.id,

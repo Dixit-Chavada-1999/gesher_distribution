@@ -84,7 +84,7 @@ export function EditCustomerDrawer({
   // ----------------------------------------
 
   const fetchCustomer = async () => {
-    if (!customerId) return;
+    if (!customerId) {return;}
 
     setIsLoading(true);
     setError(null);
@@ -96,7 +96,7 @@ export function EditCustomerDrawer({
       } else {
         setError(result.error || 'Failed to load customer');
       }
-    } catch (err) {
+    } catch {
       setError('Failed to load customer');
     } finally {
       setIsLoading(false);

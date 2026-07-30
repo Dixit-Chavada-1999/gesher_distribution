@@ -49,7 +49,7 @@ class PermissionRepositoryImpl {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch permission: ${error.message}`);
     }
 
@@ -68,7 +68,7 @@ class PermissionRepositoryImpl {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch permission: ${error.message}`);
     }
 
@@ -112,11 +112,11 @@ class PermissionRepositoryImpl {
 
     for (const permission of data || []) {
       const perm = this.mapToPermission(permission as DbPermission);
-      const module = perm.module;
-      if (!grouped[module]) {
-        grouped[module] = [];
+      const permModule = perm.module;
+      if (!grouped[permModule]) {
+        grouped[permModule] = [];
       }
-      grouped[module].push(perm);
+      grouped[permModule].push(perm);
     }
 
     return Object.entries(grouped).map(([module, permissions]) => ({
@@ -241,7 +241,7 @@ class PermissionRepositoryImpl {
     permissions: CreatePermissionData[],
     createdBy?: string
   ): Promise<number> {
-    if (permissions.length === 0) return 0;
+    if (permissions.length === 0) {return 0;}
 
     const { data, error } = await db
       .from('permissions')
@@ -275,9 +275,9 @@ class PermissionRepositoryImpl {
       updated_at: new Date().toISOString(),
     };
 
-    if (data.displayName !== undefined) updateData.display_name = data.displayName;
-    if (data.description !== undefined) updateData.description = data.description;
-    if (data.category !== undefined) updateData.category = data.category;
+    if (data.displayName !== undefined) {updateData.display_name = data.displayName;}
+    if (data.description !== undefined) {updateData.description = data.description;}
+    if (data.category !== undefined) {updateData.category = data.category;}
 
     const { data: result, error } = await db
       .from('permissions')

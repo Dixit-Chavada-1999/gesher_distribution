@@ -14,8 +14,6 @@ import type {
   CreateInventoryDTO,
   UpdateInventoryDTO,
   PaginatedResult,
-  ProductSummary,
-  LocationSummary,
 } from '../types';
 
 // ============================================
@@ -166,11 +164,11 @@ class InventoryRepositoryImpl {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch inventory: ${error.message}`);
     }
 
-    if (!data) return null;
+    if (!data) {return null;}
 
     return this.mapToInventoryWithDetails(data);
   }
@@ -190,11 +188,11 @@ class InventoryRepositoryImpl {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch inventory: ${error.message}`);
     }
 
-    if (!data) return null;
+    if (!data) {return null;}
 
     return this.mapToInventory(data as DbInventory);
   }
@@ -234,10 +232,10 @@ class InventoryRepositoryImpl {
       updated_at: new Date().toISOString(),
     };
 
-    if (data.onHand !== undefined) updateData.on_hand = data.onHand;
-    if (data.allocated !== undefined) updateData.allocated = data.allocated;
-    if (data.reorderPoint !== undefined) updateData.reorder_point = data.reorderPoint;
-    if (data.reorderQty !== undefined) updateData.reorder_qty = data.reorderQty;
+    if (data.onHand !== undefined) {updateData.on_hand = data.onHand;}
+    if (data.allocated !== undefined) {updateData.allocated = data.allocated;}
+    if (data.reorderPoint !== undefined) {updateData.reorder_point = data.reorderPoint;}
+    if (data.reorderQty !== undefined) {updateData.reorder_qty = data.reorderQty;}
 
     const { data: result, error } = await db
       .from('inventory')

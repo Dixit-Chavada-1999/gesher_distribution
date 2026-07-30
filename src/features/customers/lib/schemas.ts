@@ -375,7 +375,7 @@ export function formatCreditLimit(cents: number): string {
  * Format phone number for display
  */
 export function formatPhoneNumber(phone: string | null): string {
-  if (!phone) return '';
+  if (!phone) {return '';}
   // Simple formatting for US phone numbers
   const cleaned = phone.replace(/\D/g, '');
   if (cleaned.length === 10) {

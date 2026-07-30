@@ -203,11 +203,11 @@ class CustomerRepositoryImpl {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch customer: ${error.message}`);
     }
 
-    if (!data) return null;
+    if (!data) {return null;}
 
     return this.mapToCustomer(data as DbCustomer);
   }
@@ -224,11 +224,11 @@ class CustomerRepositoryImpl {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch customer: ${error.message}`);
     }
 
-    if (!data) return null;
+    if (!data) {return null;}
 
     return this.mapToCustomer(data as DbCustomer);
   }
@@ -245,11 +245,11 @@ class CustomerRepositoryImpl {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch customer: ${error.message}`);
     }
 
-    if (!data) return null;
+    if (!data) {return null;}
 
     return this.mapToCustomer(data as DbCustomer);
   }
@@ -285,7 +285,7 @@ class CustomerRepositoryImpl {
    * Check if an email already exists
    */
   async emailExists(email: string, excludeId?: string): Promise<boolean> {
-    if (!email) return false;
+    if (!email) {return false;}
 
     let query = db
       .from('customers')
@@ -375,11 +375,11 @@ class CustomerRepositoryImpl {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new Error(`Failed to fetch customer addresses: ${error.message}`);
     }
 
-    if (!data) return null;
+    if (!data) {return null;}
 
     const billing: Address = {
       street: data.address_1 ? `${data.address_1}${data.address_2 ? ', ' + data.address_2 : ''}` : null,
@@ -549,49 +549,49 @@ class CustomerRepositoryImpl {
     };
 
     // Map all optional fields
-    if (data.customerCode !== undefined) updateData.customer_code = data.customerCode;
-    if (data.name !== undefined) updateData.name = data.name;
-    if (data.legalName !== undefined) updateData.legal_name = data.legalName;
-    if (data.channel !== undefined) updateData.channel = data.channel;
+    if (data.customerCode !== undefined) {updateData.customer_code = data.customerCode;}
+    if (data.name !== undefined) {updateData.name = data.name;}
+    if (data.legalName !== undefined) {updateData.legal_name = data.legalName;}
+    if (data.channel !== undefined) {updateData.channel = data.channel;}
 
     // Billing Address
-    if (data.address1 !== undefined) updateData.address_1 = data.address1;
-    if (data.address2 !== undefined) updateData.address_2 = data.address2;
-    if (data.city !== undefined) updateData.city = data.city;
-    if (data.state !== undefined) updateData.state = data.state;
-    if (data.zip !== undefined) updateData.zip = data.zip;
-    if (data.country !== undefined) updateData.country = data.country;
+    if (data.address1 !== undefined) {updateData.address_1 = data.address1;}
+    if (data.address2 !== undefined) {updateData.address_2 = data.address2;}
+    if (data.city !== undefined) {updateData.city = data.city;}
+    if (data.state !== undefined) {updateData.state = data.state;}
+    if (data.zip !== undefined) {updateData.zip = data.zip;}
+    if (data.country !== undefined) {updateData.country = data.country;}
 
     // Shipping Address
-    if (data.shippingAddress1 !== undefined) updateData.shipping_address_1 = data.shippingAddress1;
-    if (data.shippingAddress2 !== undefined) updateData.shipping_address_2 = data.shippingAddress2;
-    if (data.shippingCity !== undefined) updateData.shipping_city = data.shippingCity;
-    if (data.shippingState !== undefined) updateData.shipping_state = data.shippingState;
-    if (data.shippingZip !== undefined) updateData.shipping_zip = data.shippingZip;
-    if (data.shippingCountry !== undefined) updateData.shipping_country = data.shippingCountry;
-    if (data.useSeparateShipping !== undefined) updateData.use_separate_shipping = data.useSeparateShipping;
+    if (data.shippingAddress1 !== undefined) {updateData.shipping_address_1 = data.shippingAddress1;}
+    if (data.shippingAddress2 !== undefined) {updateData.shipping_address_2 = data.shippingAddress2;}
+    if (data.shippingCity !== undefined) {updateData.shipping_city = data.shippingCity;}
+    if (data.shippingState !== undefined) {updateData.shipping_state = data.shippingState;}
+    if (data.shippingZip !== undefined) {updateData.shipping_zip = data.shippingZip;}
+    if (data.shippingCountry !== undefined) {updateData.shipping_country = data.shippingCountry;}
+    if (data.useSeparateShipping !== undefined) {updateData.use_separate_shipping = data.useSeparateShipping;}
 
     // Contact
-    if (data.phone !== undefined) updateData.phone = data.phone;
-    if (data.email !== undefined) updateData.email = data.email;
-    if (data.website !== undefined) updateData.website = data.website;
+    if (data.phone !== undefined) {updateData.phone = data.phone;}
+    if (data.email !== undefined) {updateData.email = data.email;}
+    if (data.website !== undefined) {updateData.website = data.website;}
 
     // Tax
-    if (data.taxId !== undefined) updateData.tax_id = data.taxId;
-    if (data.taxExempt !== undefined) updateData.tax_exempt = data.taxExempt;
-    if (data.taxExemptNumber !== undefined) updateData.tax_exempt_number = data.taxExemptNumber;
-    if (data.taxExemptExpiryAt !== undefined) updateData.tax_exempt_expiry_at = data.taxExemptExpiryAt || null;
+    if (data.taxId !== undefined) {updateData.tax_id = data.taxId;}
+    if (data.taxExempt !== undefined) {updateData.tax_exempt = data.taxExempt;}
+    if (data.taxExemptNumber !== undefined) {updateData.tax_exempt_number = data.taxExemptNumber;}
+    if (data.taxExemptExpiryAt !== undefined) {updateData.tax_exempt_expiry_at = data.taxExemptExpiryAt || null;}
 
     // Credit
-    if (data.creditStatus !== undefined) updateData.credit_status = data.creditStatus;
-    if (data.creditLimit !== undefined) updateData.credit_limit = data.creditLimit;
-    if (data.creditTerms !== undefined) updateData.credit_terms = data.creditTerms;
+    if (data.creditStatus !== undefined) {updateData.credit_status = data.creditStatus;}
+    if (data.creditLimit !== undefined) {updateData.credit_limit = data.creditLimit;}
+    if (data.creditTerms !== undefined) {updateData.credit_terms = data.creditTerms;}
 
     // Settings
-    if (data.preferredLocationId !== undefined) updateData.preferred_location_id = data.preferredLocationId;
-    if (data.defaultPaymentMethod !== undefined) updateData.default_payment_method = data.defaultPaymentMethod;
-    if (data.status !== undefined) updateData.status = data.status;
-    if (data.internalNotes !== undefined) updateData.internal_notes = data.internalNotes;
+    if (data.preferredLocationId !== undefined) {updateData.preferred_location_id = data.preferredLocationId;}
+    if (data.defaultPaymentMethod !== undefined) {updateData.default_payment_method = data.defaultPaymentMethod;}
+    if (data.status !== undefined) {updateData.status = data.status;}
+    if (data.internalNotes !== undefined) {updateData.internal_notes = data.internalNotes;}
 
     const { data: result, error } = await db
       .from('customers')

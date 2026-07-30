@@ -34,7 +34,7 @@ interface ColumnOptions {
  * Format date string for display
  */
 function formatDate(dateString: string | Date | null): string {
-  if (!dateString) return '-';
+  if (!dateString) {return '-';}
   const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
   return date.toLocaleDateString('en-US', {
     year: 'numeric',
