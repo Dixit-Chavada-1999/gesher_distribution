@@ -140,9 +140,9 @@ export function EditCustomerDrawer({
         // Also show toast for visibility
         toast.error(result.error || 'Failed to update customer');
       }
-    } catch (err) {
-      console.error('Update customer error:', err);
-      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+    } catch (error) {
+      console.error('Update customer error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
       setServerErrors({
         message: errorMessage,
       });

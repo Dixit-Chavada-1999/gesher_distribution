@@ -128,6 +128,21 @@ function PipedriveCardComponent() {
     toast.success('Pipedrive disconnected');
   }, []);
 
+  const handlePipelineChange = useCallback(
+    (value: string) => setConnection((prev) => prev ? { ...prev, pipelineId: value } : null),
+    []
+  );
+
+  const handlePushQuotesChange = useCallback(
+    (checked: boolean) => setConnection((prev) => prev ? { ...prev, pushQuotes: checked } : null),
+    []
+  );
+
+  const handlePullWonDealsChange = useCallback(
+    (checked: boolean) => setConnection((prev) => prev ? { ...prev, pullWonDeals: checked } : null),
+    []
+  );
+
   // ============================================
   // DISCONNECTED
   // ============================================
@@ -254,10 +269,7 @@ function PipedriveCardComponent() {
           <Label htmlFor="pipedrive-pipeline">Target pipeline</Label>
           <Select
             value={connection.pipelineId}
-            onValueChange={useCallback(
-              (value: string) => setConnection((prev) => prev ? { ...prev, pipelineId: value } : null),
-              []
-            )}
+            onValueChange={handlePipelineChange}
           >
             <SelectTrigger id="pipedrive-pipeline">
               <SelectValue placeholder="Select pipeline" />
@@ -284,10 +296,7 @@ function PipedriveCardComponent() {
             label="Quote sent creates or updates a deal"
             description="Sending a quote pushes it to Pipedrive as a deal on the pipeline above."
             checked={connection.pushQuotes}
-            onCheckedChange={useCallback(
-              (checked: boolean) => setConnection((prev) => prev ? { ...prev, pushQuotes: checked } : null),
-              []
-            )}
+            onCheckedChange={handlePushQuotesChange}
           />
 
           <Separator />
@@ -296,10 +305,7 @@ function PipedriveCardComponent() {
             label="Deal won updates the quote"
             description="Marking a deal won in Pipedrive reflects onto the linked quote and sales order."
             checked={connection.pullWonDeals}
-            onCheckedChange={useCallback(
-              (checked: boolean) => setConnection((prev) => prev ? { ...prev, pullWonDeals: checked } : null),
-              []
-            )}
+            onCheckedChange={handlePullWonDealsChange}
           />
         </div>
       </IntegrationCard>

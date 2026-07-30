@@ -481,13 +481,12 @@ export interface BillingShippingSectionProps {
   isLoadingAddresses?: boolean;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface OrderItemsTableProps {
   products: Product[];
   units: Unit[];
   taxRates: TaxRate[];
-  items: any[];
-  onItemsChange: (items: any[]) => void;
+  items: OrderItem[];
+  onItemsChange: (items: OrderItem[]) => void;
   onProductSelect?: (itemIndex: number, productId: string) => void;
   columnConfig?: OrderItemColumnConfig;
 }
@@ -501,13 +500,12 @@ export interface OrderSummaryCardsProps {
   currencySymbol?: string;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface SalesOrderFormProps {
   masterData: SalesOrderMasterData;
   initialData?: Partial<SalesOrderFormData>;
-  onSubmit?: (data: any) => void;
+  onSubmit?: (data: SalesOrderFormData) => void;
   onCancel?: () => void;
-  onSaveDraft?: (data: any) => void;
+  onSaveDraft?: (data: SalesOrderFormData) => void;
 }
 
 export interface CreateSalesOrderDrawerProps {

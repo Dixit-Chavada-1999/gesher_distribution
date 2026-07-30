@@ -213,6 +213,16 @@ function QuickBooksCardComponent() {
     }
   }, []);
 
+  const handlePushInvoicesChange = useCallback(
+    (checked: boolean) => setConnection((prev) => prev ? { ...prev, pushInvoices: checked } : null),
+    []
+  );
+
+  const handlePullPaymentsChange = useCallback(
+    (checked: boolean) => setConnection((prev) => prev ? { ...prev, pullPayments: checked } : null),
+    []
+  );
+
   // ============================================
   // LOADING STATE
   // ============================================
@@ -333,10 +343,7 @@ function QuickBooksCardComponent() {
             label="Push invoices and supplier bills"
             description="Raised in Gesher, posted to QuickBooks with the QBO id stored back on the record."
             checked={connection.pushInvoices}
-            onCheckedChange={useCallback(
-              (checked: boolean) => setConnection((prev) => prev ? { ...prev, pushInvoices: checked } : null),
-              []
-            )}
+            onCheckedChange={handlePushInvoicesChange}
           />
 
           <Separator />
@@ -345,10 +352,7 @@ function QuickBooksCardComponent() {
             label="Pull payments and AR aging"
             description="Payment and AR status flow back from QuickBooks onto the sales order."
             checked={connection.pullPayments}
-            onCheckedChange={useCallback(
-              (checked: boolean) => setConnection((prev) => prev ? { ...prev, pullPayments: checked } : null),
-              []
-            )}
+            onCheckedChange={handlePullPaymentsChange}
           />
         </div>
       </IntegrationCard>

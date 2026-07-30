@@ -40,12 +40,10 @@ import {
   fetchUserInfo,
   revokeToken,
   calculateTokenExpiry,
-  getPipedriveConfig,
 } from './oauth';
 import {
   PIPEDRIVE_SCOPES,
   PIPEDRIVE_ERRORS,
-  PIPEDRIVE_ENTITY_TYPES,
   PIPEDRIVE_DEFAULT_PAGE_SIZE,
 } from './constants';
 import type {
@@ -361,7 +359,7 @@ export class PipedriveProvider implements ICrmProvider {
     return results;
   }
 
-  async getSyncHistory(connectionId: string, limit?: number): Promise<unknown[]> {
+  async getSyncHistory(_connectionId: string, _limit?: number): Promise<unknown[]> {
     return [];
   }
 

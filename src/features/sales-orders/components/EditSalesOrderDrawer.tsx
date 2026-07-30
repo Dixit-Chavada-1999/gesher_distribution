@@ -134,8 +134,8 @@ export function EditSalesOrderDrawer({
       } else {
         toast.error(result.error || 'Failed to update order');
       }
-    } catch (err) {
-      console.error('Update order error:', err);
+    } catch (error) {
+      console.error('Update order error:', error);
       toast.error('Failed to update order');
     } finally {
       setIsSubmitting(false);

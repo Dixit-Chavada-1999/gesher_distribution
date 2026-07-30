@@ -46,13 +46,11 @@ import {
   QBO_SCOPES,
   QBO_API_MINOR_VERSION,
   QBO_ERRORS,
-  QBO_ENTITY_TYPES,
   QBO_DEFAULT_PAGE_SIZE,
 } from './constants';
 import type {
   QuickBooksEnvironment,
   QuickBooksConnectionMetadata,
-  QuickBooksStatusResponse,
   QuickBooksCustomer,
   QuickBooksInvoice,
   QuickBooksPayment,
@@ -370,7 +368,7 @@ export class QuickBooksProvider implements IAccountingProvider {
     return results;
   }
 
-  async getSyncHistory(connectionId: string, limit?: number): Promise<unknown[]> {
+  async getSyncHistory(_connectionId: string, _limit?: number): Promise<unknown[]> {
     // This would fetch from integration_sync_logs table
     // Implementation depends on specific requirements
     return [];
@@ -727,9 +725,9 @@ export class QuickBooksProvider implements IAccountingProvider {
   }
 
   async updateInvoice(
-    connectionId: string,
-    externalId: string,
-    invoice: Partial<AccountingInvoice>
+    _connectionId: string,
+    _externalId: string,
+    _invoice: Partial<AccountingInvoice>
   ): Promise<AccountingInvoice> {
     // Similar to updateCustomer - needs SyncToken
     throw new Error('Not implemented');
@@ -946,16 +944,16 @@ export class QuickBooksProvider implements IAccountingProvider {
   }
 
   async createProduct(
-    connectionId: string,
-    product: AccountingProduct
+    _connectionId: string,
+    _product: AccountingProduct
   ): Promise<AccountingProduct> {
     throw new Error('Not implemented');
   }
 
   async updateProduct(
-    connectionId: string,
-    externalId: string,
-    product: Partial<AccountingProduct>
+    _connectionId: string,
+    _externalId: string,
+    _product: Partial<AccountingProduct>
   ): Promise<AccountingProduct> {
     throw new Error('Not implemented');
   }

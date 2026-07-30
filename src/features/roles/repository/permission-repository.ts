@@ -112,11 +112,11 @@ class PermissionRepositoryImpl {
 
     for (const permission of data || []) {
       const perm = this.mapToPermission(permission as DbPermission);
-      const permModule = perm.module;
-      if (!grouped[permModule]) {
-        grouped[permModule] = [];
+      const permModuleName = perm.module;
+      if (!grouped[permModuleName]) {
+        grouped[permModuleName] = [];
       }
-      grouped[permModule].push(perm);
+      grouped[permModuleName].push(perm);
     }
 
     return Object.entries(grouped).map(([module, permissions]) => ({
