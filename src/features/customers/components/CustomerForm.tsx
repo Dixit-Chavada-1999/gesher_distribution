@@ -144,7 +144,8 @@ export function CustomerForm({
   // ----------------------------------------
 
   const methods = useForm<CustomerFormInput>({
-    resolver: zodResolver(customerFormSchema),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(customerFormSchema) as any,
     defaultValues: {
       ...DEFAULT_FORM_VALUES,
       ...initialData,

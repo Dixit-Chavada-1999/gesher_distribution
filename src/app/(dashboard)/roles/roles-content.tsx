@@ -283,8 +283,9 @@ function RolesPageContentComponent() {
   const { roles, loading: rolesLoading, error: rolesError, refetch: refetchRoles } = useRoles();
 
   // Auto-select first role (super_admin) on initial load
-  if (!hasAutoSelected && !rolesLoading && roles.length > 0 && !selectedRoleId) {
-    setSelectedRoleId(roles[0].id);
+  const firstRole = roles[0];
+  if (!hasAutoSelected && !rolesLoading && roles.length > 0 && firstRole && !selectedRoleId) {
+    setSelectedRoleId(firstRole.id);
     setHasAutoSelected(true);
   }
   const { role: selectedRole, loading: roleLoading, refetch: refetchRole } = useRole(selectedRoleId);

@@ -117,7 +117,7 @@ export function Header({ className }: HeaderProps) {
           <input
             type="search"
             placeholder="Search..."
-            className="h-10 w-full rounded-lg border border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-accent))] pl-10 pr-4 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--sidebar-muted))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--sidebar-primary))]"
+            className="h-10 w-full rounded-lg border border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-accent))] pl-10 pr-4 text-sm text-[hsl(var(--sidebar-foreground))] placeholder:text-[hsl(var(--sidebar-muted))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--sidebar-primary))]"
           />
         </div>
       </div>

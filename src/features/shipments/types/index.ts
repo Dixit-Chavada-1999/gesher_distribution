@@ -277,6 +277,6 @@ export interface EditShipmentDrawerProps {
 export interface ViewShipmentDrawerProps {
   open: boolean;
   onClose: () => void;
-  shipmentId: string;
-  onEdit?: () => void;
+  shipmentId: string | null;
+  onEdit?: (shipment: ShipmentListItem | ShipmentWithItems) => void;
 }

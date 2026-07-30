@@ -145,7 +145,7 @@ const NAV_SECTIONS = [
   //   ],
   // },
   {
-    title: 'Administration',
+    title: 'Internal',
     items: [
       {
         id: 'users',
