@@ -36,7 +36,7 @@ import {
   usePurchaseOrders,
 } from '@/features/purchase-orders';
 import { deletePurchaseOrder } from '@/features/purchase-orders/actions';
-import type { PurchaseOrderListItem, POStatus, PurchaseOrderWithItems } from '@/features/purchase-orders/types';
+import type { POListItem, POStatus, PurchaseOrderWithItems } from '@/features/purchase-orders/types';
 import { PO_STATUS_LABELS } from '@/features/purchase-orders/types';
 
 export default function PurchaseOrdersPage() {
@@ -50,7 +50,7 @@ export default function PurchaseOrdersPage() {
 
   // Delete confirmation
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [poToDelete, setPOToDelete] = useState<PurchaseOrderListItem | null>(null);
+  const [poToDelete, setPOToDelete] = useState<POListItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Filters
@@ -76,7 +76,7 @@ export default function PurchaseOrdersPage() {
     toast.info('Create purchase order functionality coming soon');
   };
 
-  const handleView = useCallback((po: PurchaseOrderListItem) => {
+  const handleView = useCallback((po: POListItem) => {
     setSelectedPOId(po.id);
     setIsViewDrawerOpen(true);
   }, []);
@@ -86,11 +86,11 @@ export default function PurchaseOrdersPage() {
     setSelectedPOId(null);
   }, []);
 
-  const handleEdit = useCallback((_po: PurchaseOrderListItem | PurchaseOrderWithItems) => {
+  const handleEdit = useCallback((_po: POListItem | PurchaseOrderWithItems) => {
     toast.info('Edit purchase order functionality coming soon');
   }, []);
 
-  const handleDeleteClick = useCallback((po: PurchaseOrderListItem) => {
+  const handleDeleteClick = useCallback((po: POListItem) => {
     setPOToDelete(po);
     setDeleteDialogOpen(true);
   }, []);
@@ -123,7 +123,7 @@ export default function PurchaseOrdersPage() {
     setPOToDelete(null);
   };
 
-  const handleRowClick = useCallback((po: PurchaseOrderListItem) => {
+  const handleRowClick = useCallback((po: POListItem) => {
     handleView(po);
   }, [handleView]);
 
