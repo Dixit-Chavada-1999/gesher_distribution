@@ -16,17 +16,21 @@ import type { SupabaseClient } from './types';
 
 /**
  * Environment variables validation
+ * Returns empty strings during build/prerender to avoid errors
  */
 function getSupabaseConfig() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-  if (!supabaseUrl) {
-    throw new Error('Missing environment variable: NEXT_PUBLIC_SUPABASE_URL');
-  }
+  // Only validate at runtime, not during build
+  if (typeof window !== 'undefined') {
+    if (!supabaseUrl) {
+      throw new Error('Missing environment variable: NEXT_PUBLIC_SUPABASE_URL');
+    }
 
-  if (!supabaseAnonKey) {
-    throw new Error('Missing environment variable: NEXT_PUBLIC_SUPABASE_ANON_KEY');
+    if (!supabaseAnonKey) {
+      throw new Error('Missing environment variable: NEXT_PUBLIC_SUPABASE_ANON_KEY');
+    }
   }
 
   return { supabaseUrl, supabaseAnonKey };
