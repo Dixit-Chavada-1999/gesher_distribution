@@ -63,6 +63,30 @@ export class CustomerContactRepository {
   }
 
   /**
+   * Get primary contact for a customer
+   */
+  async getPrimaryContact(customerId: string): Promise<CustomerContact | null> {
+    const { data, error } = await db
+      .from('customer_contacts')
+      .select('id, customer_id, first_name, last_name, contact_type, email, phone, mobile, created_at, updated_at, created_by, updated_by, deleted_at')
+      .eq('customer_id', customerId)
+      .eq('contact_type', 'primary')
+      .is('deleted_at', null)
+      .limit(1)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return null;
+      }
+      console.error('Error fetching primary contact:', error);
+      throw new Error(`Failed to fetch primary contact: ${error.message}`);
+    }
+
+    return this.mapToContact(data);
+  }
+
+  /**
    * Get a single contact by ID
    */
   async getById(id: string): Promise<CustomerContact | null> {
