@@ -11,8 +11,8 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { pipedriveProvider } from '@/modules/integrations/providers/crm/pipedrive';
 import {
-  STATE_COOKIE_NAME,
-  STATE_COOKIE_MAX_AGE,
+  PIPEDRIVE_STATE_COOKIE_NAME,
+  PIPEDRIVE_STATE_COOKIE_MAX_AGE,
   PIPEDRIVE_REDIRECT_PATHS,
 } from '@/modules/integrations/providers/crm/pipedrive';
 
@@ -23,11 +23,11 @@ export async function GET(request: Request) {
 
     // Store state in HTTP-only cookie
     const cookieStore = await cookies();
-    cookieStore.set(STATE_COOKIE_NAME, state, {
+    cookieStore.set(PIPEDRIVE_STATE_COOKIE_NAME, state, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: STATE_COOKIE_MAX_AGE,
+      maxAge: PIPEDRIVE_STATE_COOKIE_MAX_AGE,
       path: '/',
     });
 

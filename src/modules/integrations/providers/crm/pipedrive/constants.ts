@@ -71,12 +71,12 @@ export const PIPEDRIVE_ACCESS_TOKEN_LIFETIME_SECONDS = 3600;
 /**
  * State cookie name for CSRF protection
  */
-export const STATE_COOKIE_NAME = 'pipedrive_oauth_state';
+export const PIPEDRIVE_STATE_COOKIE_NAME = 'pipedrive_oauth_state';
 
 /**
  * State cookie max age in seconds (5 minutes)
  */
-export const STATE_COOKIE_MAX_AGE = 5 * 60;
+export const PIPEDRIVE_STATE_COOKIE_MAX_AGE = 5 * 60;
 
 // ============================================
 // ERROR MESSAGES
