@@ -66,7 +66,7 @@ export const PIPEDRIVE_SCOPE_STRING = PIPEDRIVE_SCOPES.join(' ');
 /**
  * Access token lifetime in seconds (typically 1 hour)
  */
-export const ACCESS_TOKEN_LIFETIME_SECONDS = 3600;
+export const PIPEDRIVE_ACCESS_TOKEN_LIFETIME_SECONDS = 3600;
 
 /**
  * State cookie name for CSRF protection

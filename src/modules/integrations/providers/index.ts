@@ -5,7 +5,7 @@
  */
 
 // Accounting Providers
-export * as accounting from './accounting';
+export * from './accounting';
 
 // CRM Providers
-export * as crm from './crm';
+export * from './crm';
