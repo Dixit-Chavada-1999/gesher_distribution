@@ -1,0 +1,226 @@
+'use client';
+
+/**
+ * Purchase Orders Page
+ *
+ * Main page for managing purchase orders.
+ */
+
+import { useState, useCallback } from 'react';
+import { Plus, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
+
+import { Button } from '@/shared/components/ui/button';
+import { PageHeader } from '@/shared/components/layout/PageHeader';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/shared/components/ui/alert-dialog';
+
+import {
+  PurchaseOrdersTable,
+  ViewPurchaseOrderDrawer,
+  usePurchaseOrders,
+} from '@/features/purchase-orders';
+import { deletePurchaseOrder } from '@/features/purchase-orders/actions';
+import type { PurchaseOrderListItem, POStatus, PurchaseOrderWithItems } from '@/features/purchase-orders/types';
+import { PO_STATUS_LABELS } from '@/features/purchase-orders/types';
+
+export default function PurchaseOrdersPage() {
+  // ----------------------------------------
+  // STATE
+  // ----------------------------------------
+
+  // Drawer states
+  const [isViewDrawerOpen, setIsViewDrawerOpen] = useState(false);
+  const [selectedPOId, setSelectedPOId] = useState<string | null>(null);
+
+  // Delete confirmation
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [poToDelete, setPOToDelete] = useState<PurchaseOrderListItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Filters
+  const [statusFilter, setStatusFilter] = useState<POStatus | 'all'>('all');
+
+  // ----------------------------------------
+  // DATA HOOKS
+  // ----------------------------------------
+
+  const {
+    data: purchaseOrders,
+    isLoading: isPOsLoading,
+    refetch: refetchPOs,
+  } = usePurchaseOrders(
+    statusFilter === 'all' ? {} : { status: statusFilter }
+  );
+
+  // ----------------------------------------
+  // HANDLERS
+  // ----------------------------------------
+
+  const handleCreateClick = () => {
+    toast.info('Create purchase order functionality coming soon');
+  };
+
+  const handleView = useCallback((po: PurchaseOrderListItem) => {
+    setSelectedPOId(po.id);
+    setIsViewDrawerOpen(true);
+  }, []);
+
+  const handleViewDrawerClose = useCallback(() => {
+    setIsViewDrawerOpen(false);
+    setSelectedPOId(null);
+  }, []);
+
+  const handleEdit = useCallback((_po: PurchaseOrderListItem | PurchaseOrderWithItems) => {
+    toast.info('Edit purchase order functionality coming soon');
+  }, []);
+
+  const handleDeleteClick = useCallback((po: PurchaseOrderListItem) => {
+    setPOToDelete(po);
+    setDeleteDialogOpen(true);
+  }, []);
+
+  const handleDeleteConfirm = async () => {
+    if (!poToDelete) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const result = await deletePurchaseOrder(poToDelete.id);
+      if (result.success) {
+        toast.success(`Purchase Order ${poToDelete.poNumber} deleted`);
+        refetchPOs();
+      } else {
+        toast.error(result.error || 'Failed to delete purchase order');
+      }
+    } catch {
+      toast.error('Failed to delete purchase order');
+    } finally {
+      setIsDeleting(false);
+      setDeleteDialogOpen(false);
+      setPOToDelete(null);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
+    setPOToDelete(null);
+  };
+
+  const handleRowClick = useCallback((po: PurchaseOrderListItem) => {
+    handleView(po);
+  }, [handleView]);
+
+  const handleRefresh = () => {
+    refetchPOs();
+  };
+
+  const handleStatusFilterChange = (value: string) => {
+    setStatusFilter(value as POStatus | 'all');
+  };
+
+  // ----------------------------------------
+  // RENDER
+  // ----------------------------------------
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Page Header */}
+      <PageHeader
+        title="Purchase Orders"
+        description="Manage purchase orders to vendors."
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleRefresh}
+              disabled={isPOsLoading}
+            >
+              <RefreshCw className={`h-4 w-4 ${isPOsLoading ? 'animate-spin' : ''}`} />
+            </Button>
+            <Button onClick={handleCreateClick}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create PO
+            </Button>
+          </div>
+        }
+      />
+
+      {/* Purchase Orders Table */}
+      <PurchaseOrdersTable
+        data={purchaseOrders}
+        isLoading={isPOsLoading}
+        onRowClick={handleRowClick}
+        onView={handleView}
+        onEdit={handleEdit}
+        onDelete={handleDeleteClick}
+        toolbarContent={
+          <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
+            <SelectTrigger className="h-8 w-[150px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              {Object.entries(PO_STATUS_LABELS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        }
+      />
+
+      {/* View Purchase Order Drawer */}
+      <ViewPurchaseOrderDrawer
+        purchaseOrderId={selectedPOId}
+        open={isViewDrawerOpen}
+        onClose={handleViewDrawerClose}
+        onEdit={handleEdit}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Purchase Order</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete purchase order{' '}
+              <span className="font-semibold">{poToDelete?.poNumber}</span>?
+              This action cannot be undone. Only draft POs can be deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleDeleteCancel} disabled={isDeleting}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}

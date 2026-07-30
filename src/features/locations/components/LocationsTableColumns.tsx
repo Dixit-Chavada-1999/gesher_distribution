@@ -1,0 +1,156 @@
+'use client';
+
+/**
+ * Locations Table Columns
+ *
+ * Column definitions for the locations data table.
+ */
+
+import { ColumnDef } from '@tanstack/react-table';
+import { Badge } from '@/shared/components/ui/badge';
+import { Checkbox } from '@/shared/components/ui/checkbox';
+import { DataTableColumnHeader } from '@/shared/components/data-table/DataTableColumnHeader';
+import { DataTableRowActions } from '@/shared/components/data-table/DataTableRowActions';
+import type { LocationTableRow } from '../types';
+
+interface ColumnOptions {
+  onEdit?: (location: LocationTableRow) => void;
+  onDelete?: (location: LocationTableRow) => void;
+  onView?: (location: LocationTableRow) => void;
+}
+
+export function getLocationsTableColumns(options: ColumnOptions = {}): ColumnDef<LocationTableRow>[] {
+  return [
+    {
+      id: 'select',
+      header: ({ table }) => (
+        <Checkbox
+          checked={
+            table.getIsAllPageRowsSelected() ||
+            (table.getIsSomePageRowsSelected() && 'indeterminate')
+          }
+          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          aria-label="Select all"
+          className="translate-y-[2px]"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label="Select row"
+          className="translate-y-[2px]"
+        />
+      ),
+      enableSorting: false,
+      enableHiding: false,
+    },
+    {
+      accessorKey: 'locationCode',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Code" />,
+      cell: ({ row }) => (
+        <div className="font-mono text-sm font-medium">{row.getValue('locationCode')}</div>
+      ),
+    },
+    {
+      accessorKey: 'name',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Name" />,
+      cell: ({ row }) => {
+        const isDefault = row.original.isDefault;
+        return (
+          <div className="flex items-center gap-2">
+            <span className="font-medium">{row.getValue('name')}</span>
+            {isDefault && (
+              <Badge variant="outline" className="text-xs">
+                Default
+              </Badge>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'locationType',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
+      cell: ({ row }) => {
+        const type = row.getValue('locationType') as string;
+        const typeLabels: Record<string, string> = {
+          warehouse: 'Warehouse',
+          drop_ship: 'Drop Ship',
+          virtual: 'Virtual',
+        };
+        const typeColors: Record<string, 'default' | 'secondary' | 'outline'> = {
+          warehouse: 'default',
+          drop_ship: 'secondary',
+          virtual: 'outline',
+        };
+        return (
+          <Badge variant={typeColors[type] || 'secondary'}>
+            {typeLabels[type] || type}
+          </Badge>
+        );
+      },
+      filterFn: (row, id, value) => {
+        return value.includes(row.getValue(id));
+      },
+    },
+    {
+      accessorKey: 'city',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="City" />,
+      cell: ({ row }) => {
+        const city = row.getValue('city') as string | null;
+        const state = row.original.state;
+        if (!city && !state) {
+          return <span className="text-muted-foreground">—</span>;
+        }
+        return (
+          <span>
+            {city}
+            {city && state && ', '}
+            {state}
+          </span>
+        );
+      },
+    },
+    {
+      accessorKey: 'contactName',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Contact" />,
+      cell: ({ row }) => {
+        const name = row.getValue('contactName') as string | null;
+        const phone = row.original.contactPhone;
+        if (!name) {
+          return <span className="text-muted-foreground">—</span>;
+        }
+        return (
+          <div>
+            <div>{name}</div>
+            {phone && <div className="text-xs text-muted-foreground">{phone}</div>}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'isActive',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
+      cell: ({ row }) => {
+        const isActive = row.getValue('isActive') as boolean;
+        return (
+          <Badge variant={isActive ? 'default' : 'secondary'}>
+            {isActive ? 'Active' : 'Inactive'}
+          </Badge>
+        );
+      },
+    },
+    {
+      id: 'actions',
+      cell: ({ row }) => (
+        <DataTableRowActions
+          row={row}
+          onView={options.onView ? () => options.onView?.(row.original) : undefined}
+          onEdit={options.onEdit ? () => options.onEdit?.(row.original) : undefined}
+          onDelete={options.onDelete ? () => options.onDelete?.(row.original) : undefined}
+        />
+      ),
+    },
+  ];
+}

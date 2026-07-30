@@ -1,0 +1,74 @@
+/**
+ * QuickBooks Integration Module
+ *
+ * Public exports for QuickBooks OAuth integration.
+ */
+
+// Types
+export type {
+  QuickBooksEnvironment,
+  QuickBooksConnectionStatus,
+  QuickBooksConnectionRow,
+  QuickBooksConnectionInsert,
+  QuickBooksConnectionUpdate,
+  QuickBooksStatusResponse,
+  QuickBooksConfig,
+  IntuitTokenResponse,
+  QuickBooksCompanyInfo,
+} from './types';
+
+// Constants
+export {
+  INTUIT_AUTH_URL,
+  INTUIT_TOKEN_URL,
+  INTUIT_REVOKE_URL,
+  QBO_SANDBOX_API_URL,
+  QBO_PRODUCTION_API_URL,
+  QBO_SCOPES,
+  QBO_SCOPE_STRING,
+  QBO_ERRORS,
+  QBO_REDIRECT_PATHS,
+  STATE_COOKIE_NAME,
+  STATE_COOKIE_MAX_AGE,
+} from './lib/constants';
+
+// OAuth utilities
+export {
+  getQuickBooksConfig,
+  getApiBaseUrl,
+  generateState,
+  buildAuthorizationUrl,
+  exchangeCodeForTokens,
+  refreshAccessToken,
+  revokeToken,
+  fetchCompanyInfo,
+  calculateTokenExpiry,
+} from './lib/oauth';
+
+// Encryption
+export {
+  encrypt,
+  decrypt,
+  generateEncryptionKey,
+} from './lib/encryption';
+
+// Repository
+export {
+  getConnection,
+  getConnectionByRealmId,
+  upsertConnection,
+  updateConnection,
+  updateConnectionStatus,
+  updateTokens,
+  disconnectConnection,
+  hasConnection,
+} from './repositories/quickbooks-connection.repository';
+
+// Service
+export {
+  initiateOAuth,
+  handleOAuthCallback,
+  disconnect,
+  getConnectionStatus,
+  getAccessToken,
+} from './services/quickbooks-auth.service';
