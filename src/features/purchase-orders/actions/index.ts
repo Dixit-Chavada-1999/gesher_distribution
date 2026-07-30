@@ -9,11 +9,11 @@
 import { revalidatePath } from 'next/cache';
 import { purchaseOrderService } from '../services/purchase-order.service';
 import { createClient } from '@/shared/lib/supabase/server';
+import type { POListParams } from '../types';
 import type {
-  POListParams,
-  CreatePurchaseOrderDTO,
-  UpdatePurchaseOrderDTO,
-} from '../types';
+  CreatePOInput,
+  UpdatePOInput,
+} from '../lib/schemas';
 
 // ============================================
 // HELPER: Get current user ID
@@ -62,7 +62,7 @@ export async function getPurchaseOrder(id: string) {
 // CREATE PURCHASE ORDER
 // ============================================
 
-export async function createPurchaseOrder(data: CreatePurchaseOrderDTO) {
+export async function createPurchaseOrder(data: CreatePOInput) {
   const userId = await getCurrentUserId();
   const result = await purchaseOrderService.create(data, userId);
 
@@ -77,7 +77,7 @@ export async function createPurchaseOrder(data: CreatePurchaseOrderDTO) {
 // UPDATE PURCHASE ORDER
 // ============================================
 
-export async function updatePurchaseOrder(id: string, data: UpdatePurchaseOrderDTO) {
+export async function updatePurchaseOrder(id: string, data: UpdatePOInput) {
   const userId = await getCurrentUserId();
   const result = await purchaseOrderService.update(id, data, userId);
 

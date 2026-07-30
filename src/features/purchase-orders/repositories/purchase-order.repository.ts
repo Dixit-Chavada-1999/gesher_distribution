@@ -18,8 +18,8 @@ import type {
   PaginatedResult,
   SalesOrderSummary,
   LocationSummary,
-  DEFAULT_SUPPLIER,
 } from '../types';
+import { DEFAULT_SUPPLIER } from '../types';
 import { calculatePOTotals, calculateLineTotal } from '../lib/schemas';
 
 // ============================================

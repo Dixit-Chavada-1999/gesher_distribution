@@ -203,20 +203,21 @@ export function getQuotesTableColumns(
         const canEdit = ['draft', 'sent'].includes(quote.status);
         const canDelete = quote.status === 'draft';
 
-        const customActions = [];
-        if (canConvert && options.onConvert) {
-          customActions.push({
-            label: 'Convert to Order',
-            onClick: () => options.onConvert?.(quote),
-          });
-        }
-
         const { actions, separatorAfter } = createCommonRowActions({
           onView: options.onView ? () => options.onView?.(quote) : undefined,
           onEdit: canEdit && options.onEdit ? () => options.onEdit?.(quote) : undefined,
           onDelete: canDelete && options.onDelete ? () => options.onDelete?.(quote) : undefined,
-          customActions,
         });
+
+        // Add custom actions before delete (if present)
+        if (canConvert && options.onConvert) {
+          const deleteIndex = actions.findIndex(a => a.label === 'Delete');
+          const insertIndex = deleteIndex >= 0 ? deleteIndex : actions.length;
+          actions.splice(insertIndex, 0, {
+            label: 'Convert to Order',
+            onClick: () => options.onConvert?.(quote),
+          });
+        }
 
         return (
           <div onClick={(e) => e.stopPropagation()}>

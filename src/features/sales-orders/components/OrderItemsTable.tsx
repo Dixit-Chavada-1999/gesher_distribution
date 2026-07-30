@@ -41,7 +41,7 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 
-import type { OrderItemsTableProps, SalesOrderItem } from '../types';
+import type { OrderItemsTableProps, OrderItem } from '../types';
 import { createEmptyOrderItem, formatCurrency } from '../lib/mock-data';
 
 // ============================================
@@ -49,7 +49,7 @@ import { createEmptyOrderItem, formatCurrency } from '../lib/mock-data';
 // ============================================
 
 interface OrderItemRowProps {
-  item: SalesOrderItem;
+  item: OrderItem;
   index: number;
   products: OrderItemsTableProps['products'];
   units: OrderItemsTableProps['units'];
@@ -70,45 +70,48 @@ const OrderItemRow = memo(function OrderItemRow({
   onItemChange,
   onRemove,
 }: OrderItemRowProps) {
+  // Item ID is required for all handlers
+  const itemId = item.id || '';
+
   // Memoized handlers
   const handleProductChange = useCallback(
-    (value: string) => onItemChange(item.id, 'productId', value),
-    [item.id, onItemChange]
+    (value: string) => onItemChange(itemId, 'productId', value),
+    [itemId, onItemChange]
   );
 
   const handleDescriptionChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => onItemChange(item.id, 'description', e.target.value),
-    [item.id, onItemChange]
+    (e: React.ChangeEvent<HTMLInputElement>) => onItemChange(itemId, 'description', e.target.value),
+    [itemId, onItemChange]
   );
 
   const handleQuantityChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => onItemChange(item.id, 'quantity', Number(e.target.value)),
-    [item.id, onItemChange]
+    (e: React.ChangeEvent<HTMLInputElement>) => onItemChange(itemId, 'quantity', Number(e.target.value)),
+    [itemId, onItemChange]
   );
 
   const handleUnitChange = useCallback(
-    (value: string) => onItemChange(item.id, 'unitId', value),
-    [item.id, onItemChange]
+    (value: string) => onItemChange(itemId, 'unitId', value),
+    [itemId, onItemChange]
   );
 
   const handleUnitPriceChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => onItemChange(item.id, 'unitPrice', Number(e.target.value)),
-    [item.id, onItemChange]
+    (e: React.ChangeEvent<HTMLInputElement>) => onItemChange(itemId, 'unitPrice', Number(e.target.value)),
+    [itemId, onItemChange]
   );
 
   const handleDiscountChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => onItemChange(item.id, 'discountPercent', Number(e.target.value)),
-    [item.id, onItemChange]
+    (e: React.ChangeEvent<HTMLInputElement>) => onItemChange(itemId, 'discountPercent', Number(e.target.value)),
+    [itemId, onItemChange]
   );
 
   const handleTaxRateChange = useCallback(
-    (value: string) => onItemChange(item.id, 'taxRateId', value),
-    [item.id, onItemChange]
+    (value: string) => onItemChange(itemId, 'taxRateId', value),
+    [itemId, onItemChange]
   );
 
   const handleRemove = useCallback(
-    () => onRemove(item.id),
-    [item.id, onRemove]
+    () => onRemove(itemId),
+    [itemId, onRemove]
   );
 
   return (
@@ -144,7 +147,7 @@ const OrderItemRow = memo(function OrderItemRow({
       {/* Description */}
       <TableCell>
         <Input
-          value={item.description}
+          value={item.description || ''}
           onChange={handleDescriptionChange}
           className="h-9"
           placeholder="Description"

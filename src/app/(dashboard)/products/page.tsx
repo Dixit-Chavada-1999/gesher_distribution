@@ -48,7 +48,6 @@ async function ProductsContent({ searchParams }: ProductsPageProps) {
   return (
     <ProductsTable
       data={data.data}
-      pageCount={data.meta.totalPages}
     />
   );
 }

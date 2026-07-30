@@ -236,6 +236,7 @@ export interface PipedriveConnectionMetadata {
   lastContactSync?: string;
   lastDealSync?: string;
   lastActivitySync?: string;
+  [key: string]: unknown;
 }
 
 // ============================================

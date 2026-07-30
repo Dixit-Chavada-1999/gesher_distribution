@@ -181,15 +181,19 @@ export interface QuickBooksItem {
 // ============================================
 
 /**
+ * QuickBooks query response pagination metadata
+ */
+export interface QuickBooksQueryPagination {
+  startPosition?: number;
+  maxResults?: number;
+  totalCount?: number;
+}
+
+/**
  * QuickBooks query response wrapper
  */
 export interface QuickBooksQueryResponse<T> {
-  QueryResponse: {
-    [key: string]: T[];
-    startPosition?: number;
-    maxResults?: number;
-    totalCount?: number;
-  };
+  QueryResponse: QuickBooksQueryPagination & Record<string, T[] | undefined>;
 }
 
 // ============================================
@@ -218,6 +222,7 @@ export interface QuickBooksConnectionMetadata {
   lastCustomerSync?: string;
   lastInvoiceSync?: string;
   lastPaymentSync?: string;
+  [key: string]: unknown;
 }
 
 // ============================================

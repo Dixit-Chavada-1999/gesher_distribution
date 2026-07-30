@@ -9,11 +9,11 @@
 import { revalidatePath } from 'next/cache';
 import { shipmentService } from '../services/shipment.service';
 import { createClient } from '@/shared/lib/supabase/server';
+import type { ShipmentListParams } from '../types';
 import type {
-  ShipmentListParams,
-  CreateShipmentDTO,
-  UpdateShipmentDTO,
-} from '../types';
+  CreateShipmentInput,
+  UpdateShipmentInput,
+} from '../lib/schemas';
 
 // ============================================
 // HELPER: Get current user ID
@@ -62,7 +62,7 @@ export async function getShipment(id: string) {
 // CREATE SHIPMENT
 // ============================================
 
-export async function createShipment(data: CreateShipmentDTO) {
+export async function createShipment(data: CreateShipmentInput) {
   const userId = await getCurrentUserId();
   const result = await shipmentService.create(data, userId);
 
@@ -77,7 +77,7 @@ export async function createShipment(data: CreateShipmentDTO) {
 // UPDATE SHIPMENT
 // ============================================
 
-export async function updateShipment(id: string, data: UpdateShipmentDTO) {
+export async function updateShipment(id: string, data: UpdateShipmentInput) {
   const userId = await getCurrentUserId();
   const result = await shipmentService.update(id, data, userId);
 

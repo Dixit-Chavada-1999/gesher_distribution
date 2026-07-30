@@ -26,11 +26,10 @@ import { deleteProduct } from '../actions';
 
 interface ProductsTableProps {
   data: ProductTableRow[];
-  pageCount?: number;
   isLoading?: boolean;
 }
 
-export function ProductsTable({ data, pageCount = 1, isLoading = false }: ProductsTableProps) {
+export function ProductsTable({ data, isLoading = false }: ProductsTableProps) {
   const router = useRouter();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<ProductTableRow | null>(null);
@@ -88,10 +87,10 @@ export function ProductsTable({ data, pageCount = 1, isLoading = false }: Produc
       <DataTable
         columns={columns}
         data={data}
-        pageCount={pageCount}
-        filterColumn="name"
         filterPlaceholder="Filter products..."
-        isLoading={isLoading}
+        loading={isLoading}
+        enableGlobalFilter
+        searchableColumns={['name', 'sku']}
       />
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

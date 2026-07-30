@@ -51,7 +51,7 @@ export function generateStoragePath(
  */
 export function extractCustomerIdFromPath(path: string): string | null {
   const parts = path.split('/');
-  return parts.length > 0 ? parts[0] : null;
+  return parts[0] ?? null;
 }
 
 // ============================================

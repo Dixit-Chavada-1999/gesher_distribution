@@ -95,7 +95,19 @@ function SalesOrderFormComponent({
 
   // Watch form values for auto-calculations and auto-fill
   const customerId = watch('customerId');
-  const items = watch('items');
+  const watchedItems = watch('items');
+
+  // Ensure items have required fields with correct types for OrderItemsTable
+  const items = (watchedItems || []).map(item => ({
+    ...item,
+    description: item.description || '',
+    quantity: Number(item.quantity) || 0,
+    unitId: item.unitId || 'EA',
+    unitPrice: Number(item.unitPrice) || 0,
+    discountPercent: Number(item.discountPercent) || 0,
+    taxRateId: item.taxRateId || '',
+    lineTotal: Number(item.lineTotal) || 0,
+  }));
 
   // ----------------------------------------
   // STATE

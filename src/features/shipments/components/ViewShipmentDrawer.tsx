@@ -250,7 +250,7 @@ export function ViewShipmentDrawer({
             <Separator />
             <div className="flex gap-2">
               {onEdit && shipment.status === 'pending' && (
-                <Button onClick={onEdit} className="flex-1">
+                <Button onClick={() => onEdit(shipment)} className="flex-1">
                   <Pencil className="mr-2 h-4 w-4" />
                   Edit Shipment
                 </Button>

@@ -441,7 +441,7 @@ export class QuickBooksProvider implements IAccountingProvider {
       query
     );
 
-    const customers = response.QueryResponse.Customer || [];
+    const customers = (response.QueryResponse.Customer || []) as QuickBooksCustomer[];
 
     return customers.map(this.mapQuickBooksCustomer);
   }
@@ -637,7 +637,7 @@ export class QuickBooksProvider implements IAccountingProvider {
       query
     );
 
-    const invoices = response.QueryResponse.Invoice || [];
+    const invoices = (response.QueryResponse.Invoice || []) as QuickBooksInvoice[];
 
     return invoices.map(this.mapQuickBooksInvoice);
   }
@@ -788,7 +788,7 @@ export class QuickBooksProvider implements IAccountingProvider {
       query
     );
 
-    const payments = response.QueryResponse.Payment || [];
+    const payments = (response.QueryResponse.Payment || []) as QuickBooksPayment[];
 
     return payments.map(this.mapQuickBooksPayment);
   }
@@ -912,7 +912,7 @@ export class QuickBooksProvider implements IAccountingProvider {
       query
     );
 
-    const items = response.QueryResponse.Item || [];
+    const items = (response.QueryResponse.Item || []) as QuickBooksItem[];
 
     return items.map(this.mapQuickBooksProduct);
   }
@@ -1036,7 +1036,7 @@ export class QuickBooksProvider implements IAccountingProvider {
       invoiceNumber: invoice.DocNumber,
       customerId: invoice.CustomerRef.value,
       customerExternalId: invoice.CustomerRef.value,
-      invoiceDate: invoice.TxnDate || new Date().toISOString().split('T')[0],
+      invoiceDate: invoice.TxnDate ?? new Date().toISOString().slice(0, 10),
       dueDate: invoice.DueDate,
       lineItems: invoice.Line.filter((l) => l.DetailType === 'SalesItemLineDetail').map(
         (line) => ({
@@ -1066,7 +1066,7 @@ export class QuickBooksProvider implements IAccountingProvider {
       customerId: payment.CustomerRef.value,
       customerExternalId: payment.CustomerRef.value,
       invoiceExternalId: linkedInvoice?.TxnId,
-      paymentDate: payment.TxnDate || new Date().toISOString().split('T')[0],
+      paymentDate: payment.TxnDate ?? new Date().toISOString().slice(0, 10),
       amount: Math.round(payment.TotalAmt * 100),
       paymentMethod: payment.PaymentMethodRef?.name,
       referenceNumber: payment.PaymentRefNum,
