@@ -69,19 +69,23 @@ export const CREDIT_STATUS_COLORS: Record<CreditStatus, string> = {
   rejected: 'bg-red-100 text-red-800 border border-red-200',
 };
 
-// Database enum: contact_type (per client doc: purchasing, AP, receiving)
-export type ContactType = 'purchasing' | 'accounts_payable' | 'receiving';
+// Database enum: contact_type
+export type ContactType = 'primary' | 'purchasing' | 'accounts_payable' | 'receiving' | 'executive';
 
 export const CONTACT_TYPES: ContactType[] = [
+  'primary',
   'purchasing',
   'accounts_payable',
   'receiving',
+  'executive',
 ];
 
 export const CONTACT_TYPE_LABELS: Record<ContactType, string> = {
+  primary: 'Primary',
   purchasing: 'Purchasing',
   accounts_payable: 'Accounts Payable',
   receiving: 'Receiving',
+  executive: 'Executive',
 };
 
 // ============================================

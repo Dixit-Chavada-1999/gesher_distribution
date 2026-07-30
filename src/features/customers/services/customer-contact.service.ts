@@ -141,17 +141,10 @@ export const customerContactService = {
         customerId: validation.data.customerId,
         firstName: validation.data.firstName,
         lastName: validation.data.lastName,
-        title: validation.data.title || null,
         contactType: validation.data.contactType,
         email: validation.data.email || null,
         phone: validation.data.phone || null,
         mobile: validation.data.mobile || null,
-        fax: validation.data.fax || null,
-        isPrimary: validation.data.isPrimary || false,
-        receivesInvoices: validation.data.receivesInvoices || false,
-        receivesStatements: validation.data.receivesStatements || false,
-        receivesMarketing: validation.data.receivesMarketing || false,
-        notes: validation.data.notes || null,
       };
 
       const contact = await customerContactRepository.create(dto, userId);
@@ -201,17 +194,10 @@ export const customerContactService = {
       const dto: UpdateCustomerContactDTO = {};
       if (validation.data.firstName !== undefined) {dto.firstName = validation.data.firstName;}
       if (validation.data.lastName !== undefined) {dto.lastName = validation.data.lastName;}
-      if (validation.data.title !== undefined) {dto.title = validation.data.title;}
       if (validation.data.contactType !== undefined) {dto.contactType = validation.data.contactType;}
       if (validation.data.email !== undefined) {dto.email = validation.data.email;}
       if (validation.data.phone !== undefined) {dto.phone = validation.data.phone;}
       if (validation.data.mobile !== undefined) {dto.mobile = validation.data.mobile;}
-      if (validation.data.fax !== undefined) {dto.fax = validation.data.fax;}
-      if (validation.data.isPrimary !== undefined) {dto.isPrimary = validation.data.isPrimary;}
-      if (validation.data.receivesInvoices !== undefined) {dto.receivesInvoices = validation.data.receivesInvoices;}
-      if (validation.data.receivesStatements !== undefined) {dto.receivesStatements = validation.data.receivesStatements;}
-      if (validation.data.receivesMarketing !== undefined) {dto.receivesMarketing = validation.data.receivesMarketing;}
-      if (validation.data.notes !== undefined) {dto.notes = validation.data.notes;}
 
       const contact = await customerContactRepository.update(id, dto, userId);
 

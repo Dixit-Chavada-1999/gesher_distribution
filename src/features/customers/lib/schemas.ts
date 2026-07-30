@@ -230,18 +230,11 @@ export const createCustomerContactSchema = z.object({
   customerId: z.string().uuid('Invalid customer ID'),
   firstName: z.string().min(1, 'First name is required').max(100, 'First name must be 100 characters or less'),
   lastName: z.string().min(1, 'Last name is required').max(100, 'Last name must be 100 characters or less'),
-  title: z.string().max(100).nullable().optional(),
   contactType: contactTypeSchema.default('primary'),
   email: z.string().email('Invalid email address').max(255).nullable().optional()
     .or(z.literal('').transform(() => null)),
   phone: z.string().max(20).nullable().optional(),
   mobile: z.string().max(20).nullable().optional(),
-  fax: z.string().max(20).nullable().optional(),
-  isPrimary: z.boolean().default(false),
-  receivesInvoices: z.boolean().default(false),
-  receivesStatements: z.boolean().default(false),
-  receivesMarketing: z.boolean().default(false),
-  notes: z.string().max(1000).nullable().optional(),
 });
 
 export const updateCustomerContactSchema = createCustomerContactSchema
