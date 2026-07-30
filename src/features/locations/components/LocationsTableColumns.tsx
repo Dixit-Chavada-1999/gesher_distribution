@@ -168,7 +168,9 @@ export function getLocationsTableColumns(options: ColumnOptions = {}): ColumnDef
           });
         }
 
-        if (actions.length === 0) return null;
+        if (actions.length === 0) {
+          return null;
+        }
 
         return (
           <DataTableRowActions
