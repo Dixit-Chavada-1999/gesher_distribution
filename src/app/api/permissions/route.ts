@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { permissionService } from '@/features/roles';
 import { z } from 'zod';
+import type { RoleScope } from '@/features/roles/types';
 
 // ============================================
 // VALIDATION SCHEMAS
@@ -15,8 +16,13 @@ import { z } from 'zod';
 
 const querySchema = z.object({
   search: z.string().optional(),
-  module: z.string().optional(),
+  permissionType: z.enum(['user', 'customer']).optional(),
+  groupName: z.string().optional(),
   grouped: z
+    .string()
+    .optional()
+    .transform((val) => val === 'true'),
+  hierarchical: z
     .string()
     .optional()
     .transform((val) => val === 'true'),
@@ -31,12 +37,28 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const query = querySchema.parse({
       search: searchParams.get('search') || undefined,
-      module: searchParams.get('module') || undefined,
+      permissionType: searchParams.get('permissionType') || undefined,
+      groupName: searchParams.get('groupName') || undefined,
       grouped: searchParams.get('grouped') || undefined,
+      hierarchical: searchParams.get('hierarchical') || undefined,
     });
 
+    // Return hierarchical grouped permissions
+    if (query.hierarchical) {
+      const permissions = await permissionService.getPermissionsGroupedHierarchical(
+        query.permissionType as RoleScope | undefined
+      );
+      return NextResponse.json({
+        success: true,
+        data: permissions,
+      });
+    }
+
+    // Return flat grouped permissions
     if (query.grouped) {
-      const permissions = await permissionService.getPermissionsGrouped();
+      const permissions = await permissionService.getPermissionsGrouped(
+        query.permissionType as RoleScope | undefined
+      );
       return NextResponse.json({
         success: true,
         data: permissions,
@@ -45,7 +67,8 @@ export async function GET(request: NextRequest) {
 
     const permissions = await permissionService.getAllPermissions({
       search: query.search,
-      module: query.module,
+      permissionType: query.permissionType as RoleScope | undefined,
+      groupName: query.groupName,
     });
 
     return NextResponse.json({

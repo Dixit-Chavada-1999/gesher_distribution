@@ -18,7 +18,7 @@
 
 CREATE TABLE price_matrix (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Foreign Key
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,

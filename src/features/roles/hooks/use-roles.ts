@@ -10,7 +10,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { queryKeys } from '@/shared/lib/query';
-import type { RoleListItem, RoleDetail, PermissionGroup } from '../types';
+import type { RoleListItem, RoleDetail, PermissionGroup, HierarchicalPermissionGroup, RoleScope } from '../types';
 
 // ============================================
 // API FETCHERS
@@ -21,11 +21,11 @@ import type { RoleListItem, RoleDetail, PermissionGroup } from '../types';
  */
 async function fetchRoles(filters?: {
   search?: string;
-  isSystem?: boolean;
+  isSystemRole?: boolean;
 }): Promise<RoleListItem[]> {
   const params = new URLSearchParams();
   if (filters?.search) {params.set('search', filters.search);}
-  if (filters?.isSystem !== undefined) {params.set('isSystem', String(filters.isSystem));}
+  if (filters?.isSystemRole !== undefined) {params.set('isSystemRole', String(filters.isSystemRole));}
 
   const response = await fetch(`/api/roles?${params.toString()}`);
   const data = await response.json();
@@ -65,6 +65,26 @@ async function fetchPermissionsGrouped(): Promise<PermissionGroup[]> {
   return data.data;
 }
 
+/**
+ * Fetch permissions grouped by module with hierarchy from the API
+ */
+async function fetchPermissionsHierarchical(permissionType?: RoleScope): Promise<HierarchicalPermissionGroup[]> {
+  const params = new URLSearchParams();
+  params.set('hierarchical', 'true');
+  if (permissionType) {
+    params.set('permissionType', permissionType);
+  }
+
+  const response = await fetch(`/api/permissions?${params.toString()}`);
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || 'Failed to fetch permissions');
+  }
+
+  return data.data;
+}
+
 // ============================================
 // HOOK OPTIONS & RESULTS
 // ============================================
@@ -73,7 +93,7 @@ interface UseRolesOptions {
   /** Filter roles by name/displayName/description */
   search?: string;
   /** Filter by system role status */
-  isSystem?: boolean;
+  isSystemRole?: boolean;
   /**
    * Whether to enable automatic fetching.
    * When false, the hook will not fetch data until enabled becomes true.
@@ -98,6 +118,10 @@ interface UseRoleResult {
 
 interface UsePermissionsOptions {
   /**
+   * Filter by permission type (user or customer)
+   */
+  permissionType?: RoleScope;
+  /**
    * Whether to enable automatic fetching.
    * When false, the hook will not fetch data until enabled becomes true.
    * Defaults to true.
@@ -107,6 +131,13 @@ interface UsePermissionsOptions {
 
 interface UsePermissionsResult {
   permissions: PermissionGroup[];
+  loading: boolean;
+  error: string | null;
+  refetch: () => Promise<void>;
+}
+
+interface UseHierarchicalPermissionsResult {
+  permissions: HierarchicalPermissionGroup[];
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
@@ -125,12 +156,12 @@ interface UsePermissionsResult {
  *
  * @param options - Query options including filters and enabled flag
  * @param options.search - Filter roles by name/displayName/description
- * @param options.isSystem - Filter by system role status
+ * @param options.isSystemRole - Filter by system role status
  * @param options.enabled - When false, prevents automatic fetching (default: true)
  */
 export function useRoles(options?: UseRolesOptions): UseRolesResult {
-  const { search, isSystem, enabled = true } = options ?? {};
-  const filters = { search, isSystem };
+  const { search, isSystemRole, enabled = true } = options ?? {};
+  const filters = { search, isSystemRole };
 
   const query = useQuery({
     queryKey: queryKeys.roles.list(filters),
@@ -196,6 +227,38 @@ export function usePermissions(options?: UsePermissionsOptions): UsePermissionsR
   const query = useQuery({
     queryKey: queryKeys.permissions.grouped(),
     queryFn: fetchPermissionsGrouped,
+    enabled,
+    // Permissions almost never change - cache for 10 minutes
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const refetch = useCallback(async () => {
+    await query.refetch();
+  }, [query]);
+
+  return {
+    permissions: query.data ?? [],
+    loading: query.isLoading,
+    error: query.error?.message ?? null,
+    refetch,
+  };
+}
+
+/**
+ * Hook to fetch hierarchical permissions grouped by module
+ *
+ * Returns permissions with parent-child relationships for nested display.
+ *
+ * @param options - Query options
+ * @param options.permissionType - Filter by permission type (user or customer)
+ * @param options.enabled - When false, prevents automatic fetching (default: true)
+ */
+export function useHierarchicalPermissions(options?: UsePermissionsOptions): UseHierarchicalPermissionsResult {
+  const { permissionType, enabled = true } = options ?? {};
+
+  const query = useQuery({
+    queryKey: [...queryKeys.permissions.hierarchical(), permissionType],
+    queryFn: () => fetchPermissionsHierarchical(permissionType),
     enabled,
     // Permissions almost never change - cache for 10 minutes
     staleTime: 10 * 60 * 1000,

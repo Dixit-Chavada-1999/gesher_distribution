@@ -11,6 +11,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
 
+import { Mail, ArrowLeft, AlertCircle } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -65,42 +67,18 @@ export function ForgotPasswordForm() {
     return (
       <div className="space-y-4 text-center">
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-          <svg
-            className="h-6 w-6 text-primary"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"
-            />
-          </svg>
+          <Mail className="h-6 w-6 text-primary" />
         </div>
-        <h3 className="text-lg font-semibold">Check your email</h3>
+        <h3 className="text-lg font-semibold text-foreground">Check your email</h3>
         <p className="text-sm text-muted-foreground">
           We&apos;ve sent a password reset link to your email address.
           Please check your inbox and follow the instructions.
         </p>
         <Link
           href="/login"
-          className="inline-flex items-center text-sm text-primary hover:underline"
+          className="inline-flex items-center text-sm font-medium text-primary hover:text-primary/80 transition-colors"
         >
-          <svg
-            className="mr-1 h-4 w-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"
-            />
-          </svg>
+          <ArrowLeft className="mr-1.5 h-4 w-4" />
           Back to sign in
         </Link>
       </div>
@@ -109,11 +87,12 @@ export function ForgotPasswordForm() {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
         {/* Error Message */}
         {error && (
-          <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {error}
+          <div className="flex items-center gap-3 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <AlertCircle className="h-4 w-4 flex-shrink-0" />
+            <span>{error}</span>
           </div>
         )}
 
@@ -122,24 +101,34 @@ export function ForgotPasswordForm() {
           control={form.control}
           name="email"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel>Email</FormLabel>
+            <FormItem className="space-y-1.5">
+              <FormLabel className="text-sm font-medium text-foreground">
+                Email Address
+              </FormLabel>
               <FormControl>
-                <Input
-                  type="email"
-                  placeholder="you@example.com"
-                  autoComplete="email"
-                  disabled={isLoading}
-                  {...field}
-                />
+                <div className="relative">
+                  <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    type="email"
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                    disabled={isLoading}
+                    className="h-11 pl-10 text-sm rounded-lg"
+                    {...field}
+                  />
+                </div>
               </FormControl>
-              <FormMessage />
+              <FormMessage className="text-xs" />
             </FormItem>
           )}
         />
 
         {/* Submit Button */}
-        <Button type="submit" className="w-full" disabled={isLoading}>
+        <Button
+          type="submit"
+          className="w-full h-11 text-sm font-semibold rounded-lg shadow-sm transition-all duration-200"
+          disabled={isLoading}
+        >
           {isLoading ? (
             <>
               <Spinner size="sm" className="mr-2" />
@@ -151,24 +140,12 @@ export function ForgotPasswordForm() {
         </Button>
 
         {/* Back to Login */}
-        <div className="text-center">
+        <div className="text-center pt-1">
           <Link
             href="/login"
-            className="inline-flex items-center text-sm text-muted-foreground hover:text-primary"
+            className="inline-flex items-center text-sm font-medium text-primary hover:text-primary/80 transition-colors"
           >
-            <svg
-              className="mr-1 h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"
-              />
-            </svg>
+            <ArrowLeft className="mr-1.5 h-4 w-4" />
             Back to sign in
           </Link>
         </div>

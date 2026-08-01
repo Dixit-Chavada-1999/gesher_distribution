@@ -23,6 +23,7 @@ import type {
 } from '../types';
 import { createClient } from '@/shared/lib/supabase/server';
 import { db } from '@/shared/lib/supabase/database';
+import { getAppUserByAuthId } from '@/shared/lib/auth';
 
 // ============================================
 // TYPES
@@ -111,6 +112,12 @@ export async function createSalesOrder(formData: FormData): Promise<ActionResult
     return { success: false, error: 'Authentication required' };
   }
 
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
   // Parse form data
   const rawData = {
     orderDate: formData.get('orderDate') as string,
@@ -151,7 +158,7 @@ export async function createSalesOrder(formData: FormData): Promise<ActionResult
     };
   }
 
-  const result = await salesOrderService.createFromForm(formValidation.data, user.id);
+  const result = await salesOrderService.createFromForm(formValidation.data, appUser.id);
 
   if (result.success) {
     revalidatePath('/sales-orders');
@@ -174,6 +181,12 @@ export async function createSalesOrderFromData(
     return { success: false, error: 'Authentication required' };
   }
 
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
   // Validate first
   const formValidation = salesOrderFormSchema.safeParse(data);
   if (!formValidation.success) {
@@ -184,7 +197,7 @@ export async function createSalesOrderFromData(
     };
   }
 
-  const result = await salesOrderService.createFromForm(formValidation.data, user.id);
+  const result = await salesOrderService.createFromForm(formValidation.data, appUser.id);
 
   if (result.success) {
     revalidatePath('/sales-orders');
@@ -206,6 +219,12 @@ export async function updateSalesOrder(
 
   if (!user) {
     return { success: false, error: 'Authentication required' };
+  }
+
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
   }
 
   // Parse form data
@@ -263,7 +282,7 @@ export async function updateSalesOrder(
     };
   }
 
-  const result = await salesOrderService.update(id, validation.data, user.id);
+  const result = await salesOrderService.update(id, validation.data, appUser.id);
 
   if (result.success) {
     revalidatePath('/sales-orders');
@@ -288,6 +307,12 @@ export async function updateSalesOrderFromData(
     return { success: false, error: 'Authentication required' };
   }
 
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
   // Validate
   const validation = updateSalesOrderSchema.safeParse(data);
   if (!validation.success) {
@@ -298,7 +323,7 @@ export async function updateSalesOrderFromData(
     };
   }
 
-  const result = await salesOrderService.update(id, validation.data, user.id);
+  const result = await salesOrderService.update(id, validation.data, appUser.id);
 
   if (result.success) {
     revalidatePath('/sales-orders');
@@ -323,7 +348,13 @@ export async function updateSalesOrderItems(
     return { success: false, error: 'Authentication required' };
   }
 
-  const result = await salesOrderService.updateItems(orderId, items, user.id);
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
+  const result = await salesOrderService.updateItems(orderId, items, appUser.id);
 
   if (result.success) {
     revalidatePath('/sales-orders');
@@ -345,7 +376,13 @@ export async function deleteSalesOrder(id: string): Promise<ActionResult<SalesOr
     return { success: false, error: 'Authentication required' };
   }
 
-  const result = await salesOrderService.delete(id, user.id);
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
+  const result = await salesOrderService.delete(id, appUser.id);
 
   if (result.success) {
     revalidatePath('/sales-orders');
@@ -370,7 +407,13 @@ export async function submitSalesOrder(id: string): Promise<ActionResult<SalesOr
     return { success: false, error: 'Authentication required' };
   }
 
-  const result = await salesOrderService.submit(id, user.id);
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
+  const result = await salesOrderService.submit(id, appUser.id);
 
   if (result.success) {
     revalidatePath('/sales-orders');
@@ -391,7 +434,13 @@ export async function confirmSalesOrder(id: string): Promise<ActionResult<SalesO
     return { success: false, error: 'Authentication required' };
   }
 
-  const result = await salesOrderService.confirm(id, user.id);
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
+  const result = await salesOrderService.confirm(id, appUser.id);
 
   if (result.success) {
     revalidatePath('/sales-orders');
@@ -412,7 +461,13 @@ export async function processSalesOrder(id: string): Promise<ActionResult<SalesO
     return { success: false, error: 'Authentication required' };
   }
 
-  const result = await salesOrderService.process(id, user.id);
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
+  const result = await salesOrderService.process(id, appUser.id);
 
   if (result.success) {
     revalidatePath('/sales-orders');
@@ -433,7 +488,13 @@ export async function shipSalesOrder(id: string): Promise<ActionResult<SalesOrde
     return { success: false, error: 'Authentication required' };
   }
 
-  const result = await salesOrderService.ship(id, user.id);
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
+  const result = await salesOrderService.ship(id, appUser.id);
 
   if (result.success) {
     revalidatePath('/sales-orders');
@@ -454,7 +515,13 @@ export async function deliverSalesOrder(id: string): Promise<ActionResult<SalesO
     return { success: false, error: 'Authentication required' };
   }
 
-  const result = await salesOrderService.deliver(id, user.id);
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
+  const result = await salesOrderService.deliver(id, appUser.id);
 
   if (result.success) {
     revalidatePath('/sales-orders');
@@ -478,7 +545,13 @@ export async function cancelSalesOrder(
     return { success: false, error: 'Authentication required' };
   }
 
-  const result = await salesOrderService.cancel(id, reason, user.id);
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
+  const result = await salesOrderService.cancel(id, reason, appUser.id);
 
   if (result.success) {
     revalidatePath('/sales-orders');

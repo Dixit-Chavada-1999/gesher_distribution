@@ -17,7 +17,7 @@
 
 CREATE TABLE customers (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Customer Identity
   customer_code VARCHAR(20) NOT NULL,
@@ -79,7 +79,6 @@ CREATE TABLE customers (
   deleted_at TIMESTAMPTZ,
 
   -- Constraints
-  CONSTRAINT customers_code_unique UNIQUE (customer_code) WHERE deleted_at IS NULL,
   CONSTRAINT customers_code_format CHECK (customer_code ~ '^[A-Z0-9\-]+$'),
   CONSTRAINT customers_name_length CHECK (LENGTH(TRIM(name)) >= 2),
   CONSTRAINT customers_email_format CHECK (
@@ -93,7 +92,7 @@ CREATE TABLE customers (
 -- INDEXES
 -- ============================================
 
-CREATE INDEX idx_customers_code ON customers(customer_code) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX idx_customers_code_unique ON customers(customer_code) WHERE deleted_at IS NULL;
 CREATE INDEX idx_customers_name ON customers(name) WHERE deleted_at IS NULL;
 CREATE INDEX idx_customers_channel ON customers(channel) WHERE deleted_at IS NULL;
 CREATE INDEX idx_customers_status ON customers(status) WHERE deleted_at IS NULL;

@@ -59,6 +59,16 @@ export const ORDER_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   cancelled: [],
 };
 
+// Statuses that allow editing
+export const EDITABLE_ORDER_STATUSES: OrderStatus[] = ['draft', 'pending'];
+
+/**
+ * Check if an order can be edited based on its status
+ */
+export function canEditOrder(status: OrderStatus): boolean {
+  return EDITABLE_ORDER_STATUSES.includes(status);
+}
+
 // ============================================
 // DATABASE ENTITY TYPES
 // ============================================

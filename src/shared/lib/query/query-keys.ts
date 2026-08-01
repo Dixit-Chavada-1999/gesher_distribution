@@ -31,7 +31,7 @@ export const roleKeys = {
 
   /** List of roles with optional filters */
   lists: () => [...roleKeys.all, 'list'] as const,
-  list: (filters?: { search?: string; isSystem?: boolean }) =>
+  list: (filters?: { search?: string; isSystemRole?: boolean }) =>
     [...roleKeys.lists(), filters] as const,
 
   /** Single role details */
@@ -51,8 +51,11 @@ export const permissionKeys = {
   list: (filters?: { search?: string; module?: string }) =>
     [...permissionKeys.lists(), filters] as const,
 
-  /** Permissions grouped by module */
+  /** Permissions grouped by module (flat) */
   grouped: () => [...permissionKeys.all, 'grouped'] as const,
+
+  /** Permissions grouped by module with hierarchy */
+  hierarchical: () => [...permissionKeys.all, 'hierarchical'] as const,
 };
 
 /**

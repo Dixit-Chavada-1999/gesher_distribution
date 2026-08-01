@@ -55,8 +55,8 @@ function toTableRow(user: UserWithRole): UserTableRow {
     fullName: user.fullName,
     email: user.email,
     initials: buildInitials(user.firstName, user.lastName),
-    roleName: user.role?.displayName ?? null,
-    roleSlug: user.role?.slug ?? null,
+    roleName: user.role?.name ?? null,
+    roleScope: user.role?.scope ?? null,
     status: user.status,
     lastLoginAt: user.lastLoginAt,
     createdAt: user.createdAt,
@@ -195,7 +195,7 @@ export const userService = {
       const metadata = {
         first_name: data.firstName,
         last_name: data.lastName,
-        role_slug: role.slug,
+        role_name: role.name,
       };
 
       const authResult = data.password

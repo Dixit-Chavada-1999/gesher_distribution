@@ -37,7 +37,7 @@ interface DbRole {
   slug: string;
   description: string | null;
   level: number;
-  is_system: boolean;
+  is_system_role: boolean;
 }
 
 // ============================================
@@ -71,7 +71,7 @@ export class AuthService {
             slug,
             description,
             level,
-            is_system
+            is_system_role
           )
         `)
         .eq('id', userId)
@@ -141,7 +141,7 @@ export class AuthService {
             slug,
             description,
             level,
-            is_system
+            is_system_role
           )
         `)
         .eq('email', email.toLowerCase())
@@ -355,7 +355,7 @@ export class AuthService {
             slug: role.slug,
             description: role.description,
             level: role.level,
-            isSystem: role.is_system,
+            isSystemRole: role.is_system_role,
           }
         : null,
       permissions: permissionNames,

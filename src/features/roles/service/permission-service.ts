@@ -13,6 +13,8 @@ import type {
   CreatePermissionData,
   PermissionQueryFilters,
   PermissionGroup,
+  HierarchicalPermissionGroup,
+  RoleScope,
 } from '../types';
 
 /**
@@ -35,24 +37,24 @@ class PermissionServiceImpl {
   }
 
   /**
-   * Get permissions grouped by module
+   * Get permissions grouped by group_name (flat structure)
    */
-  async getPermissionsGrouped(): Promise<PermissionGroup[]> {
-    return permissionRepository.findAllGroupedByModule();
+  async getPermissionsGrouped(permissionType?: RoleScope): Promise<PermissionGroup[]> {
+    return permissionRepository.findAllGroupedByModule(permissionType);
   }
 
   /**
-   * Get all modules
+   * Get permissions grouped by group_name with hierarchy
    */
-  async getModules(): Promise<string[]> {
-    return permissionRepository.getModules();
+  async getPermissionsGroupedHierarchical(permissionType?: RoleScope): Promise<HierarchicalPermissionGroup[]> {
+    return permissionRepository.findAllGroupedByModuleHierarchical(permissionType);
   }
 
   /**
-   * Get all categories
+   * Get unique group names
    */
-  async getCategories(): Promise<string[]> {
-    return permissionRepository.getCategories();
+  async getGroupNames(): Promise<string[]> {
+    return permissionRepository.getGroupNames();
   }
 
   /**
@@ -90,18 +92,6 @@ class PermissionServiceImpl {
       throw ValidationError.required('name');
     }
 
-    if (!data.displayName?.trim()) {
-      throw ValidationError.required('displayName');
-    }
-
-    if (!data.module?.trim()) {
-      throw ValidationError.required('module');
-    }
-
-    if (!data.action?.trim()) {
-      throw ValidationError.required('action');
-    }
-
     // Check uniqueness
     const isUnique = await permissionRepository.isNameUnique(data.name);
     if (!isUnique) {
@@ -109,7 +99,7 @@ class PermissionServiceImpl {
     }
 
     // Create
-    const permission = await permissionRepository.create(data, ctx?.userId);
+    const permission = await permissionRepository.create(data);
 
     // Audit log
     await auditService.logCreate(
@@ -118,8 +108,8 @@ class PermissionServiceImpl {
       permission.id,
       {
         name: permission.name,
-        module: permission.module,
-        action: permission.action,
+        permissionType: permission.permissionType,
+        groupName: permission.groupName,
       },
       {
         userId: ctx?.userId,
@@ -137,65 +127,82 @@ class PermissionServiceImpl {
     logger.info(`${this.serviceName}.seedDefaultPermissions`, { userId: ctx?.userId });
 
     const defaultPermissions: CreatePermissionData[] = [
+      // User permissions (for internal users)
       // Dashboard
-      { name: 'dashboard.view', displayName: 'View Dashboard', module: 'dashboard', action: 'view', category: 'Dashboard' },
+      { name: 'dashboard.view', description: 'View Dashboard', groupName: 'Dashboard', permissionType: 'user', sortOrder: 1 },
 
       // Users
-      { name: 'users.view', displayName: 'View Users', module: 'users', action: 'view', category: 'User Management' },
-      { name: 'users.create', displayName: 'Create Users', module: 'users', action: 'create', category: 'User Management' },
-      { name: 'users.edit', displayName: 'Edit Users', module: 'users', action: 'edit', category: 'User Management' },
-      { name: 'users.delete', displayName: 'Delete Users', module: 'users', action: 'delete', category: 'User Management' },
-      { name: 'users.export', displayName: 'Export Users', module: 'users', action: 'export', category: 'User Management' },
+      { name: 'users.view', description: 'View Users', groupName: 'User Management', permissionType: 'user', sortOrder: 1 },
+      { name: 'users.create', description: 'Create Users', groupName: 'User Management', permissionType: 'user', sortOrder: 2 },
+      { name: 'users.edit', description: 'Edit Users', groupName: 'User Management', permissionType: 'user', sortOrder: 3 },
+      { name: 'users.delete', description: 'Delete Users', groupName: 'User Management', permissionType: 'user', sortOrder: 4 },
+      { name: 'users.export', description: 'Export Users', groupName: 'User Management', permissionType: 'user', sortOrder: 5 },
 
       // Roles
-      { name: 'roles.view', displayName: 'View Roles', module: 'roles', action: 'view', category: 'Role Management' },
-      { name: 'roles.create', displayName: 'Create Roles', module: 'roles', action: 'create', category: 'Role Management' },
-      { name: 'roles.edit', displayName: 'Edit Roles', module: 'roles', action: 'edit', category: 'Role Management' },
-      { name: 'roles.delete', displayName: 'Delete Roles', module: 'roles', action: 'delete', category: 'Role Management' },
-      { name: 'roles.manage', displayName: 'Manage Role Permissions', module: 'roles', action: 'manage', category: 'Role Management' },
+      { name: 'roles.view', description: 'View Roles', groupName: 'Role Management', permissionType: 'user', sortOrder: 1 },
+      { name: 'roles.create', description: 'Create Roles', groupName: 'Role Management', permissionType: 'user', sortOrder: 2 },
+      { name: 'roles.edit', description: 'Edit Roles', groupName: 'Role Management', permissionType: 'user', sortOrder: 3 },
+      { name: 'roles.delete', description: 'Delete Roles', groupName: 'Role Management', permissionType: 'user', sortOrder: 4 },
+      { name: 'roles.manage', description: 'Manage Role Permissions', groupName: 'Role Management', permissionType: 'user', sortOrder: 5 },
 
       // Permissions
-      { name: 'permissions.view', displayName: 'View Permissions', module: 'permissions', action: 'view', category: 'Permission Management' },
-      { name: 'permissions.manage', displayName: 'Manage Permissions', module: 'permissions', action: 'manage', category: 'Permission Management' },
+      { name: 'permissions.view', description: 'View Permissions', groupName: 'Permission Management', permissionType: 'user', sortOrder: 1 },
+      { name: 'permissions.manage', description: 'Manage Permissions', groupName: 'Permission Management', permissionType: 'user', sortOrder: 2 },
 
       // Audit Logs
-      { name: 'audit.view', displayName: 'View Audit Logs', module: 'audit', action: 'view', category: 'Audit' },
-      { name: 'audit.export', displayName: 'Export Audit Logs', module: 'audit', action: 'export', category: 'Audit' },
+      { name: 'audit.view', description: 'View Audit Logs', groupName: 'Audit', permissionType: 'user', sortOrder: 1 },
+      { name: 'audit.export', description: 'Export Audit Logs', groupName: 'Audit', permissionType: 'user', sortOrder: 2 },
 
       // Settings
-      { name: 'settings.view', displayName: 'View Settings', module: 'settings', action: 'view', category: 'Settings' },
-      { name: 'settings.edit', displayName: 'Edit Settings', module: 'settings', action: 'edit', category: 'Settings' },
+      { name: 'settings.view', description: 'View Settings', groupName: 'Settings', permissionType: 'user', sortOrder: 1 },
+      { name: 'settings.edit', description: 'Edit Settings', groupName: 'Settings', permissionType: 'user', sortOrder: 2 },
 
       // Products
-      { name: 'products.view', displayName: 'View Products', module: 'products', action: 'view', category: 'Products' },
-      { name: 'products.create', displayName: 'Create Products', module: 'products', action: 'create', category: 'Products' },
-      { name: 'products.edit', displayName: 'Edit Products', module: 'products', action: 'edit', category: 'Products' },
-      { name: 'products.delete', displayName: 'Delete Products', module: 'products', action: 'delete', category: 'Products' },
+      { name: 'products.view', description: 'View Products', groupName: 'Products', permissionType: 'user', sortOrder: 1 },
+      { name: 'products.create', description: 'Create Products', groupName: 'Products', permissionType: 'user', sortOrder: 2 },
+      { name: 'products.edit', description: 'Edit Products', groupName: 'Products', permissionType: 'user', sortOrder: 3 },
+      { name: 'products.delete', description: 'Delete Products', groupName: 'Products', permissionType: 'user', sortOrder: 4 },
 
       // Customers
-      { name: 'customers.view', displayName: 'View Customers', module: 'customers', action: 'view', category: 'Customers' },
-      { name: 'customers.create', displayName: 'Create Customers', module: 'customers', action: 'create', category: 'Customers' },
-      { name: 'customers.edit', displayName: 'Edit Customers', module: 'customers', action: 'edit', category: 'Customers' },
-      { name: 'customers.delete', displayName: 'Delete Customers', module: 'customers', action: 'delete', category: 'Customers' },
+      { name: 'customers.view', description: 'View Customers', groupName: 'Customers', permissionType: 'user', sortOrder: 1 },
+      { name: 'customers.create', description: 'Create Customers', groupName: 'Customers', permissionType: 'user', sortOrder: 2 },
+      { name: 'customers.edit', description: 'Edit Customers', groupName: 'Customers', permissionType: 'user', sortOrder: 3 },
+      { name: 'customers.delete', description: 'Delete Customers', groupName: 'Customers', permissionType: 'user', sortOrder: 4 },
 
       // Orders
-      { name: 'orders.view', displayName: 'View Orders', module: 'orders', action: 'view', category: 'Orders' },
-      { name: 'orders.create', displayName: 'Create Orders', module: 'orders', action: 'create', category: 'Orders' },
-      { name: 'orders.edit', displayName: 'Edit Orders', module: 'orders', action: 'edit', category: 'Orders' },
-      { name: 'orders.delete', displayName: 'Delete Orders', module: 'orders', action: 'delete', category: 'Orders' },
-      { name: 'orders.approve', displayName: 'Approve Orders', module: 'orders', action: 'approve', category: 'Orders' },
+      { name: 'orders.view', description: 'View Orders', groupName: 'Orders', permissionType: 'user', sortOrder: 1 },
+      { name: 'orders.create', description: 'Create Orders', groupName: 'Orders', permissionType: 'user', sortOrder: 2 },
+      { name: 'orders.edit', description: 'Edit Orders', groupName: 'Orders', permissionType: 'user', sortOrder: 3 },
+      { name: 'orders.delete', description: 'Delete Orders', groupName: 'Orders', permissionType: 'user', sortOrder: 4 },
+      { name: 'orders.approve', description: 'Approve Orders', groupName: 'Orders', permissionType: 'user', sortOrder: 5 },
 
       // Inventory
-      { name: 'inventory.view', displayName: 'View Inventory', module: 'inventory', action: 'view', category: 'Inventory' },
-      { name: 'inventory.manage', displayName: 'Manage Inventory', module: 'inventory', action: 'manage', category: 'Inventory' },
-      { name: 'inventory.adjust', displayName: 'Adjust Inventory', module: 'inventory', action: 'adjust', category: 'Inventory' },
+      { name: 'inventory.view', description: 'View Inventory', groupName: 'Inventory', permissionType: 'user', sortOrder: 1 },
+      { name: 'inventory.manage', description: 'Manage Inventory', groupName: 'Inventory', permissionType: 'user', sortOrder: 2 },
+      { name: 'inventory.adjust', description: 'Adjust Inventory', groupName: 'Inventory', permissionType: 'user', sortOrder: 3 },
 
       // Reports
-      { name: 'reports.view', displayName: 'View Reports', module: 'reports', action: 'view', category: 'Reports' },
-      { name: 'reports.export', displayName: 'Export Reports', module: 'reports', action: 'export', category: 'Reports' },
+      { name: 'reports.view', description: 'View Reports', groupName: 'Reports', permissionType: 'user', sortOrder: 1 },
+      { name: 'reports.export', description: 'Export Reports', groupName: 'Reports', permissionType: 'user', sortOrder: 2 },
+
+      // Customer permissions (for external customers)
+      // Customer Dashboard
+      { name: 'customer.dashboard.view', description: 'View Customer Dashboard', groupName: 'Customer Dashboard', permissionType: 'customer', sortOrder: 1 },
+
+      // Customer Orders
+      { name: 'customer.orders.view', description: 'View My Orders', groupName: 'Customer Orders', permissionType: 'customer', sortOrder: 1 },
+      { name: 'customer.orders.create', description: 'Place Orders', groupName: 'Customer Orders', permissionType: 'customer', sortOrder: 2 },
+      { name: 'customer.orders.cancel', description: 'Cancel Orders', groupName: 'Customer Orders', permissionType: 'customer', sortOrder: 3 },
+
+      // Customer Products
+      { name: 'customer.products.view', description: 'View Products Catalog', groupName: 'Customer Products', permissionType: 'customer', sortOrder: 1 },
+
+      // Customer Profile
+      { name: 'customer.profile.view', description: 'View My Profile', groupName: 'Customer Profile', permissionType: 'customer', sortOrder: 1 },
+      { name: 'customer.profile.edit', description: 'Edit My Profile', groupName: 'Customer Profile', permissionType: 'customer', sortOrder: 2 },
     ];
 
-    const count = await permissionRepository.createMany(defaultPermissions, ctx?.userId);
+    const count = await permissionRepository.createMany(defaultPermissions);
 
     if (count > 0) {
       await auditService.log({

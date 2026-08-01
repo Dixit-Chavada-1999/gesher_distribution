@@ -16,7 +16,7 @@
 
 CREATE TABLE locations (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Location Identity
   location_code VARCHAR(20) NOT NULL,
@@ -48,7 +48,6 @@ CREATE TABLE locations (
   deleted_at TIMESTAMPTZ,
 
   -- Constraints
-  CONSTRAINT locations_code_unique UNIQUE (location_code) WHERE deleted_at IS NULL,
   CONSTRAINT locations_code_format CHECK (location_code ~ '^[A-Z0-9\-]+$'),
   CONSTRAINT locations_name_length CHECK (LENGTH(TRIM(name)) >= 2),
   CONSTRAINT locations_email_format CHECK (
@@ -61,7 +60,7 @@ CREATE TABLE locations (
 -- INDEXES
 -- ============================================
 
-CREATE INDEX idx_locations_code ON locations(location_code) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX idx_locations_code_unique ON locations(location_code) WHERE deleted_at IS NULL;
 CREATE INDEX idx_locations_type ON locations(location_type) WHERE deleted_at IS NULL;
 CREATE INDEX idx_locations_is_active ON locations(is_active) WHERE deleted_at IS NULL;
 CREATE INDEX idx_locations_is_default ON locations(is_default) WHERE deleted_at IS NULL;

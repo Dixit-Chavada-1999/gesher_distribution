@@ -70,22 +70,18 @@ export const CREDIT_STATUS_COLORS: Record<CreditStatus, string> = {
 };
 
 // Database enum: contact_type
-export type ContactType = 'primary' | 'purchasing' | 'accounts_payable' | 'receiving' | 'executive';
+export type ContactType = 'purchasing' | 'accounts_payable' | 'receiving';
 
 export const CONTACT_TYPES: ContactType[] = [
-  'primary',
   'purchasing',
   'accounts_payable',
   'receiving',
-  'executive',
 ];
 
 export const CONTACT_TYPE_LABELS: Record<ContactType, string> = {
-  primary: 'Primary',
   purchasing: 'Purchasing',
   accounts_payable: 'Accounts Payable',
   receiving: 'Receiving',
-  executive: 'Executive',
 };
 
 // ============================================
@@ -230,7 +226,7 @@ export interface CustomerContactFormValues {
 export const DEFAULT_CUSTOMER_CONTACT_FORM_VALUES: CustomerContactFormValues = {
   firstName: '',
   lastName: '',
-  contactType: 'primary',
+  contactType: 'purchasing',
   email: '',
   phone: '',
   mobile: '',

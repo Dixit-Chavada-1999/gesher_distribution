@@ -71,7 +71,7 @@ function ChangeRoleDialogComponent({
       return;
     }
 
-    const current = roles.find((role) => role.displayName === user.roleName);
+    const current = roles.find((role) => role.name === user.roleName);
     setRoleId(current?.id ?? '');
   }, [open, user, roles]);
 
@@ -118,7 +118,7 @@ function ChangeRoleDialogComponent({
             <SelectContent>
               {roles.map((role) => (
                 <SelectItem key={role.id} value={role.id}>
-                  {role.displayName}
+                  {role.name}
                 </SelectItem>
               ))}
             </SelectContent>

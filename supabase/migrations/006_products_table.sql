@@ -17,7 +17,7 @@
 
 CREATE TABLE products (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Product Identity
   sku VARCHAR(50) NOT NULL,
@@ -50,7 +50,6 @@ CREATE TABLE products (
   deleted_at TIMESTAMPTZ,
 
   -- Constraints
-  CONSTRAINT products_sku_unique UNIQUE (sku) WHERE deleted_at IS NULL,
   CONSTRAINT products_sku_format CHECK (sku ~ '^[A-Z0-9\-]+$'),
   CONSTRAINT products_name_length CHECK (LENGTH(TRIM(name)) >= 2),
   CONSTRAINT products_base_cost_positive CHECK (base_cost >= 0),
@@ -61,7 +60,7 @@ CREATE TABLE products (
 -- INDEXES
 -- ============================================
 
-CREATE INDEX idx_products_sku ON products(sku) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX idx_products_sku_unique ON products(sku) WHERE deleted_at IS NULL;
 CREATE INDEX idx_products_status ON products(status) WHERE deleted_at IS NULL;
 CREATE INDEX idx_products_category ON products(category) WHERE deleted_at IS NULL;
 CREATE INDEX idx_products_is_sellable ON products(is_sellable) WHERE deleted_at IS NULL;

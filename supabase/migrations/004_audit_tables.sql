@@ -14,7 +14,7 @@
 
 CREATE TABLE audit_logs (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- User Reference
   user_id UUID REFERENCES users(id) ON DELETE SET NULL,
@@ -105,7 +105,7 @@ COMMENT ON COLUMN audit_logs.metadata IS 'Additional context data';
 
 CREATE TABLE attachments (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Entity Reference (polymorphic)
   entity_type VARCHAR(50) NOT NULL,

@@ -73,10 +73,10 @@ export function LoginForm() {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
         {/* Error Message */}
         {error && (
-          <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="flex items-center gap-3 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             <AlertCircle className="h-4 w-4 flex-shrink-0" />
             <span>{error}</span>
           </div>
@@ -87,19 +87,19 @@ export function LoginForm() {
           control={form.control}
           name="email"
           render={({ field }) => (
-            <FormItem className="space-y-2">
-              <FormLabel className="text-sm font-medium text-slate-700">
+            <FormItem className="space-y-1.5">
+              <FormLabel className="text-sm font-medium text-foreground">
                 Email Address
               </FormLabel>
               <FormControl>
                 <div className="relative">
-                  <Mail className="absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-400" />
+                  <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     type="email"
                     placeholder="you@example.com"
                     autoComplete="email"
                     disabled={isLoading}
-                    className="h-11 pl-11 text-sm border-slate-200 focus:border-blue-500 focus:ring-blue-500"
+                    className="h-11 pl-10 text-sm rounded-lg"
                     {...field}
                   />
                 </div>
@@ -114,32 +114,32 @@ export function LoginForm() {
           control={form.control}
           name="password"
           render={({ field }) => (
-            <FormItem className="space-y-2">
-              <FormLabel className="text-sm font-medium text-slate-700">
+            <FormItem className="space-y-1.5">
+              <FormLabel className="text-sm font-medium text-foreground">
                 Password
               </FormLabel>
               <FormControl>
                 <div className="relative">
-                  <Lock className="absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-400" />
+                  <Lock className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     type={showPassword ? 'text' : 'password'}
                     placeholder="Enter your password"
                     autoComplete="current-password"
                     disabled={isLoading}
-                    className="h-11 pl-11 pr-11 text-sm border-slate-200 focus:border-blue-500 focus:ring-blue-500"
+                    className="h-11 pl-10 pr-10 text-sm rounded-lg"
                     {...field}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
                     tabIndex={-1}
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPassword ? (
-                      <EyeOff className="h-[18px] w-[18px]" />
+                      <EyeOff className="h-4 w-4" />
                     ) : (
-                      <Eye className="h-[18px] w-[18px]" />
+                      <Eye className="h-4 w-4" />
                     )}
                   </button>
                 </div>
@@ -160,10 +160,10 @@ export function LoginForm() {
                   checked={field.value}
                   onCheckedChange={field.onChange}
                   disabled={isLoading}
-                  className="border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                  className="h-4 w-4 rounded border-border data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                 />
               </FormControl>
-              <FormLabel className="text-sm font-normal text-slate-600 cursor-pointer">
+              <FormLabel className="text-sm font-normal text-muted-foreground cursor-pointer">
                 Remember me for 30 days
               </FormLabel>
             </FormItem>
@@ -173,7 +173,7 @@ export function LoginForm() {
         {/* Submit Button */}
         <Button
           type="submit"
-          className="w-full h-12 text-base font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all duration-200"
+          className="w-full h-11 text-sm font-semibold rounded-lg shadow-sm transition-all duration-200"
           disabled={isLoading}
         >
           {isLoading ? (
@@ -187,10 +187,10 @@ export function LoginForm() {
         </Button>
 
         {/* Forgot Password Link */}
-        <div className="text-center">
+        <div className="text-center pt-1">
           <Link
             href="/forgot-password"
-            className="text-sm font-medium text-blue-600 hover:text-blue-500 transition-colors"
+            className="text-sm font-medium text-primary hover:text-primary/80 transition-colors"
           >
             Forgot your password?
           </Link>

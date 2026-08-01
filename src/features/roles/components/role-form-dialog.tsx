@@ -5,10 +5,6 @@
  *
  * Dialog for creating and editing roles.
  * Only handles basic role info - permissions are managed separately on the main page.
- *
- * Performance Optimizations:
- * - Uses React.memo to prevent unnecessary re-renders
- * - Memoized callbacks with useCallback
  */
 
 import { memo, useState, useEffect, useCallback } from 'react';
@@ -26,6 +22,13 @@ import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Textarea } from '@/shared/components/ui/textarea';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/components/ui/select';
+import {
   Form,
   FormControl,
   FormDescription,
@@ -36,7 +39,7 @@ import {
 } from '@/shared/components/ui/form';
 import { Loader2 } from 'lucide-react';
 import { useCreateRole, useUpdateRole } from '../hooks/use-role-mutations';
-import type { RoleDetail, CreateRoleData, UpdateRoleData } from '../types';
+import type { RoleDetail, CreateRoleData, UpdateRoleData, RoleScope } from '../types';
 
 // ============================================
 // SCHEMA
@@ -44,23 +47,14 @@ import type { RoleDetail, CreateRoleData, UpdateRoleData } from '../types';
 
 const roleFormSchema = z.object({
   name: z.string().min(1, 'Name is required').max(50),
-  slug: z
-    .string()
-    .min(1, 'Slug is required')
-    .max(50)
-    .regex(
-      /^[a-z][a-z0-9_]*$/,
-      'Slug must start with a letter and contain only lowercase letters, numbers, and underscores'
-    ),
-  displayName: z.string().min(1, 'Display name is required').max(100),
   description: z.string().max(500).optional(),
+  scope: z.enum(['user', 'customer']),
 });
 
 type RoleFormValues = {
   name: string;
-  slug: string;
-  displayName: string;
   description?: string;
+  scope: RoleScope;
 };
 
 // ============================================
@@ -94,9 +88,8 @@ function RoleFormDialogComponent({
     resolver: zodResolver(roleFormSchema),
     defaultValues: {
       name: '',
-      slug: '',
-      displayName: '',
       description: '',
+      scope: 'user',
     },
   });
 
@@ -105,32 +98,17 @@ function RoleFormDialogComponent({
     if (role) {
       form.reset({
         name: role.name,
-        slug: role.slug,
-        displayName: role.displayName,
         description: role.description || '',
+        scope: role.scope,
       });
     } else {
       form.reset({
         name: '',
-        slug: '',
-        displayName: '',
         description: '',
+        scope: 'user',
       });
     }
   }, [role, form]);
-
-  // Auto-generate slug from name
-  const watchName = form.watch('name');
-  useEffect(() => {
-    if (!isEditing && watchName) {
-      const slug = watchName
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '_')
-        .replace(/^_+|_+$/g, '')
-        .substring(0, 50);
-      form.setValue('slug', slug);
-    }
-  }, [watchName, isEditing, form]);
 
   const onSubmit = useCallback(async (values: RoleFormValues) => {
     try {
@@ -139,16 +117,15 @@ function RoleFormDialogComponent({
       if (isEditing && role) {
         const updateData: UpdateRoleData = {
           name: values.name,
-          displayName: values.displayName,
           description: values.description || undefined,
+          scope: values.scope,
         };
         await updateRole(role.id, updateData);
       } else {
         const createData: CreateRoleData = {
           name: values.name,
-          slug: values.slug,
-          displayName: values.displayName,
           description: values.description || undefined,
+          scope: values.scope,
         };
         await createRole(createData);
       }
@@ -180,56 +157,46 @@ function RoleFormDialogComponent({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* Name & Slug */}
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Name *</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        placeholder="e.g., Sales Manager"
-                        disabled={role?.isSystem}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="slug"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Slug *</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        placeholder="e.g., sales_manager"
-                        disabled={isEditing}
-                      />
-                    </FormControl>
-                    <FormDescription>Unique identifier (auto-generated)</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            {/* Display Name */}
+            {/* Name */}
             <FormField
               control={form.control}
-              name="displayName"
+              name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Display Name *</FormLabel>
+                  <FormLabel>Name *</FormLabel>
                   <FormControl>
-                    <Input {...field} placeholder="e.g., Sales Manager" />
+                    <Input
+                      {...field}
+                      placeholder="e.g., Sales Manager"
+                      disabled={role?.isSystemRole}
+                    />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Scope */}
+            <FormField
+              control={form.control}
+              name="scope"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Scope *</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select scope" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="user">User</SelectItem>
+                      <SelectItem value="customer">Customer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    User roles for internal users, Customer roles for external customers
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

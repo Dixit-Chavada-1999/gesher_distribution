@@ -34,27 +34,24 @@ export function AuthLayout({
   className,
 }: AuthLayoutProps) {
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-br from-slate-50 via-white to-slate-100">
-      {/* Subtle Background Pattern */}
-      <div className="absolute inset-0 -z-10 opacity-40 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] bg-[size:40px_40px]" />
-
+    <div className="flex min-h-screen flex-col bg-background">
       {/* Main Content */}
       <main className="flex flex-1 items-center justify-center p-4">
-        <div className={cn('w-full max-w-[420px] space-y-8', className)}>
+        <div className={cn('w-full max-w-[440px] space-y-6', className)}>
           {/* Logo */}
           <div className="flex justify-center">
             <Logo asLink={false} variant="default" />
           </div>
 
           {/* Card */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-lg shadow-slate-200/50">
+          <div className="rounded-xl border border-border bg-card px-8 py-10 shadow-soft">
             {/* Header */}
-            <div className="mb-8 text-center">
-              <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+            <div className="mb-6 text-center">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">
                 {title}
               </h1>
               {description && (
-                <p className="mt-2 text-sm text-slate-500">
+                <p className="mt-2 text-sm text-muted-foreground">
                   {description}
                 </p>
               )}
@@ -65,7 +62,7 @@ export function AuthLayout({
           </div>
 
           {/* Footer */}
-          <p className="text-center text-xs text-slate-400">
+          <p className="text-center text-sm text-muted-foreground">
             © {new Date().getFullYear()} Gesher Distribution. All rights reserved.
           </p>
         </div>
@@ -84,37 +81,37 @@ export function AuthLayout({
  */
 function AuthLayoutSkeleton() {
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-br from-slate-50 via-white to-slate-100">
+    <div className="flex min-h-screen flex-col bg-background">
       <main className="flex flex-1 items-center justify-center p-4">
-        <div className="w-full max-w-[420px] space-y-8">
+        <div className="w-full max-w-[440px] space-y-6">
           {/* Logo Skeleton */}
           <div className="flex justify-center">
-            <div className="h-10 w-40 animate-pulse rounded-lg bg-slate-200" />
+            <div className="h-10 w-40 animate-pulse rounded-lg bg-muted" />
           </div>
 
           {/* Card Skeleton */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-lg shadow-slate-200/50">
-            <div className="mb-8 space-y-3 text-center">
-              <div className="mx-auto h-7 w-40 animate-pulse rounded-lg bg-slate-200" />
-              <div className="mx-auto h-4 w-64 animate-pulse rounded-lg bg-slate-100" />
+          <div className="rounded-xl border border-border bg-card px-8 py-10 shadow-soft">
+            <div className="mb-6 space-y-3 text-center">
+              <div className="mx-auto h-7 w-40 animate-pulse rounded-lg bg-muted" />
+              <div className="mx-auto h-4 w-64 animate-pulse rounded-lg bg-muted/50" />
             </div>
 
-            <div className="space-y-6">
+            <div className="space-y-5">
               <div className="space-y-2">
-                <div className="h-4 w-24 animate-pulse rounded bg-slate-200" />
-                <div className="h-11 w-full animate-pulse rounded-lg bg-slate-100" />
+                <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+                <div className="h-11 w-full animate-pulse rounded-lg bg-muted/50" />
               </div>
               <div className="space-y-2">
-                <div className="h-4 w-20 animate-pulse rounded bg-slate-200" />
-                <div className="h-11 w-full animate-pulse rounded-lg bg-slate-100" />
+                <div className="h-4 w-20 animate-pulse rounded bg-muted" />
+                <div className="h-11 w-full animate-pulse rounded-lg bg-muted/50" />
               </div>
-              <div className="h-12 w-full animate-pulse rounded-lg bg-slate-200" />
+              <div className="h-12 w-full animate-pulse rounded-lg bg-muted" />
             </div>
           </div>
 
           {/* Footer Skeleton */}
           <div className="flex justify-center">
-            <div className="h-4 w-52 animate-pulse rounded bg-slate-200" />
+            <div className="h-4 w-52 animate-pulse rounded bg-muted" />
           </div>
         </div>
       </main>

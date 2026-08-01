@@ -17,7 +17,7 @@
 
 CREATE TABLE customer_documents (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Foreign Key
   customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,

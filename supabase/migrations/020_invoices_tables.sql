@@ -27,7 +27,7 @@ COMMENT ON TYPE invoice_status IS 'Invoice workflow status';
 
 CREATE TABLE invoices (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Invoice Identity
   invoice_number VARCHAR(50) NOT NULL,
@@ -101,7 +101,7 @@ CREATE TABLE invoices (
 
 CREATE TABLE invoice_items (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Relationships
   invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
@@ -144,7 +144,7 @@ CREATE TABLE invoice_items (
 
 CREATE TABLE invoice_payments (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Relationships
   invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
@@ -227,7 +227,7 @@ CREATE TRIGGER trg_invoice_payments_updated_at
 -- SEQUENCE FOR INVOICE NUMBERS
 -- ============================================
 
-CREATE SEQUENCE invoice_number_seq
+CREATE SEQUENCE IF NOT EXISTS invoice_number_seq
   START WITH 1
   INCREMENT BY 1
   NO MAXVALUE

@@ -25,7 +25,7 @@ COMMENT ON TYPE shipment_status IS 'Shipment workflow status';
 
 CREATE TABLE shipments (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Shipment Identity
   shipment_number VARCHAR(50) NOT NULL,
@@ -86,7 +86,7 @@ CREATE TABLE shipments (
 
 CREATE TABLE shipment_items (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Relationships
   shipment_id UUID NOT NULL REFERENCES shipments(id) ON DELETE CASCADE,
@@ -161,7 +161,7 @@ CREATE TRIGGER trg_shipment_items_updated_at
 -- SEQUENCE FOR SHIPMENT NUMBERS
 -- ============================================
 
-CREATE SEQUENCE shipment_number_seq
+CREATE SEQUENCE IF NOT EXISTS shipment_number_seq
   START WITH 1
   INCREMENT BY 1
   NO MAXVALUE

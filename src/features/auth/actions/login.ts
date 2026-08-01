@@ -45,22 +45,29 @@ export async function loginAction(data: LoginFormData): Promise<LoginResult | vo
   });
 
   if (error) {
+    // Log full error for debugging
+    console.error('Login error FULL:', JSON.stringify(error, null, 2));
+    console.error('Login error keys:', Object.keys(error));
+    console.error('Login error message:', error.message);
+    console.error('Login error cause:', (error as Error & { cause?: unknown }).cause);
+
+    const errorMsg = error.message || error.name || JSON.stringify(error) || 'Unknown error';
+
     // Map Supabase errors to user-friendly messages
-    if (error.message === 'Invalid login credentials') {
+    if (errorMsg === 'Invalid login credentials') {
       return { error: 'Invalid email or password. Please try again.' };
     }
 
-    if (error.message.includes('Email not confirmed')) {
+    if (errorMsg.includes('Email not confirmed')) {
       return { error: 'Please verify your email before signing in.' };
     }
 
-    if (error.message.includes('Too many requests')) {
+    if (errorMsg.includes('Too many requests')) {
       return { error: 'Too many login attempts. Please try again later.' };
     }
 
-    // Generic error for unexpected issues
-    console.error('Login error:', error);
-    return { error: 'An error occurred during sign in. Please try again.' };
+    // Generic error for unexpected issues - show actual error in development
+    return { error: `Login failed: ${errorMsg}` };
   }
 
   // Get the authenticated user

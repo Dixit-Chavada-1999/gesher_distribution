@@ -72,7 +72,7 @@ COMMENT ON TYPE sync_status IS 'Sync operation status';
 
 CREATE TABLE integrations (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Integration Identity
   provider integration_provider NOT NULL,
@@ -107,7 +107,7 @@ COMMENT ON COLUMN integrations.status IS 'Whether this integration is available 
 
 CREATE TABLE integration_connections (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Relationships
   integration_id UUID NOT NULL REFERENCES integrations(id) ON DELETE RESTRICT,
@@ -159,7 +159,7 @@ COMMENT ON COLUMN integration_connections.status IS 'Current connection state';
 
 CREATE TABLE integration_sync_logs (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Relationships
   connection_id UUID NOT NULL REFERENCES integration_connections(id) ON DELETE CASCADE,

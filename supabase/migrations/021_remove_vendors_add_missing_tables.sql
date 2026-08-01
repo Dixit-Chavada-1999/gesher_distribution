@@ -38,7 +38,7 @@ DROP TABLE IF EXISTS vendors CASCADE;
 
 CREATE TABLE inventory (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Relationships
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
@@ -131,7 +131,7 @@ CREATE TYPE cost_component_type AS ENUM (
 
 CREATE TABLE cost_components (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Relationships (can be linked to PO or PO Item)
   purchase_order_id UUID REFERENCES purchase_orders(id) ON DELETE CASCADE,
@@ -225,7 +225,7 @@ CREATE TYPE credit_note_reason AS ENUM (
 
 CREATE TABLE credit_notes (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Credit Note Identity
   credit_note_number VARCHAR(50) NOT NULL,
@@ -272,7 +272,7 @@ CREATE TABLE credit_notes (
 -- Credit Note Items
 CREATE TABLE credit_note_items (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Relationships
   credit_note_id UUID NOT NULL REFERENCES credit_notes(id) ON DELETE CASCADE,
@@ -306,7 +306,7 @@ CREATE INDEX idx_credit_notes_qb ON credit_notes(quickbooks_credit_memo_id) WHER
 CREATE INDEX idx_credit_note_items_cn ON credit_note_items(credit_note_id);
 
 -- Sequence for credit note numbers
-CREATE SEQUENCE credit_note_number_seq START WITH 1 INCREMENT BY 1 NO MAXVALUE CACHE 1;
+CREATE SEQUENCE IF NOT EXISTS credit_note_number_seq START WITH 1 INCREMENT BY 1 NO MAXVALUE CACHE 1;
 
 CREATE OR REPLACE FUNCTION generate_credit_note_number()
 RETURNS VARCHAR(50) AS $$
@@ -384,7 +384,7 @@ CREATE TYPE approval_status AS ENUM (
 
 CREATE TABLE approval_events (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Event Type & Subject
   event_type approval_event_type NOT NULL,

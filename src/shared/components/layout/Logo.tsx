@@ -42,7 +42,7 @@ export function Logo({
   const content = (
     <div
       className={cn(
-        'flex items-center gap-3 font-semibold',
+        'flex items-center gap-2.5 font-semibold',
         collapsed ? 'justify-center' : 'justify-start',
         className
       )}
@@ -50,24 +50,20 @@ export function Logo({
       {/* Logo Icon */}
       <div
         className={cn(
-          'flex items-center justify-center rounded-xl shadow-sm',
+          'flex items-center justify-center rounded-lg',
           isSidebar
             ? 'h-8 w-8 bg-sidebar-primary text-sidebar-primary-foreground'
-            : 'h-10 w-10 bg-gradient-to-br from-blue-600 to-blue-700 text-white'
+            : 'h-9 w-9 bg-primary text-primary-foreground'
         )}
       >
         <svg
-          className={cn(isSidebar ? 'h-5 w-5' : 'h-6 w-6')}
+          className={cn(isSidebar ? 'h-5 w-5' : 'h-5 w-5')}
           viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+          fill="currentColor"
         >
-          <path d="M12 2L2 7l10 5 10-5-10-5z" />
-          <path d="M2 17l10 5 10-5" />
-          <path d="M2 12l10 5 10-5" />
+          <path d="M12 2L2 7l10 5 10-5-10-5z" opacity="0.9" />
+          <path d="M2 12l10 5 10-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M2 17l10 5 10-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </div>
 
@@ -79,7 +75,7 @@ export function Logo({
               'font-bold leading-none tracking-tight',
               isSidebar
                 ? 'text-base text-sidebar-primary-foreground'
-                : 'text-lg text-slate-900'
+                : 'text-lg text-foreground'
             )}
           >
             Gesher
@@ -89,7 +85,7 @@ export function Logo({
               'font-medium leading-none mt-0.5',
               isSidebar
                 ? 'text-xs text-sidebar-foreground/70'
-                : 'text-xs text-slate-500'
+                : 'text-xs text-primary'
             )}
           >
             Distribution

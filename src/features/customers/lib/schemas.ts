@@ -219,18 +219,16 @@ export type CustomerListParamsInput = z.infer<typeof customerListParamsSchema>;
 // ============================================
 
 export const contactTypeSchema = z.enum([
-  'primary',
   'purchasing',
   'accounts_payable',
   'receiving',
-  'executive',
 ]);
 
 export const createCustomerContactSchema = z.object({
   customerId: z.string().uuid('Invalid customer ID'),
   firstName: z.string().min(1, 'First name is required').max(100, 'First name must be 100 characters or less'),
   lastName: z.string().min(1, 'Last name is required').max(100, 'Last name must be 100 characters or less'),
-  contactType: contactTypeSchema.default('primary'),
+  contactType: contactTypeSchema.default('purchasing'),
   email: z.string().email('Invalid email address').max(255).nullable().optional()
     .or(z.literal('').transform(() => null)),
   phone: z.string().max(20).nullable().optional(),

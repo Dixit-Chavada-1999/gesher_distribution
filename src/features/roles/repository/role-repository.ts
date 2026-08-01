@@ -21,32 +21,32 @@ import type {
 
 interface DbRole {
   id: string;
+  scope: 'user' | 'customer';
+  is_system_role: boolean;
   name: string;
-  slug: string;
-  display_name: string;
   description: string | null;
-  level: number;
-  is_system: boolean;
   created_at: string;
   updated_at: string;
-  created_by: string | null;
-  updated_by: string | null;
   deleted_at: string | null;
 }
 
 interface DbPermission {
   id: string;
+  permission_type: 'user' | 'customer';
+  parent_id: string | null;
   name: string;
-  display_name: string;
+  group_name: string | null;
+  sort_order: number;
   description: string | null;
-  module: string;
-  action: string;
-  category: string | null;
   created_at: string;
   updated_at: string;
-  created_by: string | null;
-  updated_by: string | null;
-  deleted_at: string | null;
+}
+
+interface DbRolePermission {
+  role_id: string;
+  permission_id: string;
+  is_active: boolean;
+  permissions?: DbPermission;
 }
 
 
@@ -75,13 +75,13 @@ class RoleRepositoryImpl {
   }
 
   /**
-   * Find role by slug
+   * Find role by name
    */
-  async findBySlug(slug: string): Promise<Role | null> {
+  async findByName(name: string): Promise<Role | null> {
     const { data, error } = await db
       .from('roles')
       .select('*')
-      .eq('slug', slug)
+      .eq('name', name)
       .is('deleted_at', null)
       .single();
 
@@ -110,7 +110,9 @@ class RoleRepositoryImpl {
       db
         .from('role_permissions')
         .select(`
-          *,
+          role_id,
+          permission_id,
+          is_active,
           permissions:permission_id (*)
         `)
         .eq('role_id', id),
@@ -143,14 +145,15 @@ class RoleRepositoryImpl {
 
     return {
       ...role,
-      rolePermissions: (permsResult.data || []).map((rp) => ({
-        id: rp.id,
-        roleId: rp.role_id,
-        permissionId: rp.permission_id,
-        createdAt: new Date(rp.created_at),
-        createdBy: rp.created_by,
-        permission: this.mapToPermission(rp.permissions as DbPermission),
-      })),
+      rolePermissions: (permsResult.data || []).map((rp) => {
+        const rpTyped = rp as unknown as DbRolePermission;
+        return {
+          roleId: rpTyped.role_id,
+          permissionId: rpTyped.permission_id,
+          isActive: rpTyped.is_active ?? true,
+          permission: this.mapToPermission(rpTyped.permissions as DbPermission),
+        };
+      }),
       _count: {
         users: countResult.count ?? 0,
       },
@@ -172,23 +175,19 @@ class RoleRepositoryImpl {
     // Apply filters
     if (filters?.search) {
       query = query.or(
-        `name.ilike.%${filters.search}%,display_name.ilike.%${filters.search}%,description.ilike.%${filters.search}%`
+        `name.ilike.%${filters.search}%,description.ilike.%${filters.search}%`
       );
     }
 
-    if (filters?.isSystem !== undefined) {
-      query = query.eq('is_system', filters.isSystem);
+    if (filters?.scope) {
+      query = query.eq('scope', filters.scope);
     }
 
-    if (filters?.minLevel !== undefined) {
-      query = query.gte('level', filters.minLevel);
+    if (filters?.isSystemRole !== undefined) {
+      query = query.eq('is_system_role', filters.isSystemRole);
     }
 
-    if (filters?.maxLevel !== undefined) {
-      query = query.lte('level', filters.maxLevel);
-    }
-
-    query = query.order('level', { ascending: false }).order('name', { ascending: true });
+    query = query.order('name', { ascending: true });
 
     const { data: rolesData, error: rolesError } = await query;
 
@@ -237,12 +236,10 @@ class RoleRepositoryImpl {
 
     return rolesData.map((role) => ({
       id: role.id,
+      scope: role.scope || 'user',
+      isSystemRole: role.is_system_role || false,
       name: role.name,
-      slug: role.slug,
-      displayName: role.display_name,
       description: role.description,
-      level: role.level,
-      isSystem: role.is_system,
       userCount: userCountMap[role.id] || 0,
       permissionCount: permCountMap[role.id] || 0,
       createdAt: new Date(role.created_at),
@@ -254,7 +251,7 @@ class RoleRepositoryImpl {
    */
   async createWithPermissions(
     data: CreateRoleData,
-    createdBy?: string
+    _createdBy?: string
   ): Promise<RoleWithPermissions> {
     const { permissionIds, ...roleData } = data;
 
@@ -263,12 +260,9 @@ class RoleRepositoryImpl {
       .from('roles')
       .insert({
         name: roleData.name,
-        slug: roleData.slug,
-        display_name: roleData.displayName,
         description: roleData.description ?? null,
-        level: roleData.level ?? 0,
-        is_system: roleData.isSystem ?? false,
-        created_by: createdBy ?? null,
+        scope: roleData.scope ?? 'user',
+        is_system_role: roleData.isSystemRole ?? false,
       })
       .select()
       .single();
@@ -285,7 +279,7 @@ class RoleRepositoryImpl {
           permissionIds.map((permissionId) => ({
             role_id: newRole.id,
             permission_id: permissionId,
-            created_by: createdBy ?? null,
+            is_active: true,
           }))
         );
 
@@ -307,7 +301,7 @@ class RoleRepositoryImpl {
   async updateWithPermissions(
     id: string,
     data: UpdateRoleData,
-    updatedBy?: string
+    _updatedBy?: string
   ): Promise<RoleWithPermissions> {
     const { permissionIds, ...roleData } = data;
 
@@ -331,7 +325,7 @@ class RoleRepositoryImpl {
             permissionIds.map((permissionId) => ({
               role_id: id,
               permission_id: permissionId,
-              created_by: updatedBy ?? null,
+              is_active: true,
             }))
           );
 
@@ -343,14 +337,12 @@ class RoleRepositoryImpl {
 
     // Build update data
     const updateData: Record<string, unknown> = {
-      updated_by: updatedBy ?? null,
       updated_at: new Date().toISOString(),
     };
 
     if (roleData.name !== undefined) {updateData.name = roleData.name;}
-    if (roleData.displayName !== undefined) {updateData.display_name = roleData.displayName;}
     if (roleData.description !== undefined) {updateData.description = roleData.description;}
-    if (roleData.level !== undefined) {updateData.level = roleData.level;}
+    if (roleData.scope !== undefined) {updateData.scope = roleData.scope;}
 
     // Update role
     const { error: updateError } = await db
@@ -372,12 +364,11 @@ class RoleRepositoryImpl {
   /**
    * Delete role (soft delete)
    */
-  async delete(id: string, deletedBy?: string): Promise<Role> {
+  async delete(id: string, _deletedBy?: string): Promise<Role> {
     const { data, error } = await db
       .from('roles')
       .update({
         deleted_at: new Date().toISOString(),
-        updated_by: deletedBy ?? null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
@@ -415,7 +406,8 @@ class RoleRepositoryImpl {
     const { data, error } = await db
       .from('role_permissions')
       .select('permissions:permission_id (name)')
-      .eq('role_id', roleId);
+      .eq('role_id', roleId)
+      .eq('is_active', true);
 
     if (error) {
       throw new Error(`Failed to get permissions: ${error.message}`);
@@ -429,13 +421,13 @@ class RoleRepositoryImpl {
   }
 
   /**
-   * Check if slug is unique
+   * Check if name is unique
    */
-  async isSlugUnique(slug: string, excludeId?: string): Promise<boolean> {
+  async isNameUnique(name: string, excludeId?: string): Promise<boolean> {
     let query = db
       .from('roles')
       .select('id', { count: 'exact', head: true })
-      .eq('slug', slug)
+      .eq('name', name)
       .is('deleted_at', null);
 
     if (excludeId) {
@@ -445,7 +437,7 @@ class RoleRepositoryImpl {
     const { count, error } = await query;
 
     if (error) {
-      throw new Error(`Failed to check slug: ${error.message}`);
+      throw new Error(`Failed to check name: ${error.message}`);
     }
 
     return (count ?? 0) === 0;
@@ -457,16 +449,12 @@ class RoleRepositoryImpl {
   private mapToRole(data: DbRole): Role {
     return {
       id: data.id,
+      scope: data.scope,
+      isSystemRole: data.is_system_role,
       name: data.name,
-      slug: data.slug,
-      displayName: data.display_name,
       description: data.description,
-      level: data.level,
-      isSystem: data.is_system,
       createdAt: new Date(data.created_at),
       updatedAt: new Date(data.updated_at),
-      createdBy: data.created_by,
-      updatedBy: data.updated_by,
       deletedAt: data.deleted_at ? new Date(data.deleted_at) : null,
     };
   }
@@ -477,17 +465,14 @@ class RoleRepositoryImpl {
   private mapToPermission(data: DbPermission): Permission {
     return {
       id: data.id,
+      permissionType: data.permission_type,
+      parentId: data.parent_id,
       name: data.name,
-      displayName: data.display_name,
+      groupName: data.group_name,
+      sortOrder: data.sort_order ?? 0,
       description: data.description,
-      module: data.module,
-      action: data.action,
-      category: data.category,
       createdAt: new Date(data.created_at),
       updatedAt: new Date(data.updated_at),
-      createdBy: data.created_by,
-      updatedBy: data.updated_by,
-      deletedAt: data.deleted_at ? new Date(data.deleted_at) : null,
     };
   }
 }

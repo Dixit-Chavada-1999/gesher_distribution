@@ -13,7 +13,7 @@ import { DataTableColumnHeader } from '@/shared/components/data-table/DataTableC
 import { DataTableRowActions, createCommonRowActions } from '@/shared/components/data-table/DataTableRowActions';
 
 import type { SalesOrderListItem } from '../types';
-import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from '../types';
+import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS, canEditOrder } from '../types';
 import { formatDate } from '../lib/mock-data';
 
 // ============================================
@@ -185,9 +185,11 @@ export function getSalesOrdersTableColumns(
     {
       id: 'actions',
       cell: ({ row }) => {
+        const isEditable = canEditOrder(row.original.status);
         const { actions, separatorAfter } = createCommonRowActions({
           onView: options.onView ? () => options.onView?.(row.original) : undefined,
-          onEdit: options.onEdit ? () => options.onEdit?.(row.original) : undefined,
+          // Only show edit button for editable statuses (draft, pending)
+          onEdit: options.onEdit && isEditable ? () => options.onEdit?.(row.original) : undefined,
           onDelete: options.onDelete ? () => options.onDelete?.(row.original) : undefined,
         });
         return (

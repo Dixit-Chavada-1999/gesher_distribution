@@ -15,6 +15,7 @@ import type {
   UpdateCustomerContactDTO,
 } from '../types';
 import { createClient } from '@/shared/lib/supabase/server';
+import { getAppUserByAuthId } from '@/shared/lib/auth';
 
 // ============================================
 // TYPES
@@ -106,6 +107,12 @@ export async function createCustomerContact(
       return { success: false, error: 'Authentication required' };
     }
 
+    // Get app user ID (public.users.id) from auth user ID
+    const appUser = await getAppUserByAuthId(user.id);
+    if (!appUser) {
+      return { success: false, error: 'User profile not found' };
+    }
+
     // Validate required fields
     if (!data.firstName?.trim()) {
       return { success: false, error: 'First name is required' };
@@ -118,7 +125,7 @@ export async function createCustomerContact(
     }
 
     const repository = getCustomerContactRepository();
-    const contact = await repository.create(data, user.id);
+    const contact = await repository.create(data, appUser.id);
 
     revalidatePath('/customers');
     revalidatePath(`/customers/${data.customerId}`);
@@ -148,6 +155,12 @@ export async function updateCustomerContact(
       return { success: false, error: 'Authentication required' };
     }
 
+    // Get app user ID (public.users.id) from auth user ID
+    const appUser = await getAppUserByAuthId(user.id);
+    if (!appUser) {
+      return { success: false, error: 'User profile not found' };
+    }
+
     const repository = getCustomerContactRepository();
 
     // Check if contact exists
@@ -156,7 +169,7 @@ export async function updateCustomerContact(
       return { success: false, error: 'Contact not found' };
     }
 
-    const contact = await repository.update(id, data, user.id);
+    const contact = await repository.update(id, data, appUser.id);
 
     revalidatePath('/customers');
     revalidatePath(`/customers/${contact.customerId}`);
@@ -185,6 +198,12 @@ export async function deleteCustomerContact(
       return { success: false, error: 'Authentication required' };
     }
 
+    // Get app user ID (public.users.id) from auth user ID
+    const appUser = await getAppUserByAuthId(user.id);
+    if (!appUser) {
+      return { success: false, error: 'User profile not found' };
+    }
+
     const repository = getCustomerContactRepository();
 
     // Check if contact exists
@@ -193,7 +212,7 @@ export async function deleteCustomerContact(
       return { success: false, error: 'Contact not found' };
     }
 
-    await repository.delete(id, user.id);
+    await repository.delete(id, appUser.id);
 
     revalidatePath('/customers');
     revalidatePath(`/customers/${existing.customerId}`);

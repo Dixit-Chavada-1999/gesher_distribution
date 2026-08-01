@@ -27,7 +27,7 @@ COMMENT ON TYPE quote_status IS 'Quote workflow status';
 
 CREATE TABLE quotes (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Quote Identity
   quote_number VARCHAR(50) NOT NULL,
@@ -99,7 +99,7 @@ CREATE TABLE quotes (
 
 CREATE TABLE quote_items (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Relationships
   quote_id UUID NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
@@ -179,7 +179,7 @@ CREATE TRIGGER trg_quote_items_updated_at
 -- SEQUENCE FOR QUOTE NUMBERS
 -- ============================================
 
-CREATE SEQUENCE quote_number_seq
+CREATE SEQUENCE IF NOT EXISTS quote_number_seq
   START WITH 1
   INCREMENT BY 1
   NO MAXVALUE

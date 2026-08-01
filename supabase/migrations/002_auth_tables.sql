@@ -15,7 +15,7 @@
 
 CREATE TABLE users (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Supabase Auth Link
   auth_user_id UUID UNIQUE,
@@ -98,7 +98,7 @@ COMMENT ON COLUMN users.deleted_at IS 'Soft delete timestamp (NULL = active)';
 
 CREATE TABLE user_sessions (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- User Reference
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

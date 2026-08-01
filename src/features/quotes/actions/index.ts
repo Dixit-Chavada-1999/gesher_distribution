@@ -24,6 +24,7 @@ import type {
 } from '../types';
 import { createClient } from '@/shared/lib/supabase/server';
 import { db } from '@/shared/lib/supabase/database';
+import { getAppUserByAuthId } from '@/shared/lib/auth';
 
 // ============================================
 // TYPES
@@ -112,6 +113,12 @@ export async function createQuote(formData: FormData): Promise<ActionResult<Quot
     return { success: false, error: 'Authentication required' };
   }
 
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
   // Parse form data
   const rawData = {
     quoteDate: formData.get('quoteDate') as string,
@@ -150,7 +157,7 @@ export async function createQuote(formData: FormData): Promise<ActionResult<Quot
     };
   }
 
-  const result = await quoteService.createFromForm(formValidation.data, user.id);
+  const result = await quoteService.createFromForm(formValidation.data, appUser.id);
 
   if (result.success) {
     revalidatePath('/quotes');
@@ -173,6 +180,12 @@ export async function createQuoteFromData(
     return { success: false, error: 'Authentication required' };
   }
 
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
   // Validate with createQuoteSchema (expects Date objects from formToCreateDTO)
   const validation = createQuoteSchema.safeParse(data);
   if (!validation.success) {
@@ -193,7 +206,7 @@ export async function createQuoteFromData(
     };
   }
 
-  const result = await quoteService.create(validation.data, user.id);
+  const result = await quoteService.create(validation.data, appUser.id);
 
   if (result.success) {
     revalidatePath('/quotes');
@@ -215,6 +228,12 @@ export async function updateQuote(
 
   if (!user) {
     return { success: false, error: 'Authentication required' };
+  }
+
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
   }
 
   // Parse form data
@@ -271,7 +290,7 @@ export async function updateQuote(
     };
   }
 
-  const result = await quoteService.update(id, validation.data, user.id);
+  const result = await quoteService.update(id, validation.data, appUser.id);
 
   if (result.success) {
     revalidatePath('/quotes');
@@ -296,6 +315,12 @@ export async function updateQuoteFromData(
     return { success: false, error: 'Authentication required' };
   }
 
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
   // Validate
   const validation = updateQuoteSchema.safeParse(data);
   if (!validation.success) {
@@ -306,7 +331,7 @@ export async function updateQuoteFromData(
     };
   }
 
-  const result = await quoteService.update(id, validation.data, user.id);
+  const result = await quoteService.update(id, validation.data, appUser.id);
 
   if (result.success) {
     revalidatePath('/quotes');
@@ -331,7 +356,13 @@ export async function updateQuoteItems(
     return { success: false, error: 'Authentication required' };
   }
 
-  const result = await quoteService.updateItems(quoteId, items, user.id);
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
+  const result = await quoteService.updateItems(quoteId, items, appUser.id);
 
   if (result.success) {
     revalidatePath('/quotes');
@@ -353,7 +384,13 @@ export async function deleteQuote(id: string): Promise<ActionResult<Quote>> {
     return { success: false, error: 'Authentication required' };
   }
 
-  const result = await quoteService.delete(id, user.id);
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
+  const result = await quoteService.delete(id, appUser.id);
 
   if (result.success) {
     revalidatePath('/quotes');
@@ -378,7 +415,13 @@ export async function sendQuote(id: string): Promise<ActionResult<Quote>> {
     return { success: false, error: 'Authentication required' };
   }
 
-  const result = await quoteService.send(id, user.id);
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
+  const result = await quoteService.send(id, appUser.id);
 
   if (result.success) {
     revalidatePath('/quotes');
@@ -399,7 +442,13 @@ export async function acceptQuote(id: string): Promise<ActionResult<Quote>> {
     return { success: false, error: 'Authentication required' };
   }
 
-  const result = await quoteService.accept(id, user.id);
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
+  const result = await quoteService.accept(id, appUser.id);
 
   if (result.success) {
     revalidatePath('/quotes');
@@ -420,7 +469,13 @@ export async function rejectQuote(id: string): Promise<ActionResult<Quote>> {
     return { success: false, error: 'Authentication required' };
   }
 
-  const result = await quoteService.reject(id, user.id);
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
+  const result = await quoteService.reject(id, appUser.id);
 
   if (result.success) {
     revalidatePath('/quotes');
@@ -441,7 +496,13 @@ export async function expireQuote(id: string): Promise<ActionResult<Quote>> {
     return { success: false, error: 'Authentication required' };
   }
 
-  const result = await quoteService.expire(id, user.id);
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
+  const result = await quoteService.expire(id, appUser.id);
 
   if (result.success) {
     revalidatePath('/quotes');
@@ -464,7 +525,13 @@ export async function convertQuoteToSalesOrder(
     return { success: false, error: 'Authentication required' };
   }
 
-  const result = await quoteService.convertToSalesOrder(id, user.id);
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
+  const result = await quoteService.convertToSalesOrder(id, appUser.id);
 
   if (result.success) {
     revalidatePath('/quotes');

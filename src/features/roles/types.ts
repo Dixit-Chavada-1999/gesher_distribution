@@ -3,6 +3,15 @@
  */
 
 // ============================================
+// ENUMS
+// ============================================
+
+/**
+ * Role/Permission scope types
+ */
+export type RoleScope = 'user' | 'customer';
+
+// ============================================
 // ENTITY TYPES
 // ============================================
 
@@ -11,16 +20,12 @@
  */
 export interface Role {
   id: string;
+  scope: RoleScope;
+  isSystemRole: boolean;
   name: string;
-  slug: string;
-  displayName: string;
   description: string | null;
-  level: number;
-  isSystem: boolean;
   createdAt: Date;
   updatedAt: Date;
-  createdBy: string | null;
-  updatedBy: string | null;
   deletedAt: Date | null;
 }
 
@@ -29,28 +34,30 @@ export interface Role {
  */
 export interface Permission {
   id: string;
+  permissionType: RoleScope;
+  parentId: string | null;
   name: string;
-  displayName: string;
+  groupName: string | null;
+  sortOrder: number;
   description: string | null;
-  module: string;
-  action: string;
-  category: string | null;
   createdAt: Date;
   updatedAt: Date;
-  createdBy: string | null;
-  updatedBy: string | null;
-  deletedAt: Date | null;
+}
+
+/**
+ * Permission with children for hierarchical display
+ */
+export interface HierarchicalPermission extends Permission {
+  children: HierarchicalPermission[];
 }
 
 /**
  * Role-Permission junction
  */
 export interface RolePermission {
-  id: string;
   roleId: string;
   permissionId: string;
-  createdAt: Date;
-  createdBy: string | null;
+  isActive: boolean;
 }
 
 /**
@@ -66,11 +73,19 @@ export interface RoleWithPermissions extends Role {
 }
 
 /**
- * Permission grouped by module
+ * Permission grouped by group_name (flat structure)
  */
 export interface PermissionGroup {
-  module: string;
+  groupName: string;
   permissions: Permission[];
+}
+
+/**
+ * Permission grouped by group_name with hierarchy
+ */
+export interface HierarchicalPermissionGroup {
+  groupName: string;
+  permissions: HierarchicalPermission[];
 }
 
 // ============================================
@@ -82,11 +97,9 @@ export interface PermissionGroup {
  */
 export interface CreateRoleData {
   name: string;
-  slug: string;
-  displayName: string;
   description?: string;
-  level?: number;
-  isSystem?: boolean;
+  scope?: RoleScope;
+  isSystemRole?: boolean;
   permissionIds?: string[];
 }
 
@@ -95,9 +108,8 @@ export interface CreateRoleData {
  */
 export interface UpdateRoleData {
   name?: string;
-  displayName?: string;
   description?: string;
-  level?: number;
+  scope?: RoleScope;
   permissionIds?: string[];
 }
 
@@ -106,20 +118,21 @@ export interface UpdateRoleData {
  */
 export interface CreatePermissionData {
   name: string;
-  displayName: string;
   description?: string;
-  module: string;
-  action: string;
-  category?: string;
+  permissionType?: RoleScope;
+  groupName?: string;
+  parentId?: string;
+  sortOrder?: number;
 }
 
 /**
  * Data for updating a permission
  */
 export interface UpdatePermissionData {
-  displayName?: string;
+  name?: string;
   description?: string;
-  category?: string;
+  groupName?: string;
+  sortOrder?: number;
 }
 
 // ============================================
@@ -131,9 +144,8 @@ export interface UpdatePermissionData {
  */
 export interface RoleQueryFilters {
   search?: string;
-  isSystem?: boolean;
-  minLevel?: number;
-  maxLevel?: number;
+  scope?: RoleScope;
+  isSystemRole?: boolean;
 }
 
 /**
@@ -141,9 +153,8 @@ export interface RoleQueryFilters {
  */
 export interface PermissionQueryFilters {
   search?: string;
-  module?: string;
-  action?: string;
-  category?: string;
+  permissionType?: RoleScope;
+  groupName?: string;
 }
 
 // ============================================
@@ -155,12 +166,10 @@ export interface PermissionQueryFilters {
  */
 export interface RoleListItem {
   id: string;
+  scope: RoleScope;
+  isSystemRole: boolean;
   name: string;
-  slug: string;
-  displayName: string;
   description: string | null;
-  level: number;
-  isSystem: boolean;
   userCount: number;
   permissionCount: number;
   createdAt: Date;

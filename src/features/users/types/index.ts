@@ -43,9 +43,9 @@ export interface User {
 export interface UserRoleSummary {
   id: string;
   name: string;
-  slug: string;
-  displayName: string;
-  level: number;
+  scope: 'user' | 'customer';
+  isSystemRole: boolean;
+  description: string | null;
 }
 
 /**
@@ -171,7 +171,7 @@ export interface UserTableRow {
   email: string;
   initials: string;
   roleName: string | null;
-  roleSlug: string | null;
+  roleScope: 'user' | 'customer' | null;
   status: UserStatus;
   lastLoginAt: Date | null;
   createdAt: Date;

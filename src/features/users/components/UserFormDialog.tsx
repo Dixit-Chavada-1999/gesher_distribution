@@ -416,7 +416,7 @@ const EditUserForm = memo(function EditUserForm({
 
 interface RoleOption {
   id: string;
-  displayName: string;
+  name: string;
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -446,7 +446,7 @@ const RoleField = memo(function RoleField({
             <SelectContent>
               {roles.map((role) => (
                 <SelectItem key={role.id} value={role.id}>
-                  {role.displayName}
+                  {role.name}
                 </SelectItem>
               ))}
             </SelectContent>

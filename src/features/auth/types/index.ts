@@ -52,7 +52,7 @@ export interface UserRole {
   slug: string;
   description: string | null;
   level: number;
-  isSystem: boolean;
+  isSystemRole: boolean;
 }
 
 /**

@@ -12,7 +12,7 @@
  * - Memoized computed values with useMemo
  */
 
-import { memo, useState, useMemo, useCallback } from 'react';
+import { memo, useState, useMemo, useCallback, useEffect } from 'react';
 import { PageHeader } from '@/shared/components/layout';
 import {
   Card,
@@ -41,12 +41,12 @@ import { Plus, Pencil, Trash2, Loader2, RefreshCw, Key, ChevronDown, ChevronUp }
 import {
   useRoles,
   useRole,
-  usePermissions,
+  useHierarchicalPermissions,
   useDeleteRole,
 } from '@/features/roles/hooks';
 import { useUpdateRole } from '@/features/roles/hooks/use-role-mutations';
 import { RoleFormDialog } from '@/features/roles/components';
-import type { RoleListItem, Permission, PermissionGroup as PermissionGroupType } from '@/features/roles/types';
+import type { RoleListItem, HierarchicalPermission, HierarchicalPermissionGroup } from '@/features/roles/types';
 import { toast } from 'sonner';
 import { cn } from '@/shared/lib/utils';
 
@@ -91,11 +91,22 @@ const RoleCard = memo(function RoleCard({
       onClick={handleCardClick}
     >
       <CardContent className="p-4">
-        {/* Header Row - Slug & Actions */}
+        {/* Header Row - Name, Scope & Actions */}
         <div className="flex items-start justify-between mb-3">
-          <h3 className="font-semibold text-foreground">
-            {role.slug}
-          </h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-foreground">
+              {role.name}
+            </h3>
+            <Badge
+              variant="outline"
+              className={cn(
+                'text-xs capitalize',
+                role.scope === 'user' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-purple-50 text-purple-700 border-purple-200'
+              )}
+            >
+              {role.scope}
+            </Badge>
+          </div>
           <div className="flex items-center gap-1">
             <Button
               variant="ghost"
@@ -110,16 +121,16 @@ const RoleCard = memo(function RoleCard({
               size="icon"
               className="h-8 w-8 text-muted-foreground hover:text-destructive"
               onClick={handleDeleteClickInternal}
-              disabled={role.isSystem}
+              disabled={role.isSystemRole}
             >
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         </div>
 
-        {/* Display Name / Description */}
+        {/* Description */}
         <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
-          {role.displayName}
+          {role.description || 'No description'}
         </p>
 
         {/* Stats Row */}
@@ -139,52 +150,138 @@ const RoleCard = memo(function RoleCard({
 });
 
 // ============================================
-// PERMISSION ROW COMPONENT (Memoized)
+// HIERARCHICAL PERMISSION ROW COMPONENT (Memoized)
 // ============================================
 
-interface PermissionRowProps {
-  permission: Permission;
-  isEnabled: boolean;
+interface HierarchicalPermissionRowProps {
+  permission: HierarchicalPermission;
+  depth: number;
+  selectedRolePermissionIds: Set<string>;
   isUpdating: boolean;
-  onToggle: (permission: Permission, isEnabled: boolean) => void;
+  onToggle: (permission: HierarchicalPermission, isEnabled: boolean) => void;
+  parentExpanded?: boolean; // When parent expands, children should also expand
 }
 
-const PermissionRow = memo(function PermissionRow({
+const HierarchicalPermissionRow = memo(function HierarchicalPermissionRow({
   permission,
-  isEnabled,
+  depth,
+  selectedRolePermissionIds,
   isUpdating,
   onToggle,
-}: PermissionRowProps) {
+  parentExpanded = false,
+}: HierarchicalPermissionRowProps) {
+  const [isExpanded, setIsExpanded] = useState(false); // Collapsed by default
+
+  // When parent expands, expand this row too
+  useEffect(() => {
+    if (parentExpanded) {
+      setIsExpanded(true);
+    }
+  }, [parentExpanded]);
+  const isEnabled = selectedRolePermissionIds.has(permission.id);
+  const hasChildren = permission.children.length > 0;
+
   const handleToggle = useCallback((checked: boolean) => {
     onToggle(permission, checked);
   }, [onToggle, permission]);
 
+  // Calculate enabled count for children
+  const childStats = useMemo(() => {
+    const countAll = (perms: HierarchicalPermission[]): { enabled: number; total: number } => {
+      let enabled = 0;
+      let total = 0;
+      for (const p of perms) {
+        total++;
+        if (selectedRolePermissionIds.has(p.id)) { enabled++; }
+        if (p.children.length > 0) {
+          const childCounts = countAll(p.children);
+          enabled += childCounts.enabled;
+          total += childCounts.total;
+        }
+      }
+      return { enabled, total };
+    };
+    return countAll(permission.children);
+  }, [permission.children, selectedRolePermissionIds]);
+
+  const paddingLeft = 16 + (depth * 24); // Base padding + depth indentation
+
   return (
-    <div className="flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors border-b last:border-b-0">
-      <div className="flex items-center gap-3 pl-8">
-        <Switch
-          checked={isEnabled}
-          onCheckedChange={handleToggle}
-          disabled={isUpdating}
-          className="data-[state=checked]:bg-green-500"
-        />
-        <div>
-          <p className="text-sm font-medium">{permission.displayName}</p>
-          {permission.description && (
-            <p className="text-xs text-muted-foreground">{permission.description}</p>
+    <>
+      <div
+        className={cn(
+          "flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors border-b last:border-b-0",
+          depth === 0 && "bg-muted/20"
+        )}
+        style={{ paddingLeft: `${paddingLeft}px` }}
+      >
+        <div className="flex items-center gap-3">
+          {hasChildren && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsExpanded(!isExpanded);
+              }}
+              className="p-1 hover:bg-muted rounded"
+            >
+              {isExpanded ? (
+                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              )}
+            </button>
+          )}
+          {!hasChildren && <div className="w-5" />}
+          <div onClick={(e) => e.stopPropagation()}>
+            <Switch
+              checked={isEnabled}
+              onCheckedChange={handleToggle}
+              disabled={isUpdating}
+              className="data-[state=checked]:bg-green-500"
+            />
+          </div>
+          <div>
+            <p className={cn("text-sm", depth === 0 ? "font-semibold" : "font-medium")}>
+              {permission.description || permission.name}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {hasChildren && (
+            <Badge
+              variant="secondary"
+              className={cn(
+                'text-xs',
+                childStats.enabled === childStats.total && childStats.total > 0
+                  ? 'bg-green-100 text-green-700'
+                  : childStats.enabled > 0
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'bg-gray-100 text-gray-600'
+              )}
+            >
+              {childStats.enabled}/{childStats.total}
+            </Badge>
           )}
         </div>
       </div>
-      <Badge
-        variant="outline"
-        className={cn(
-          'text-xs',
-          isEnabled ? 'bg-green-50 text-green-700 border-green-200' : ''
-        )}
-      >
-        {permission.action}
-      </Badge>
-    </div>
+      {/* Render children recursively */}
+      {hasChildren && isExpanded && (
+        <>
+          {permission.children.map((child) => (
+            <HierarchicalPermissionRow
+              key={child.id}
+              permission={child}
+              depth={depth + 1}
+              selectedRolePermissionIds={selectedRolePermissionIds}
+              isUpdating={isUpdating}
+              onToggle={onToggle}
+              parentExpanded={isExpanded}
+            />
+          ))}
+        </>
+      )}
+    </>
   );
 });
 
@@ -193,13 +290,13 @@ const PermissionRow = memo(function PermissionRow({
 // ============================================
 
 interface PermissionModuleProps {
-  group: PermissionGroupType;
+  group: HierarchicalPermissionGroup;
   counts: { enabled: number; total: number };
   isExpanded: boolean;
   selectedRolePermissionIds: Set<string>;
   isUpdating: boolean;
   onToggleModule: (module: string) => void;
-  onPermissionToggle: (permission: Permission, isEnabled: boolean) => void;
+  onPermissionToggle: (permission: HierarchicalPermission, isEnabled: boolean) => void;
 }
 
 const PermissionModule = memo(function PermissionModule({
@@ -212,8 +309,8 @@ const PermissionModule = memo(function PermissionModule({
   onPermissionToggle,
 }: PermissionModuleProps) {
   const handleToggle = useCallback(() => {
-    onToggleModule(group.module);
-  }, [onToggleModule, group.module]);
+    onToggleModule(group.groupName);
+  }, [onToggleModule, group.groupName]);
 
   return (
     <Card>
@@ -223,7 +320,7 @@ const PermissionModule = memo(function PermissionModule({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Key className="h-5 w-5 text-amber-500" />
-                <span className="font-medium">{group.module}</span>
+                <span className="font-medium capitalize">{group.groupName}</span>
               </div>
               <div className="flex items-center gap-3">
                 <Badge
@@ -252,10 +349,11 @@ const PermissionModule = memo(function PermissionModule({
         <CollapsibleContent>
           <div className="border-t">
             {group.permissions.map((permission) => (
-              <PermissionRow
+              <HierarchicalPermissionRow
                 key={permission.id}
                 permission={permission}
-                isEnabled={selectedRolePermissionIds.has(permission.id)}
+                depth={0}
+                selectedRolePermissionIds={selectedRolePermissionIds}
                 isUpdating={isUpdating}
                 onToggle={onPermissionToggle}
               />
@@ -280,6 +378,11 @@ function RolesPageContentComponent() {
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
   const [hasAutoSelected, setHasAutoSelected] = useState(false);
 
+  // Track original permissions when role is selected
+  const [originalPermissionIds, setOriginalPermissionIds] = useState<Set<string>>(new Set());
+  // Track current (modified) permissions locally
+  const [pendingPermissionIds, setPendingPermissionIds] = useState<Set<string>>(new Set());
+
   const { roles, loading: rolesLoading, error: rolesError, refetch: refetchRoles } = useRoles();
 
   // Auto-select first role (super_admin) on initial load
@@ -290,15 +393,38 @@ function RolesPageContentComponent() {
   }
   const { role: selectedRole, loading: roleLoading, refetch: refetchRole } = useRole(selectedRoleId);
   const { role: editingRole } = useRole(editingRoleId); // For dialog
-  const { permissions: permissionGroups, loading: permissionsLoading } = usePermissions();
+
+  // Find selected role from list to get scope
+  const selectedRoleFromList = roles.find(r => r.id === selectedRoleId);
+
+  // Fetch permissions filtered by role's scope
+  const { permissions: permissionGroups, loading: permissionsLoading } = useHierarchicalPermissions({
+    permissionType: selectedRoleFromList?.scope,
+    enabled: !!selectedRoleFromList,
+  });
   const { deleteRole, loading: deletingRole } = useDeleteRole();
   const { updateRole, loading: updatingRole } = useUpdateRole();
 
-  // Get selected role's permission IDs as a Set for quick lookup
-  const selectedRolePermissionIds = useMemo(() => {
-    if (!selectedRole?.permissions) {return new Set<string>();}
-    return new Set(selectedRole.permissions.map(p => p.id));
+  // Sync original and pending state when role changes or loads
+  useEffect(() => {
+    if (selectedRole?.permissions) {
+      const permIds = new Set(selectedRole.permissions.map(p => p.id));
+      setOriginalPermissionIds(permIds);
+      setPendingPermissionIds(new Set(permIds));
+    } else {
+      setOriginalPermissionIds(new Set());
+      setPendingPermissionIds(new Set());
+    }
   }, [selectedRole]);
+
+  // Calculate unsaved changes count
+  const unsavedChangesCount = useMemo(() => {
+    const added = [...pendingPermissionIds].filter(id => !originalPermissionIds.has(id));
+    const removed = [...originalPermissionIds].filter(id => !pendingPermissionIds.has(id));
+    return added.length + removed.length;
+  }, [originalPermissionIds, pendingPermissionIds]);
+
+  const hasUnsavedChanges = unsavedChangesCount > 0;
 
   const handleCreateRole = useCallback(() => {
     setEditingRoleId(null); // null means create mode
@@ -360,46 +486,123 @@ function RolesPageContentComponent() {
     });
   }, []);
 
-  const handlePermissionToggle = useCallback(async (permission: Permission, isEnabled: boolean) => {
-    if (!selectedRole || !selectedRoleId) {return;}
+  // Build a map of permission ID -> parent ID for ancestor lookup
+  const parentIdMap = useMemo(() => {
+    const map = new Map<string, string | null>();
 
-    try {
-      const currentPermissionIds = selectedRole.permissions.map(p => p.id);
-      let newPermissionIds: string[];
+    const buildMap = (permissions: HierarchicalPermission[], parentId: string | null = null) => {
+      for (const perm of permissions) {
+        map.set(perm.id, parentId);
+        if (perm.children.length > 0) {
+          buildMap(perm.children, perm.id);
+        }
+      }
+    };
+
+    for (const group of permissionGroups) {
+      buildMap(group.permissions, null);
+    }
+
+    return map;
+  }, [permissionGroups]);
+
+  // Helper to collect all descendant IDs from a hierarchical permission
+  const collectAllDescendantIds = useCallback((permission: HierarchicalPermission): string[] => {
+    const ids: string[] = [permission.id];
+    for (const child of permission.children) {
+      ids.push(...collectAllDescendantIds(child));
+    }
+    return ids;
+  }, []);
+
+  // Helper to collect all ancestor IDs for a permission
+  const collectAllAncestorIds = useCallback((permissionId: string): string[] => {
+    const ids: string[] = [];
+    let currentId: string | null | undefined = parentIdMap.get(permissionId);
+
+    while (currentId) {
+      ids.push(currentId);
+      currentId = parentIdMap.get(currentId);
+    }
+
+    return ids;
+  }, [parentIdMap]);
+
+  const handlePermissionToggle = useCallback((permission: HierarchicalPermission, isEnabled: boolean) => {
+    setPendingPermissionIds(prev => {
+      const next = new Set(prev);
 
       if (isEnabled) {
-        // Add permission
-        newPermissionIds = [...currentPermissionIds, permission.id];
+        // When enabling: add this permission + all descendants + all ancestors
+        const descendantIds = collectAllDescendantIds(permission);
+        const ancestorIds = collectAllAncestorIds(permission.id);
+
+        for (const id of descendantIds) {
+          next.add(id);
+        }
+        for (const id of ancestorIds) {
+          next.add(id);
+        }
       } else {
-        // Remove permission
-        newPermissionIds = currentPermissionIds.filter(id => id !== permission.id);
+        // When disabling: remove this permission + all descendants only
+        const descendantIds = collectAllDescendantIds(permission);
+        for (const id of descendantIds) {
+          next.delete(id);
+        }
       }
 
-      await updateRole(selectedRoleId, { permissionIds: newPermissionIds });
-      await refetchRole();
-      refetchRoles(); // Update permission count in the card
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to update permission');
-    }
-  }, [selectedRole, selectedRoleId, updateRole, refetchRole, refetchRoles]);
+      return next;
+    });
+  }, [collectAllDescendantIds, collectAllAncestorIds]);
 
-  // Calculate permission counts per module for the selected role
+  const handleDiscard = useCallback(() => {
+    setPendingPermissionIds(new Set(originalPermissionIds));
+  }, [originalPermissionIds]);
+
+  const handleSaveChanges = useCallback(async () => {
+    if (!selectedRoleId) { return; }
+
+    try {
+      await updateRole(selectedRoleId, {
+        permissionIds: Array.from(pendingPermissionIds)
+      });
+
+      // Update original to match saved state
+      setOriginalPermissionIds(new Set(pendingPermissionIds));
+      await refetchRole();
+      refetchRoles();
+      toast.success('Permissions saved successfully');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save permissions');
+    }
+  }, [selectedRoleId, pendingPermissionIds, updateRole, refetchRole, refetchRoles]);
+
+  // Helper to count all permissions recursively in hierarchy
+  const countHierarchicalPermissions = useCallback((permissions: HierarchicalPermission[]): { enabled: number; total: number } => {
+    let enabled = 0;
+    let total = 0;
+    for (const p of permissions) {
+      total++;
+      if (pendingPermissionIds.has(p.id)) { enabled++; }
+      if (p.children.length > 0) {
+        const childCounts = countHierarchicalPermissions(p.children);
+        enabled += childCounts.enabled;
+        total += childCounts.total;
+      }
+    }
+    return { enabled, total };
+  }, [pendingPermissionIds]);
+
+  // Calculate permission counts per module for the selected role (using pending state)
   const modulePermissionCounts = useMemo(() => {
     const counts: Record<string, { enabled: number; total: number }> = {};
 
     for (const group of permissionGroups) {
-      const enabled = group.permissions.filter(p => selectedRolePermissionIds.has(p.id)).length;
-      counts[group.module] = {
-        enabled,
-        total: group.permissions.length,
-      };
+      counts[group.groupName] = countHierarchicalPermissions(group.permissions);
     }
 
     return counts;
-  }, [permissionGroups, selectedRolePermissionIds]);
-
-  // Find selected role from list
-  const selectedRoleFromList = roles.find(r => r.id === selectedRoleId);
+  }, [permissionGroups, countHierarchicalPermissions]);
 
   return (
     <div className="space-y-6">
@@ -497,7 +700,7 @@ function RolesPageContentComponent() {
           <div className="border-t pt-6">
             <h2 className="text-lg font-semibold">
               Permissions for:{' '}
-              <span className="text-primary">{selectedRoleFromList.slug}</span>
+              <span className="text-primary">{selectedRoleFromList.name}</span>
             </h2>
             <p className="text-sm text-muted-foreground">
               Toggle permissions on or off for this role. Changes affect all users holding this role.
@@ -522,11 +725,11 @@ function RolesPageContentComponent() {
             <div className="space-y-3">
               {permissionGroups.map((group) => (
                 <PermissionModule
-                  key={group.module}
+                  key={group.groupName}
                   group={group}
-                  counts={modulePermissionCounts[group.module] || { enabled: 0, total: 0 }}
-                  isExpanded={expandedModules.has(group.module)}
-                  selectedRolePermissionIds={selectedRolePermissionIds}
+                  counts={modulePermissionCounts[group.groupName] || { enabled: 0, total: 0 }}
+                  isExpanded={expandedModules.has(group.groupName)}
+                  selectedRolePermissionIds={pendingPermissionIds}
                   isUpdating={updatingRole}
                   onToggleModule={toggleModule}
                   onPermissionToggle={handlePermissionToggle}
@@ -560,7 +763,7 @@ function RolesPageContentComponent() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Role</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete the role &ldquo;{roleToDelete?.displayName}&rdquo;?
+              Are you sure you want to delete the role &ldquo;{roleToDelete?.name}&rdquo;?
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -577,6 +780,25 @@ function RolesPageContentComponent() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Unsaved Changes Footer */}
+      {hasUnsavedChanges && selectedRoleFromList && (
+        <div className="fixed bottom-0 left-0 right-0 bg-muted border-t px-6 py-4 flex items-center justify-between z-50">
+          <p className="text-sm">
+            You have <span className="font-semibold">{unsavedChangesCount}</span> unsaved changes to the{' '}
+            <span className="font-semibold">{selectedRoleFromList.name}</span> role.
+          </p>
+          <div className="flex items-center gap-3">
+            <Button variant="outline" onClick={handleDiscard}>
+              Discard
+            </Button>
+            <Button onClick={handleSaveChanges} disabled={updatingRole}>
+              {updatingRole && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Changes
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

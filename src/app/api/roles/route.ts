@@ -29,7 +29,7 @@ const createRoleSchema = z.object({
 
 const querySchema = z.object({
   search: z.string().optional(),
-  isSystem: z
+  isSystemRole: z
     .string()
     .optional()
     .transform((val) => (val === 'true' ? true : val === 'false' ? false : undefined)),
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const query = querySchema.parse({
       search: searchParams.get('search') || undefined,
-      isSystem: searchParams.get('isSystem') || undefined,
+      isSystemRole: searchParams.get('isSystemRole') || undefined,
     });
 
     const roles = await roleService.getAllRoles(query);

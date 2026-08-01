@@ -28,7 +28,7 @@ COMMENT ON TYPE order_status IS 'Sales order workflow status';
 
 CREATE TABLE sales_orders (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Order Identity
   order_number VARCHAR(50) NOT NULL,
@@ -104,7 +104,7 @@ CREATE TABLE sales_orders (
 
 CREATE TABLE sales_order_items (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Relationships
   sales_order_id UUID NOT NULL REFERENCES sales_orders(id) ON DELETE CASCADE,
@@ -199,7 +199,7 @@ CREATE TRIGGER trg_sales_order_items_updated_at
 -- SEQUENCE FOR ORDER NUMBERS
 -- ============================================
 
-CREATE SEQUENCE sales_order_number_seq
+CREATE SEQUENCE IF NOT EXISTS sales_order_number_seq
   START WITH 1
   INCREMENT BY 1
   NO MAXVALUE

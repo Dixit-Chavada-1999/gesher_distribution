@@ -14,7 +14,7 @@
 
 CREATE TABLE roles (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Role Identity
   name VARCHAR(50) NOT NULL UNIQUE,
@@ -86,7 +86,7 @@ COMMENT ON COLUMN roles.is_system IS 'System roles cannot be deleted';
 
 CREATE TABLE permissions (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Permission Identity
   name VARCHAR(100) NOT NULL UNIQUE,
@@ -141,7 +141,7 @@ COMMENT ON COLUMN permissions.category IS 'Optional grouping category';
 
 CREATE TABLE role_permissions (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- References
   role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,

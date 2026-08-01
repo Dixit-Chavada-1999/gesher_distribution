@@ -11,6 +11,9 @@ import type {
   UpdatePermissionData,
   PermissionQueryFilters,
   PermissionGroup,
+  HierarchicalPermission,
+  HierarchicalPermissionGroup,
+  RoleScope,
 } from '../types';
 
 // ============================================
@@ -19,17 +22,14 @@ import type {
 
 interface DbPermission {
   id: string;
+  permission_type: 'user' | 'customer';
+  parent_id: string | null;
   name: string;
-  display_name: string;
+  group_name: string | null;
+  sort_order: number;
   description: string | null;
-  module: string;
-  action: string;
-  category: string | null;
   created_at: string;
   updated_at: string;
-  created_by: string | null;
-  updated_by: string | null;
-  deleted_at: string | null;
 }
 
 // ============================================
@@ -45,7 +45,6 @@ class PermissionRepositoryImpl {
       .from('permissions')
       .select('*')
       .eq('id', id)
-      .is('deleted_at', null)
       .single();
 
     if (error) {
@@ -64,7 +63,6 @@ class PermissionRepositoryImpl {
       .from('permissions')
       .select('*')
       .eq('name', name)
-      .is('deleted_at', null)
       .single();
 
     if (error) {
@@ -76,15 +74,14 @@ class PermissionRepositoryImpl {
   }
 
   /**
-   * Find permissions by module
+   * Find permissions by group name
    */
-  async findByModule(module: string): Promise<Permission[]> {
+  async findByGroupName(groupName: string): Promise<Permission[]> {
     const { data, error } = await db
       .from('permissions')
       .select('*')
-      .eq('module', module)
-      .is('deleted_at', null)
-      .order('name', { ascending: true });
+      .eq('group_name', groupName)
+      .order('sort_order', { ascending: true });
 
     if (error) {
       throw new Error(`Failed to fetch permissions: ${error.message}`);
@@ -94,15 +91,20 @@ class PermissionRepositoryImpl {
   }
 
   /**
-   * Get all permissions grouped by module
+   * Get all permissions grouped by group_name (flat structure)
    */
-  async findAllGroupedByModule(): Promise<PermissionGroup[]> {
-    const { data, error } = await db
+  async findAllGroupedByModule(permissionType?: RoleScope): Promise<PermissionGroup[]> {
+    let query = db
       .from('permissions')
       .select('*')
-      .is('deleted_at', null)
-      .order('module', { ascending: true })
-      .order('action', { ascending: true });
+      .order('group_name', { ascending: true })
+      .order('sort_order', { ascending: true });
+
+    if (permissionType) {
+      query = query.eq('permission_type', permissionType);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       throw new Error(`Failed to fetch permissions: ${error.message}`);
@@ -112,15 +114,15 @@ class PermissionRepositoryImpl {
 
     for (const permission of data || []) {
       const perm = this.mapToPermission(permission as DbPermission);
-      const permModuleName = perm.module;
-      if (!grouped[permModuleName]) {
-        grouped[permModuleName] = [];
+      const groupKey = perm.groupName || 'Other';
+      if (!grouped[groupKey]) {
+        grouped[groupKey] = [];
       }
-      grouped[permModuleName].push(perm);
+      grouped[groupKey].push(perm);
     }
 
-    return Object.entries(grouped).map(([module, permissions]) => ({
-      module,
+    return Object.entries(grouped).map(([groupName, permissions]) => ({
+      groupName,
       permissions,
     }));
   }
@@ -131,28 +133,23 @@ class PermissionRepositoryImpl {
   async findAllFiltered(filters?: PermissionQueryFilters): Promise<Permission[]> {
     let query = db
       .from('permissions')
-      .select('*')
-      .is('deleted_at', null);
+      .select('*');
 
     if (filters?.search) {
       query = query.or(
-        `name.ilike.%${filters.search}%,display_name.ilike.%${filters.search}%,description.ilike.%${filters.search}%`
+        `name.ilike.%${filters.search}%,description.ilike.%${filters.search}%`
       );
     }
 
-    if (filters?.module) {
-      query = query.eq('module', filters.module);
+    if (filters?.permissionType) {
+      query = query.eq('permission_type', filters.permissionType);
     }
 
-    if (filters?.action) {
-      query = query.eq('action', filters.action);
+    if (filters?.groupName) {
+      query = query.eq('group_name', filters.groupName);
     }
 
-    if (filters?.category) {
-      query = query.eq('category', filters.category);
-    }
-
-    query = query.order('module', { ascending: true }).order('action', { ascending: true });
+    query = query.order('group_name', { ascending: true }).order('sort_order', { ascending: true });
 
     const { data, error } = await query;
 
@@ -171,58 +168,37 @@ class PermissionRepositoryImpl {
   }
 
   /**
-   * Get unique modules
+   * Get unique group names
    */
-  async getModules(): Promise<string[]> {
+  async getGroupNames(): Promise<string[]> {
     const { data, error } = await db
       .from('permissions')
-      .select('module')
-      .is('deleted_at', null)
-      .order('module', { ascending: true });
+      .select('group_name')
+      .not('group_name', 'is', null)
+      .order('group_name', { ascending: true });
 
     if (error) {
-      throw new Error(`Failed to fetch modules: ${error.message}`);
+      throw new Error(`Failed to fetch group names: ${error.message}`);
     }
 
-    // Get unique modules
-    const modules = [...new Set((data || []).map((r) => r.module))];
-    return modules;
-  }
-
-  /**
-   * Get unique categories
-   */
-  async getCategories(): Promise<string[]> {
-    const { data, error } = await db
-      .from('permissions')
-      .select('category')
-      .is('deleted_at', null)
-      .not('category', 'is', null)
-      .order('category', { ascending: true });
-
-    if (error) {
-      throw new Error(`Failed to fetch categories: ${error.message}`);
-    }
-
-    // Get unique non-null categories
-    const categories = [...new Set((data || []).filter((r) => r.category).map((r) => r.category as string))];
-    return categories;
+    // Get unique group names
+    const groups = [...new Set((data || []).filter((r) => r.group_name).map((r) => r.group_name as string))];
+    return groups;
   }
 
   /**
    * Create a permission
    */
-  async create(data: CreatePermissionData, createdBy?: string): Promise<Permission> {
+  async create(data: CreatePermissionData): Promise<Permission> {
     const { data: result, error } = await db
       .from('permissions')
       .insert({
         name: data.name,
-        display_name: data.displayName,
         description: data.description ?? null,
-        module: data.module,
-        action: data.action,
-        category: data.category ?? null,
-        created_by: createdBy ?? null,
+        permission_type: data.permissionType ?? 'user',
+        group_name: data.groupName ?? null,
+        parent_id: data.parentId ?? null,
+        sort_order: data.sortOrder ?? 0,
       })
       .select()
       .single();
@@ -237,10 +213,7 @@ class PermissionRepositoryImpl {
   /**
    * Create multiple permissions
    */
-  async createMany(
-    permissions: CreatePermissionData[],
-    createdBy?: string
-  ): Promise<number> {
+  async createMany(permissions: CreatePermissionData[]): Promise<number> {
     if (permissions.length === 0) {return 0;}
 
     const { data, error } = await db
@@ -248,12 +221,11 @@ class PermissionRepositoryImpl {
       .upsert(
         permissions.map((p) => ({
           name: p.name,
-          display_name: p.displayName,
           description: p.description ?? null,
-          module: p.module,
-          action: p.action,
-          category: p.category ?? null,
-          created_by: createdBy ?? null,
+          permission_type: p.permissionType ?? 'user',
+          group_name: p.groupName ?? null,
+          parent_id: p.parentId ?? null,
+          sort_order: p.sortOrder ?? 0,
         })),
         { onConflict: 'name', ignoreDuplicates: true }
       )
@@ -269,15 +241,15 @@ class PermissionRepositoryImpl {
   /**
    * Update a permission
    */
-  async update(id: string, data: UpdatePermissionData, updatedBy?: string): Promise<Permission> {
+  async update(id: string, data: UpdatePermissionData): Promise<Permission> {
     const updateData: Record<string, unknown> = {
-      updated_by: updatedBy ?? null,
       updated_at: new Date().toISOString(),
     };
 
-    if (data.displayName !== undefined) {updateData.display_name = data.displayName;}
+    if (data.name !== undefined) {updateData.name = data.name;}
     if (data.description !== undefined) {updateData.description = data.description;}
-    if (data.category !== undefined) {updateData.category = data.category;}
+    if (data.groupName !== undefined) {updateData.group_name = data.groupName;}
+    if (data.sortOrder !== undefined) {updateData.sort_order = data.sortOrder;}
 
     const { data: result, error } = await db
       .from('permissions')
@@ -294,25 +266,17 @@ class PermissionRepositoryImpl {
   }
 
   /**
-   * Delete a permission (soft delete)
+   * Delete a permission (hard delete)
    */
-  async delete(id: string, deletedBy?: string): Promise<Permission> {
-    const { data, error } = await db
+  async delete(id: string): Promise<void> {
+    const { error } = await db
       .from('permissions')
-      .update({
-        deleted_at: new Date().toISOString(),
-        updated_by: deletedBy ?? null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-      .select()
-      .single();
+      .delete()
+      .eq('id', id);
 
     if (error) {
       throw new Error(`Failed to delete permission: ${error.message}`);
     }
-
-    return this.mapToPermission(data as DbPermission);
   }
 
   /**
@@ -322,8 +286,7 @@ class PermissionRepositoryImpl {
     let query = db
       .from('permissions')
       .select('id', { count: 'exact', head: true })
-      .eq('name', name)
-      .is('deleted_at', null);
+      .eq('name', name);
 
     if (excludeId) {
       query = query.neq('id', excludeId);
@@ -385,18 +348,91 @@ class PermissionRepositoryImpl {
   private mapToPermission(data: DbPermission): Permission {
     return {
       id: data.id,
+      permissionType: data.permission_type,
+      parentId: data.parent_id,
       name: data.name,
-      displayName: data.display_name,
+      groupName: data.group_name,
+      sortOrder: data.sort_order ?? 0,
       description: data.description,
-      module: data.module,
-      action: data.action,
-      category: data.category,
       createdAt: new Date(data.created_at),
       updatedAt: new Date(data.updated_at),
-      createdBy: data.created_by,
-      updatedBy: data.updated_by,
-      deletedAt: data.deleted_at ? new Date(data.deleted_at) : null,
     };
+  }
+
+  /**
+   * Build hierarchical structure from flat permissions
+   */
+  private buildHierarchy(permissions: Permission[]): HierarchicalPermission[] {
+    const permissionMap = new Map<string, HierarchicalPermission>();
+    const roots: HierarchicalPermission[] = [];
+
+    // First pass: create all nodes with empty children
+    for (const perm of permissions) {
+      permissionMap.set(perm.id, { ...perm, children: [] });
+    }
+
+    // Second pass: build parent-child relationships
+    for (const perm of permissions) {
+      const node = permissionMap.get(perm.id)!;
+      if (perm.parentId && permissionMap.has(perm.parentId)) {
+        const parent = permissionMap.get(perm.parentId)!;
+        parent.children.push(node);
+      } else {
+        roots.push(node);
+      }
+    }
+
+    // Sort children by sortOrder
+    const sortChildren = (nodes: HierarchicalPermission[]) => {
+      nodes.sort((a, b) => a.sortOrder - b.sortOrder);
+      for (const node of nodes) {
+        if (node.children.length > 0) {
+          sortChildren(node.children);
+        }
+      }
+    };
+
+    sortChildren(roots);
+    return roots;
+  }
+
+  /**
+   * Get all permissions grouped by group_name with hierarchy
+   */
+  async findAllGroupedByModuleHierarchical(permissionType?: RoleScope): Promise<HierarchicalPermissionGroup[]> {
+    let query = db
+      .from('permissions')
+      .select('*')
+      .order('group_name', { ascending: true })
+      .order('sort_order', { ascending: true });
+
+    if (permissionType) {
+      query = query.eq('permission_type', permissionType);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw new Error(`Failed to fetch permissions: ${error.message}`);
+    }
+
+    // Group by group_name first
+    const grouped: Record<string, Permission[]> = {};
+
+    for (const permission of data || []) {
+      const perm = this.mapToPermission(permission as DbPermission);
+      const groupKey = perm.groupName || 'Other';
+      if (!grouped[groupKey]) {
+        grouped[groupKey] = [];
+      }
+      grouped[groupKey]!.push(perm);
+    }
+
+    // Build hierarchy for each group
+    return Object.entries(grouped).map(([groupName, permissions]) => ({
+      groupName,
+      permissions: this.buildHierarchy(permissions),
+    }));
   }
 }
 

@@ -65,9 +65,9 @@ interface DbUser {
 interface DbRole {
   id: string;
   name: string;
-  slug: string;
-  display_name: string;
-  level: number;
+  scope: 'user' | 'customer';
+  is_system_role: boolean;
+  description: string | null;
 }
 
 /**
@@ -117,9 +117,9 @@ export const userRepository = {
         roles:role_id (
           id,
           name,
-          slug,
-          display_name,
-          level
+          scope,
+          is_system_role,
+          description
         )
       `, { count: 'exact' });
 
@@ -185,9 +185,9 @@ export const userRepository = {
         roles:role_id (
           id,
           name,
-          slug,
-          display_name,
-          level
+          scope,
+          is_system_role,
+          description
         )
       `)
       .eq('id', id)
@@ -213,9 +213,9 @@ export const userRepository = {
         roles:role_id (
           id,
           name,
-          slug,
-          display_name,
-          level
+          scope,
+          is_system_role,
+          description
         )
       `)
       .eq('email', email.toLowerCase())
@@ -241,9 +241,9 @@ export const userRepository = {
         roles:role_id (
           id,
           name,
-          slug,
-          display_name,
-          level
+          scope,
+          is_system_role,
+          description
         )
       `)
       .eq('auth_user_id', authUserId)
@@ -559,9 +559,9 @@ export const userRepository = {
     return {
       id: role.id,
       name: role.name,
-      slug: role.slug,
-      displayName: role.display_name,
-      level: role.level,
+      scope: role.scope,
+      isSystemRole: role.is_system_role,
+      description: role.description,
     };
   },
 };

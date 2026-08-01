@@ -38,31 +38,10 @@ class RoleServiceImpl {
       throw ValidationError.required('name');
     }
 
-    if (!data.slug?.trim()) {
-      throw ValidationError.required('slug');
-    }
-
-    if (!data.displayName?.trim()) {
-      throw ValidationError.required('displayName');
-    }
-
-    // Validate slug format (lowercase, alphanumeric, underscores)
-    if (!/^[a-z][a-z0-9_]*$/.test(data.slug)) {
-      throw ValidationError.field(
-        'slug',
-        'Slug must start with a letter and contain only lowercase letters, numbers, and underscores'
-      );
-    }
-
-    // Check slug uniqueness
-    const isUnique = await roleRepository.isSlugUnique(data.slug);
+    // Check name uniqueness
+    const isUnique = await roleRepository.isNameUnique(data.name);
     if (!isUnique) {
-      throw ConflictError.duplicate('slug', data.slug);
-    }
-
-    // Validate level range
-    if (data.level !== undefined && (data.level < 0 || data.level > 100)) {
-      throw ValidationError.field('level', 'Level must be between 0 and 100');
+      throw ConflictError.duplicate('name', data.name);
     }
   }
 
@@ -76,13 +55,16 @@ class RoleServiceImpl {
       throw ValidationError.field('id', 'Role not found');
     }
 
-    if (existing.isSystem && (data.name || data.level !== undefined)) {
-      throw ValidationError.field('role', 'Cannot modify name or level of system roles');
+    if (existing.isSystemRole && data.name) {
+      throw ValidationError.field('role', 'Cannot modify name of system roles');
     }
 
-    // Validate level range
-    if (data.level !== undefined && (data.level < 0 || data.level > 100)) {
-      throw ValidationError.field('level', 'Level must be between 0 and 100');
+    // Check name uniqueness if changing
+    if (data.name && data.name !== existing.name) {
+      const isUnique = await roleRepository.isNameUnique(data.name, id);
+      if (!isUnique) {
+        throw ConflictError.duplicate('name', data.name);
+      }
     }
   }
 
@@ -102,12 +84,10 @@ class RoleServiceImpl {
 
     return {
       id: role.id,
+      scope: role.scope,
+      isSystemRole: role.isSystemRole,
       name: role.name,
-      slug: role.slug,
-      displayName: role.displayName,
       description: role.description,
-      level: role.level,
-      isSystem: role.isSystem,
       userCount: role._count?.users ?? 0,
       permissionCount: role.rolePermissions.length,
       createdAt: role.createdAt,
@@ -116,10 +96,10 @@ class RoleServiceImpl {
   }
 
   /**
-   * Get role by slug
+   * Get role by name
    */
-  async getRoleBySlug(slug: string): Promise<Role | null> {
-    return roleRepository.findBySlug(slug);
+  async getRoleByName(name: string): Promise<Role | null> {
+    return roleRepository.findByName(name);
   }
 
   /**
@@ -141,9 +121,7 @@ class RoleServiceImpl {
       role.id,
       {
         name: role.name,
-        slug: role.slug,
-        displayName: role.displayName,
-        level: role.level,
+        scope: role.scope,
         permissionCount: role.rolePermissions.length,
       },
       {
@@ -184,14 +162,12 @@ class RoleServiceImpl {
       role.id,
       {
         name: existing.name,
-        displayName: existing.displayName,
-        level: existing.level,
+        scope: existing.scope,
         permissionCount: existing.rolePermissions.length,
       },
       {
         name: role.name,
-        displayName: role.displayName,
-        level: role.level,
+        scope: role.scope,
         permissionCount: role.rolePermissions.length,
       },
       {
@@ -216,7 +192,7 @@ class RoleServiceImpl {
     }
 
     // Check if system role
-    if (existing.isSystem) {
+    if (existing.isSystemRole) {
       throw ValidationError.field('role', 'Cannot delete system roles');
     }
 
@@ -239,8 +215,7 @@ class RoleServiceImpl {
       role.id,
       {
         name: role.name,
-        slug: role.slug,
-        displayName: role.displayName,
+        scope: role.scope,
       },
       {
         userId: ctx?.userId,
@@ -265,17 +240,6 @@ class RoleServiceImpl {
     // This would typically check the user's role and its permissions
     // For now, return false - will be implemented when we integrate with user service
     return false;
-  }
-
-  /**
-   * Generate slug from name
-   */
-  generateSlug(name: string): string {
-    return name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_+|_+$/g, '')
-      .substring(0, 50);
   }
 }
 

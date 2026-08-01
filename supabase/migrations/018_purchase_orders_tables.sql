@@ -1,11 +1,115 @@
 -- ============================================
 -- MIGRATION: 018_purchase_orders_tables.sql
--- PURPOSE: Purchase Orders and Purchase Order Items tables
+-- PURPOSE: Purchase Orders and Purchase Order Items tables (includes vendors)
 -- AUTHOR: System
 -- DATE: 2024
 -- PHASE: 3
--- DEPENDS ON: 017_vendors_table.sql, 012_sales_orders_tables.sql
+-- DEPENDS ON: 012_sales_orders_tables.sql
 -- ============================================
+
+-- ============================================
+-- VENDOR STATUS ENUM
+-- ============================================
+
+CREATE TYPE vendor_status AS ENUM (
+  'active',
+  'inactive'
+);
+COMMENT ON TYPE vendor_status IS 'Vendor status';
+
+-- ============================================
+-- VENDORS TABLE
+-- ============================================
+
+CREATE TABLE vendors (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  vendor_code VARCHAR(50) NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  legal_name VARCHAR(255),
+  contact_name VARCHAR(255),
+  email VARCHAR(255),
+  phone VARCHAR(50),
+  website VARCHAR(255),
+  address_street VARCHAR(200),
+  address_city VARCHAR(100),
+  address_state VARCHAR(50),
+  address_postal_code VARCHAR(20),
+  address_country VARCHAR(50) DEFAULT 'US',
+  payment_terms VARCHAR(100),
+  currency_code VARCHAR(3) NOT NULL DEFAULT 'USD',
+  tax_id VARCHAR(50),
+  status vendor_status NOT NULL DEFAULT 'active',
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  updated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  deleted_at TIMESTAMPTZ,
+  CONSTRAINT vendors_name_length CHECK (LENGTH(TRIM(name)) >= 2),
+  CONSTRAINT vendors_email_format CHECK (
+    email IS NULL OR
+    email ~ '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+  )
+);
+
+CREATE UNIQUE INDEX idx_vendors_code_unique ON vendors(vendor_code) WHERE deleted_at IS NULL;
+CREATE INDEX idx_vendors_name ON vendors(name) WHERE deleted_at IS NULL;
+CREATE INDEX idx_vendors_status ON vendors(status) WHERE deleted_at IS NULL;
+CREATE INDEX idx_vendors_deleted_at ON vendors(deleted_at);
+
+CREATE SEQUENCE IF NOT EXISTS vendor_code_seq START WITH 1 INCREMENT BY 1 NO MAXVALUE CACHE 1;
+
+CREATE OR REPLACE FUNCTION generate_vendor_code()
+RETURNS VARCHAR(50) AS $$
+DECLARE
+  seq_num INTEGER;
+BEGIN
+  seq_num := NEXTVAL('vendor_code_seq');
+  RETURN 'VEN-' || LPAD(seq_num::TEXT, 5, '0');
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_vendors_updated_at
+  BEFORE UPDATE ON vendors
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+ALTER TABLE vendors ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY vendors_select ON vendors
+  FOR SELECT
+  USING (deleted_at IS NULL AND auth.role() = 'authenticated');
+
+CREATE POLICY vendors_insert ON vendors
+  FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM users u
+      JOIN roles r ON u.role_id = r.id
+      JOIN role_permissions rp ON r.id = rp.role_id
+      JOIN permissions p ON rp.permission_id = p.id
+      WHERE u.auth_user_id = auth.uid()
+        AND p.name = 'vendors.create'
+        AND u.deleted_at IS NULL
+    )
+  );
+
+CREATE POLICY vendors_update ON vendors
+  FOR UPDATE
+  USING (
+    deleted_at IS NULL AND
+    EXISTS (
+      SELECT 1 FROM users u
+      JOIN roles r ON u.role_id = r.id
+      JOIN role_permissions rp ON r.id = rp.role_id
+      JOIN permissions p ON rp.permission_id = p.id
+      WHERE u.auth_user_id = auth.uid()
+        AND p.name = 'vendors.edit'
+        AND u.deleted_at IS NULL
+    )
+  );
+
+COMMENT ON TABLE vendors IS 'Vendor/supplier master table';
 
 -- ============================================
 -- PURCHASE ORDER STATUS ENUM
@@ -27,7 +131,7 @@ COMMENT ON TYPE po_status IS 'Purchase order workflow status';
 
 CREATE TABLE purchase_orders (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- PO Identity
   po_number VARCHAR(50) NOT NULL,
@@ -99,7 +203,7 @@ CREATE TABLE purchase_orders (
 
 CREATE TABLE purchase_order_items (
   -- Primary Key
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Relationships
   purchase_order_id UUID NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
@@ -181,7 +285,7 @@ CREATE TRIGGER trg_po_items_updated_at
 -- SEQUENCE FOR PO NUMBERS
 -- ============================================
 
-CREATE SEQUENCE po_number_seq
+CREATE SEQUENCE IF NOT EXISTS po_number_seq
   START WITH 1
   INCREMENT BY 1
   NO MAXVALUE
