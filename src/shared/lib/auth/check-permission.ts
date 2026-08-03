@@ -96,8 +96,13 @@ export function hasAllPermissions(user: AppUser | null, permissions: string[]): 
 /**
  * Get current authenticated user from Supabase session
  *
- * Uses cookie cache to avoid database queries on every page navigation.
- * Cache is refreshed on login/logout or when cache is empty.
+ * Always fetches fresh from database for reliable permission checks.
+ * Uses React's cache() via getAppUserByAuthId for request-level memoization,
+ * so multiple calls within the same request only hit DB once.
+ *
+ * Note: Cookie caching was removed because it caused stale permission issues
+ * where layout.tsx (using getAppUserByAuthId directly) had fresh data but
+ * pages (using getCurrentUser with cache) had stale data.
  */
 export async function getCurrentUser(): Promise<AppUser | null> {
   try {
@@ -108,23 +113,9 @@ export async function getCurrentUser(): Promise<AppUser | null> {
       return null;
     }
 
-    // Try to get from cookie cache first (READ ONLY - safe in server components)
-    const { getCachedProfile } = await import('./profile-cache');
-    const cachedProfile = await getCachedProfile();
-
-    // Only use cache if it has valid data WITH permissions
-    // If cache has empty permissions, it's stale - fetch fresh from DB
-    if (cachedProfile && cachedProfile.id && cachedProfile.permissions.length > 0) {
-      return cachedProfile;
-    }
-
-    // Cache miss or stale (empty permissions) - fetch from database
+    // Always fetch fresh from database (same as layout.tsx does)
+    // getAppUserByAuthId uses React's cache() for request-level memoization
     const appUser = await getAppUserByAuthId(authUser.id);
-
-    // Note: We cannot set/clear cookies here because this function may be called
-    // from Server Components. Cookie modifications are only allowed in
-    // Route Handlers or Server Actions. The cache will be updated on next login
-    // or via the auth refresh API.
 
     return appUser;
   } catch (error) {
