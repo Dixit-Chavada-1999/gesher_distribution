@@ -46,6 +46,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/shared/components/ui/form';
+import { Label } from '@/shared/components/ui/label';
 import { useRoles } from '@/features/roles/hooks/use-roles';
 
 import { useCreateUser, useUpdateUser } from '../hooks/use-user-mutations';
@@ -295,6 +296,7 @@ const EditUserForm = memo(function EditUserForm({
       phone: '',
       roleId: '',
       status: 'active',
+      password: '',
     },
   });
 
@@ -318,6 +320,7 @@ const EditUserForm = memo(function EditUserForm({
         phone: detail.phone || '',
         roleId: detail.roleId || '',
         status: detail.status,
+        password: '', // Always empty - user enters new password only if changing
       });
     }
 
@@ -375,15 +378,13 @@ const EditUserForm = memo(function EditUserForm({
           />
         </div>
 
-        <FormItem>
-          <FormLabel>Email</FormLabel>
-          <FormControl>
-            <Input value={user.email} disabled readOnly />
-          </FormControl>
-          <FormDescription>
+        <div className="space-y-2">
+          <Label>Email</Label>
+          <Input value={user.email} disabled readOnly className="bg-muted" />
+          <p className="text-sm text-muted-foreground">
             Changing an email has to go through a verified Auth flow, so it is not editable here.
-          </FormDescription>
-        </FormItem>
+          </p>
+        </div>
 
         <FormField
           control={form.control}
@@ -403,6 +404,23 @@ const EditUserForm = memo(function EditUserForm({
           <RoleField control={form.control} roles={roles} loading={rolesLoading} />
           <StatusField control={form.control} />
         </div>
+
+        <FormField
+          control={form.control}
+          name="password"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>New Password</FormLabel>
+              <FormControl>
+                <Input {...field} type="password" autoComplete="new-password" placeholder="Leave empty to keep current" />
+              </FormControl>
+              <FormDescription>
+                Leave empty to keep the current password. Must be at least 8 characters with uppercase, lowercase, and number.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
         <FormActions submitting={submitting} onCancel={onDone} submitLabel="Save Changes" />
       </form>

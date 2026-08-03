@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import { Loader2, MapPin, FileText, Calendar, User, Building2, ArrowRight } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
+import { useAuthStore } from '@/shared/stores';
 import {
   Sheet,
   SheetContent,
@@ -142,6 +143,24 @@ export function ViewQuoteDrawer({
   onEdit,
   onConvert,
 }: ViewQuoteDrawerProps) {
+  const { hasPermission } = useAuthStore();
+
+  // ----------------------------------------
+  // HYDRATION GUARD
+  // ----------------------------------------
+
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  // ----------------------------------------
+  // PERMISSIONS (only check after hydration)
+  // ----------------------------------------
+
+  const canEditPermission = hasMounted && hasPermission('quotes.edit');
+
   // ----------------------------------------
   // STATE
   // ----------------------------------------
@@ -203,10 +222,10 @@ export function ViewQuoteDrawer({
     }
   };
 
-  // Can only edit draft or sent quotes
-  const canEdit = quote && ['draft', 'sent'].includes(quote.status);
-  // Can only convert accepted quotes
-  const canConvert = quote && quote.status === 'accepted';
+  // Can only edit draft or sent quotes (and must have permission)
+  const canEdit = quote && ['draft', 'sent'].includes(quote.status) && canEditPermission;
+  // Can only convert accepted quotes (and must have edit permission)
+  const canConvert = quote && quote.status === 'accepted' && canEditPermission;
 
   // ----------------------------------------
   // RENDER

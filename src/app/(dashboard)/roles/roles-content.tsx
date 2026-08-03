@@ -49,6 +49,7 @@ import { RoleFormDialog } from '@/features/roles/components';
 import type { RoleListItem, HierarchicalPermission, HierarchicalPermissionGroup } from '@/features/roles/types';
 import { toast } from 'sonner';
 import { cn } from '@/shared/lib/utils';
+import { useAuthStore } from '@/shared/stores';
 
 // ============================================
 // ROLE CARD COMPONENT (Memoized)
@@ -58,8 +59,8 @@ interface RoleCardProps {
   role: RoleListItem;
   isSelected: boolean;
   onCardClick: (role: RoleListItem) => void;
-  onEditClick: (role: RoleListItem) => void;
-  onDeleteClick: (role: RoleListItem, e: React.MouseEvent) => void;
+  onEditClick?: (role: RoleListItem) => void;
+  onDeleteClick?: (role: RoleListItem, e: React.MouseEvent) => void;
 }
 
 const RoleCard = memo(function RoleCard({
@@ -75,12 +76,15 @@ const RoleCard = memo(function RoleCard({
 
   const handleEditClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    onEditClick(role);
+    onEditClick?.(role);
   }, [onEditClick, role]);
 
   const handleDeleteClickInternal = useCallback((e: React.MouseEvent) => {
-    onDeleteClick(role, e);
+    onDeleteClick?.(role, e);
   }, [onDeleteClick, role]);
+
+  // Don't show actions for system roles
+  const hasActions = !role.isSystemRole && (onEditClick || onDeleteClick);
 
   return (
     <Card
@@ -106,26 +110,39 @@ const RoleCard = memo(function RoleCard({
             >
               {role.scope}
             </Badge>
+            {role.isSystemRole && (
+              <Badge
+                variant="outline"
+                className="text-xs bg-amber-50 text-amber-700 border-amber-200"
+              >
+                System
+              </Badge>
+            )}
           </div>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              onClick={handleEditClick}
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-destructive"
-              onClick={handleDeleteClickInternal}
-              disabled={role.isSystemRole}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
+          {hasActions && (
+            <div className="flex items-center gap-1">
+              {onEditClick && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  onClick={handleEditClick}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              )}
+              {onDeleteClick && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  onClick={handleDeleteClickInternal}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Description */}
@@ -159,7 +176,6 @@ interface HierarchicalPermissionRowProps {
   selectedRolePermissionIds: Set<string>;
   isUpdating: boolean;
   onToggle: (permission: HierarchicalPermission, isEnabled: boolean) => void;
-  parentExpanded?: boolean; // When parent expands, children should also expand
 }
 
 const HierarchicalPermissionRow = memo(function HierarchicalPermissionRow({
@@ -168,16 +184,8 @@ const HierarchicalPermissionRow = memo(function HierarchicalPermissionRow({
   selectedRolePermissionIds,
   isUpdating,
   onToggle,
-  parentExpanded = false,
 }: HierarchicalPermissionRowProps) {
   const [isExpanded, setIsExpanded] = useState(false); // Collapsed by default
-
-  // When parent expands, expand this row too
-  useEffect(() => {
-    if (parentExpanded) {
-      setIsExpanded(true);
-    }
-  }, [parentExpanded]);
   const isEnabled = selectedRolePermissionIds.has(permission.id);
   const hasChildren = permission.children.length > 0;
 
@@ -206,31 +214,32 @@ const HierarchicalPermissionRow = memo(function HierarchicalPermissionRow({
 
   const paddingLeft = 16 + (depth * 24); // Base padding + depth indentation
 
+  const handleRowClick = useCallback(() => {
+    if (hasChildren) {
+      setIsExpanded(!isExpanded);
+    }
+  }, [hasChildren, isExpanded]);
+
   return (
     <>
       <div
         className={cn(
           "flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors border-b last:border-b-0",
-          depth === 0 && "bg-muted/20"
+          depth === 0 && "bg-muted/20",
+          hasChildren && "cursor-pointer"
         )}
         style={{ paddingLeft: `${paddingLeft}px` }}
+        onClick={handleRowClick}
       >
         <div className="flex items-center gap-3">
           {hasChildren && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsExpanded(!isExpanded);
-              }}
-              className="p-1 hover:bg-muted rounded"
-            >
+            <div className="p-1">
               {isExpanded ? (
                 <ChevronUp className="h-4 w-4 text-muted-foreground" />
               ) : (
                 <ChevronDown className="h-4 w-4 text-muted-foreground" />
               )}
-            </button>
+            </div>
           )}
           {!hasChildren && <div className="w-5" />}
           <div onClick={(e) => e.stopPropagation()}>
@@ -276,7 +285,6 @@ const HierarchicalPermissionRow = memo(function HierarchicalPermissionRow({
               selectedRolePermissionIds={selectedRolePermissionIds}
               isUpdating={isUpdating}
               onToggle={onToggle}
-              parentExpanded={isExpanded}
             />
           ))}
         </>
@@ -370,6 +378,31 @@ const PermissionModule = memo(function PermissionModule({
 // ============================================
 
 function RolesPageContentComponent() {
+  const { hasPermission } = useAuthStore();
+
+  // ----------------------------------------
+  // HYDRATION GUARD
+  // ----------------------------------------
+
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  // ----------------------------------------
+  // PERMISSIONS (only check after hydration)
+  // ----------------------------------------
+
+  const canCreate = hasMounted && hasPermission('roles.create');
+  const canEdit = hasMounted && hasPermission('roles.edit');
+  const canDelete = hasMounted && hasPermission('roles.delete');
+  const canUpdatePermission = hasMounted && hasPermission('roles.update_permission');
+
+  // ----------------------------------------
+  // STATE
+  // ----------------------------------------
+
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null); // Separate state for dialog
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -386,11 +419,14 @@ function RolesPageContentComponent() {
   const { roles, loading: rolesLoading, error: rolesError, refetch: refetchRoles } = useRoles();
 
   // Auto-select first role (super_admin) on initial load
-  const firstRole = roles[0];
-  if (!hasAutoSelected && !rolesLoading && roles.length > 0 && firstRole && !selectedRoleId) {
-    setSelectedRoleId(firstRole.id);
-    setHasAutoSelected(true);
-  }
+  useEffect(() => {
+    const firstRole = roles[0];
+    if (!hasAutoSelected && !rolesLoading && roles.length > 0 && firstRole && !selectedRoleId) {
+      setSelectedRoleId(firstRole.id);
+      setHasAutoSelected(true);
+    }
+  }, [roles, rolesLoading, hasAutoSelected, selectedRoleId]);
+
   const { role: selectedRole, loading: roleLoading, refetch: refetchRole } = useRole(selectedRoleId);
   const { role: editingRole } = useRole(editingRoleId); // For dialog
 
@@ -443,7 +479,8 @@ function RolesPageContentComponent() {
   }, []);
 
   const handleCardClick = useCallback((role: RoleListItem) => {
-    setSelectedRoleId(prev => role.id === prev ? null : role.id);
+    // Always keep a role selected - only change selection, don't toggle off
+    setSelectedRoleId(role.id);
   }, []);
 
   const handleConfirmDelete = useCallback(async () => {
@@ -620,10 +657,12 @@ function RolesPageContentComponent() {
               <RefreshCw className="mr-2 h-4 w-4" />
               Refresh
             </Button>
-            <Button onClick={handleCreateRole}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Role
-            </Button>
+            {canCreate && (
+              <Button onClick={handleCreateRole}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create Role
+              </Button>
+            )}
           </div>
         }
       />
@@ -672,10 +711,12 @@ function RolesPageContentComponent() {
             <Card className="col-span-full">
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <p className="text-muted-foreground mb-4">No roles found</p>
-                <Button onClick={handleCreateRole}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create First Role
-                </Button>
+                {canCreate && (
+                  <Button onClick={handleCreateRole}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create First Role
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ) : (
@@ -685,8 +726,8 @@ function RolesPageContentComponent() {
                 role={role}
                 isSelected={selectedRoleId === role.id}
                 onCardClick={handleCardClick}
-                onEditClick={handleEditRole}
-                onDeleteClick={handleDeleteClick}
+                onEditClick={canEdit ? handleEditRole : undefined}
+                onDeleteClick={canDelete ? handleDeleteClick : undefined}
               />
             ))
           )}
@@ -730,9 +771,9 @@ function RolesPageContentComponent() {
                   counts={modulePermissionCounts[group.groupName] || { enabled: 0, total: 0 }}
                   isExpanded={expandedModules.has(group.groupName)}
                   selectedRolePermissionIds={pendingPermissionIds}
-                  isUpdating={updatingRole}
+                  isUpdating={updatingRole || !canUpdatePermission}
                   onToggleModule={toggleModule}
-                  onPermissionToggle={handlePermissionToggle}
+                  onPermissionToggle={canUpdatePermission ? handlePermissionToggle : () => {}}
                 />
               ))}
             </div>
@@ -782,7 +823,7 @@ function RolesPageContentComponent() {
       </AlertDialog>
 
       {/* Unsaved Changes Footer */}
-      {hasUnsavedChanges && selectedRoleFromList && (
+      {hasUnsavedChanges && selectedRoleFromList && canUpdatePermission && (
         <div className="fixed bottom-0 left-0 right-0 bg-muted border-t px-6 py-4 flex items-center justify-between z-50">
           <p className="text-sm">
             You have <span className="font-semibold">{unsavedChangesCount}</span> unsaved changes to the{' '}

@@ -34,9 +34,7 @@ interface DbUser {
 interface DbRole {
   id: string;
   name: string;
-  slug: string;
   description: string | null;
-  level: number;
   is_system_role: boolean;
 }
 
@@ -68,9 +66,7 @@ export class AuthService {
           roles:role_id (
             id,
             name,
-            slug,
             description,
-            level,
             is_system_role
           )
         `)
@@ -138,9 +134,7 @@ export class AuthService {
           roles:role_id (
             id,
             name,
-            slug,
             description,
-            level,
             is_system_role
           )
         `)
@@ -352,9 +346,7 @@ export class AuthService {
         ? {
             id: role.id,
             name: role.name,
-            slug: role.slug,
             description: role.description,
-            level: role.level,
             isSystemRole: role.is_system_role,
           }
         : null,

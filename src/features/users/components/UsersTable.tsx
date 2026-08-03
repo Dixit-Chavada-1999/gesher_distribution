@@ -11,7 +11,7 @@
  * - Memoized columns with useMemo
  */
 
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import type { PaginationState } from '@tanstack/react-table';
 import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
@@ -70,6 +70,27 @@ interface UsersTableProps {
 
 function UsersTableComponent({ onDataChange, initialData }: UsersTableProps) {
   const currentUserId = useAuthStore((state) => state.appUser?.id);
+  const hasPermission = useAuthStore((state) => state.hasPermission);
+
+  // ----------------------------------------
+  // HYDRATION GUARD
+  // ----------------------------------------
+
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  // ----------------------------------------
+  // PERMISSIONS (only check after hydration)
+  // ----------------------------------------
+
+  const canCreate = hasMounted && hasPermission('users.create');
+  const canEdit = hasMounted && hasPermission('users.edit');
+  const canChangeRole = hasMounted && hasPermission('users.change_role');
+  const canResetPassword = hasMounted && hasPermission('users.reset_password');
+  const canDelete = hasMounted && hasPermission('users.delete');
 
   // Query state
   const [page, setPage] = useState(1);
@@ -170,15 +191,15 @@ function UsersTableComponent({ onDataChange, initialData }: UsersTableProps) {
   const columns = useMemo(
     () =>
       getUsersTableColumns({
-        onEdit: handleEdit,
-        onChangeRole: handleChangeRole,
-        onResetPassword: handleResetPassword,
-        onDelete: setDeleteTarget,
-        onRestore: handleRestore,
+        onEdit: canEdit ? handleEdit : undefined,
+        onChangeRole: canChangeRole ? handleChangeRole : undefined,
+        onResetPassword: canResetPassword ? handleResetPassword : undefined,
+        onDelete: canDelete ? setDeleteTarget : undefined,
+        onRestore: canDelete ? handleRestore : undefined, // Restore requires delete permission
         currentUserId,
         isRestoring: restoring,
       }),
-    [handleEdit, handleChangeRole, handleResetPassword, handleRestore, currentUserId, restoring]
+    [handleEdit, handleChangeRole, handleResetPassword, handleRestore, currentUserId, restoring, canEdit, canChangeRole, canResetPassword, canDelete]
   );
 
   // The table reports 0-based pages; the API is 1-based
@@ -255,12 +276,14 @@ function UsersTableComponent({ onDataChange, initialData }: UsersTableProps) {
               </Label>
             </div>
 
-            <div className="ml-auto">
-              <Button size="sm" onClick={handleCreate}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add User
-              </Button>
-            </div>
+            {canCreate && (
+              <div className="ml-auto">
+                <Button size="sm" onClick={handleCreate}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add User
+                </Button>
+              </div>
+            )}
           </div>
         }
       />

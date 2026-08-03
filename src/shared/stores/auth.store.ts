@@ -29,8 +29,7 @@ export interface AppUser {
   role: {
     id: string;
     name: string;
-    slug: string;
-    level: number;
+    isSystemRole: boolean;
   } | null;
   permissions: string[];
 }
@@ -76,7 +75,7 @@ interface AuthActions {
   hasPermission: (permission: string) => boolean;
   hasAnyPermission: (permissions: string[]) => boolean;
   hasAllPermissions: (permissions: string[]) => boolean;
-  hasMinimumRoleLevel: (level: number) => boolean;
+  isSuperAdmin: () => boolean;
 
   // Reset
   reset: () => void;
@@ -161,6 +160,12 @@ export const useAuthStore = create<AuthStore>()(
         if (!appUser) {
           return false;
         }
+        // Super Admin bypass - ONLY by role name pattern (not isSystemRole alone)
+        // This ensures only actual super admin role bypasses permissions
+        const roleName = appUser.role?.name?.toLowerCase().replace(/[_\s]/g, '');
+        if (roleName === 'superadmin') {
+          return true;
+        }
         return appUser.permissions.includes(permission);
       },
 
@@ -168,6 +173,11 @@ export const useAuthStore = create<AuthStore>()(
         const { appUser } = get();
         if (!appUser) {
           return false;
+        }
+        // Super Admin bypass - ONLY by role name
+        const roleName = appUser.role?.name?.toLowerCase().replace(/[_\s]/g, '');
+        if (roleName === 'superadmin') {
+          return true;
         }
         return permissions.some((p) => appUser.permissions.includes(p));
       },
@@ -177,15 +187,18 @@ export const useAuthStore = create<AuthStore>()(
         if (!appUser) {
           return false;
         }
+        // Super Admin bypass - ONLY by role name
+        const roleName = appUser.role?.name?.toLowerCase().replace(/[_\s]/g, '');
+        if (roleName === 'superadmin') {
+          return true;
+        }
         return permissions.every((p) => appUser.permissions.includes(p));
       },
 
-      hasMinimumRoleLevel: (level) => {
+      isSuperAdmin: () => {
         const { appUser } = get();
-        if (!appUser?.role) {
-          return false;
-        }
-        return appUser.role.level >= level;
+        const roleName = appUser?.role?.name?.toLowerCase().replace(/[_\s]/g, '');
+        return roleName === 'superadmin';
       },
 
       // Reset
@@ -193,12 +206,20 @@ export const useAuthStore = create<AuthStore>()(
     }),
     {
       name: 'auth-storage',
+      version: 2, // Increment when schema changes - clears old cached data
       storage: createJSONStorage(() => sessionStorage),
       partialize: (state) => ({
         // Only persist essential data
         appUser: state.appUser,
         isAuthenticated: state.isAuthenticated,
       }),
+      migrate: (persistedState, version) => {
+        // If version is old, return fresh state (clears old data)
+        if (version < 2) {
+          return { appUser: null, isAuthenticated: false };
+        }
+        return persistedState as { appUser: AppUser | null; isAuthenticated: boolean };
+      },
     }
   )
 );
@@ -237,15 +258,17 @@ export const selectRoleName = (state: AuthStore): string => {
 };
 
 /**
- * Select if user is admin (level >= 90)
+ * Select if user is admin (Super Admin or system role)
  */
 export const selectIsAdmin = (state: AuthStore): boolean => {
-  return (state.appUser?.role?.level ?? 0) >= 90;
+  const roleName = state.appUser?.role?.name?.toLowerCase().replace(/[_\s]/g, '');
+  return state.appUser?.role?.isSystemRole === true || roleName === 'superadmin';
 };
 
 /**
- * Select if user is super admin (level === 100)
+ * Select if user is super admin
  */
 export const selectIsSuperAdmin = (state: AuthStore): boolean => {
-  return state.appUser?.role?.level === 100;
+  const roleName = state.appUser?.role?.name?.toLowerCase().replace(/[_\s]/g, '');
+  return state.appUser?.role?.isSystemRole === true || roleName === 'superadmin';
 };

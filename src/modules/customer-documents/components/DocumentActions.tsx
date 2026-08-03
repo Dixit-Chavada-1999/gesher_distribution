@@ -31,6 +31,14 @@ export function DocumentActions({
 }: DocumentActionsProps) {
   const isArchived = document.status === 'archived';
 
+  // Check if any actions are available
+  const hasAnyAction = onView || onDownload || onReplace || onArchive;
+
+  // Don't render if no actions available
+  if (!hasAnyAction) {
+    return null;
+  }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -40,28 +48,36 @@ export function DocumentActions({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={onView}>
-          <Eye className="mr-2 h-4 w-4" />
-          View
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={onDownload}>
-          <Download className="mr-2 h-4 w-4" />
-          Download
-        </DropdownMenuItem>
-        {!isArchived && (
+        {onView && (
+          <DropdownMenuItem onClick={onView}>
+            <Eye className="mr-2 h-4 w-4" />
+            View
+          </DropdownMenuItem>
+        )}
+        {onDownload && (
+          <DropdownMenuItem onClick={onDownload}>
+            <Download className="mr-2 h-4 w-4" />
+            Download
+          </DropdownMenuItem>
+        )}
+        {!isArchived && (onReplace || onArchive) && (
           <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onReplace}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Replace
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={onArchive}
-              className="text-destructive focus:text-destructive"
-            >
-              <Archive className="mr-2 h-4 w-4" />
-              Archive
-            </DropdownMenuItem>
+            {(onView || onDownload) && <DropdownMenuSeparator />}
+            {onReplace && (
+              <DropdownMenuItem onClick={onReplace}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Replace
+              </DropdownMenuItem>
+            )}
+            {onArchive && (
+              <DropdownMenuItem
+                onClick={onArchive}
+                className="text-destructive focus:text-destructive"
+              >
+                <Archive className="mr-2 h-4 w-4" />
+                Archive
+              </DropdownMenuItem>
+            )}
           </>
         )}
       </DropdownMenuContent>

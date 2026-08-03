@@ -15,15 +15,9 @@ import { z } from 'zod';
 // ============================================
 
 const createRoleSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(50),
-  slug: z
-    .string()
-    .min(1, 'Slug is required')
-    .max(50)
-    .regex(/^[a-z][a-z0-9_]*$/, 'Slug must start with a letter and contain only lowercase letters, numbers, and underscores'),
-  displayName: z.string().min(1, 'Display name is required').max(100),
+  name: z.string().min(1, 'Name is required').max(100),
   description: z.string().max(500).optional(),
-  level: z.number().min(0).max(100).optional().default(0),
+  scope: z.enum(['user', 'customer']).optional().default('user'),
   permissionIds: z.array(z.string().uuid()).optional(),
 });
 

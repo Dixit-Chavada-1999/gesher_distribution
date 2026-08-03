@@ -301,7 +301,22 @@ export const userService = {
         }
       }
 
-      const user = await userRepository.update(id, data, actorId);
+      // Handle password update if provided
+      if (data.password && data.password.length > 0) {
+        const passwordResult = await this.setPassword(id, data.password);
+        if (!passwordResult.success) {
+          return {
+            success: false,
+            error: passwordResult.error || 'Failed to update password',
+            errors: passwordResult.errors,
+          };
+        }
+      }
+
+      // Remove password from data before updating user table (it's handled by Auth)
+      const { password: _password, ...userData } = data;
+
+      const user = await userRepository.update(id, userData, actorId);
 
       return {
         success: true,

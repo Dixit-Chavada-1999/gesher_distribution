@@ -109,6 +109,8 @@ export const updateUserSchema = z.object({
     .or(z.literal('')),
   roleId: roleIdSchema.optional(),
   status: userStatusSchema.optional(),
+  /** Optional new password - if provided, updates the user's auth password */
+  password: passwordSchema.optional().or(z.literal('')),
 });
 
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
@@ -186,7 +188,7 @@ export const createUserFormSchema = z
 export type CreateUserFormInput = z.infer<typeof createUserFormSchema>;
 
 /**
- * Edit form - no email, no password (both are separate Auth flows)
+ * Edit form - no email (Auth flow), password is optional
  */
 export const editUserFormSchema = z.object({
   firstName: z
@@ -208,6 +210,20 @@ export const editUserFormSchema = z.object({
     .or(z.literal('')),
   roleId: z.string().min(1, 'Role is required').uuid('Select a valid role'),
   status: userStatusSchema,
+  /** Optional new password - leave empty to keep current password */
+  password: z.string().optional().or(z.literal('')),
+}).superRefine((data, ctx) => {
+  // Only validate password if it's provided (not empty)
+  if (data.password && data.password.length > 0) {
+    const result = passwordSchema.safeParse(data.password);
+    if (!result.success) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['password'],
+        message: result.error.issues[0]?.message ?? 'Invalid password',
+      });
+    }
+  }
 });
 
 export type EditUserFormInput = z.infer<typeof editUserFormSchema>;
@@ -272,6 +288,8 @@ export function editFormToDTO(values: EditUserFormInput): UpdateUserInput {
     phone: values.phone ? values.phone.trim() : null,
     roleId: values.roleId,
     status: values.status,
+    // Only include password if provided (non-empty)
+    password: values.password && values.password.length > 0 ? values.password : undefined,
   };
 }
 

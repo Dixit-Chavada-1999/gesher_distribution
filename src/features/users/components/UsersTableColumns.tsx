@@ -22,11 +22,11 @@ import type { UserTableRow, UserStatus } from '../types';
 // ============================================
 
 export interface UsersTableColumnsOptions {
-  onEdit: (user: UserTableRow) => void;
-  onChangeRole: (user: UserTableRow) => void;
-  onResetPassword: (user: UserTableRow) => void;
-  onDelete: (user: UserTableRow) => void;
-  onRestore: (user: UserTableRow) => void;
+  onEdit?: (user: UserTableRow) => void;
+  onChangeRole?: (user: UserTableRow) => void;
+  onResetPassword?: (user: UserTableRow) => void;
+  onDelete?: (user: UserTableRow) => void;
+  onRestore?: (user: UserTableRow) => void;
   /** The signed-in user - some actions are refused against yourself */
   currentUserId?: string;
   /** Whether a restore operation is in progress */
@@ -134,6 +134,7 @@ export function getUsersTableColumns({
 
         // Deleted users only get the restore action
         if (user.isDeleted) {
+          if (!onRestore) { return null; }
           return (
             <div className="text-right">
               <DataTableRowActions
@@ -150,36 +151,57 @@ export function getUsersTableColumns({
           );
         }
 
+        // Build actions array based on available handlers
+        const actions = [];
+
+        if (onEdit) {
+          actions.push({
+            label: 'Edit',
+            onClick: () => onEdit(user),
+            icon: <Pencil className="h-4 w-4" />,
+          });
+        }
+
+        if (onChangeRole) {
+          actions.push({
+            label: 'Change Role',
+            onClick: () => onChangeRole(user),
+            icon: <ShieldCheck className="h-4 w-4" />,
+            // Demoting yourself locks you out of this very screen
+            disabled: isSelf,
+          });
+        }
+
+        if (onResetPassword) {
+          actions.push({
+            label: 'Reset Password',
+            onClick: () => onResetPassword(user),
+            icon: <KeyRound className="h-4 w-4" />,
+          });
+        }
+
+        if (onDelete) {
+          actions.push({
+            label: 'Delete',
+            onClick: () => onDelete(user),
+            icon: <Trash2 className="h-4 w-4" />,
+            destructive: true,
+            disabled: isSelf,
+          });
+        }
+
+        // Don't render if no actions available
+        if (actions.length === 0) { return null; }
+
+        // Calculate separator position (after non-destructive actions)
+        const nonDestructiveCount = actions.filter(a => !a.destructive).length;
+        const separatorAfter = nonDestructiveCount > 0 && onDelete ? [nonDestructiveCount - 1] : [];
+
         return (
           <div className="text-right">
             <DataTableRowActions
-              separatorAfter={[2]}
-              actions={[
-                {
-                  label: 'Edit',
-                  onClick: () => onEdit(user),
-                  icon: <Pencil className="h-4 w-4" />,
-                },
-                {
-                  label: 'Change Role',
-                  onClick: () => onChangeRole(user),
-                  icon: <ShieldCheck className="h-4 w-4" />,
-                  // Demoting yourself locks you out of this very screen
-                  disabled: isSelf,
-                },
-                {
-                  label: 'Reset Password',
-                  onClick: () => onResetPassword(user),
-                  icon: <KeyRound className="h-4 w-4" />,
-                },
-                {
-                  label: 'Delete',
-                  onClick: () => onDelete(user),
-                  icon: <Trash2 className="h-4 w-4" />,
-                  destructive: true,
-                  disabled: isSelf,
-                },
-              ]}
+              separatorAfter={separatorAfter}
+              actions={actions}
             />
           </div>
         );

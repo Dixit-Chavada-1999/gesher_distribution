@@ -188,8 +188,8 @@ export interface DocumentPreviewDialogProps {
 
 export interface DocumentActionsProps {
   document: CustomerDocumentListItem;
-  onView: () => void;
-  onDownload: () => void;
-  onReplace: () => void;
-  onArchive: () => void;
+  onView?: () => void;
+  onDownload?: () => void;
+  onReplace?: () => void;
+  onArchive?: () => void;
 }

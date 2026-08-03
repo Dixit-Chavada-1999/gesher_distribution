@@ -6,9 +6,10 @@
  * Main tab component for displaying and managing customer documents.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Upload, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuthStore } from '@/shared/stores';
 
 import { Button } from '@/shared/components/ui/button';
 import {
@@ -36,6 +37,28 @@ import type { CustomerDocumentsTabProps, CustomerDocumentListItem } from '../typ
 // ============================================
 
 export function CustomerDocumentsTab({ customerId }: CustomerDocumentsTabProps) {
+  const { hasPermission } = useAuthStore();
+
+  // ----------------------------------------
+  // HYDRATION GUARD
+  // ----------------------------------------
+
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  // ----------------------------------------
+  // PERMISSIONS (only check after hydration)
+  // ----------------------------------------
+
+  const canUpload = hasMounted && hasPermission('customers.upload_document');
+  const canView = hasMounted && hasPermission('customers.view_document');
+  const canDownload = hasMounted && hasPermission('customers.download_document');
+  const canReplace = hasMounted && hasPermission('customers.replace_document');
+  const canArchive = hasMounted && hasPermission('customers.archive_document');
+
   // ----------------------------------------
   // STATE
   // ----------------------------------------
@@ -174,10 +197,12 @@ export function CustomerDocumentsTab({ customerId }: CustomerDocumentsTabProps) 
       {hasDocuments && (
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-medium">Documents ({activeDocuments.length})</h3>
-          <Button size="sm" onClick={handleUploadClick}>
-            <Upload className="mr-2 h-4 w-4" />
-            Upload Document
-          </Button>
+          {canUpload && (
+            <Button size="sm" onClick={handleUploadClick}>
+              <Upload className="mr-2 h-4 w-4" />
+              Upload Document
+            </Button>
+          )}
         </div>
       )}
 
@@ -185,13 +210,13 @@ export function CustomerDocumentsTab({ customerId }: CustomerDocumentsTabProps) 
       {hasDocuments ? (
         <CustomerDocumentsTable
           documents={activeDocuments}
-          onView={handleView}
-          onDownload={handleDownload}
-          onReplace={handleReplaceClick}
-          onArchive={handleArchiveClick}
+          onView={canView ? handleView : undefined}
+          onDownload={canDownload ? handleDownload : undefined}
+          onReplace={canReplace ? handleReplaceClick : undefined}
+          onArchive={canArchive ? handleArchiveClick : undefined}
         />
       ) : (
-        <EmptyDocuments onUploadClick={handleUploadClick} />
+        <EmptyDocuments onUploadClick={canUpload ? handleUploadClick : undefined} />
       )}
 
       {/* Upload Drawer */}

@@ -20,15 +20,17 @@ export function AuthHydrator({ appUser, children }: AuthHydratorProps) {
   const hasHydrated = useRef(false);
 
   useEffect(() => {
-    // Only hydrate once
-    if (hasHydrated.current) {return;}
-    hasHydrated.current = true;
-
+    // Always update appUser from server (ensures fresh data)
     if (appUser) {
       setAppUser(appUser);
     }
-    setLoading(false);
-    setInitialized(true);
+
+    // Only set initialized once
+    if (!hasHydrated.current) {
+      hasHydrated.current = true;
+      setLoading(false);
+      setInitialized(true);
+    }
   }, [appUser, setAppUser, setInitialized, setLoading]);
 
   return <>{children}</>;

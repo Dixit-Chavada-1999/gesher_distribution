@@ -14,7 +14,7 @@ import { Button } from '@/shared/components/ui/button';
 // ============================================
 
 interface EmptyDocumentsProps {
-  onUploadClick: () => void;
+  onUploadClick?: () => void;
 }
 
 // ============================================
@@ -29,12 +29,16 @@ export function EmptyDocuments({ onUploadClick }: EmptyDocumentsProps) {
       </div>
       <h3 className="text-lg font-medium mb-2">No documents uploaded</h3>
       <p className="text-sm text-muted-foreground max-w-sm mb-6">
-        Upload compliance documents such as W-9, tax exemption certificates, credit applications, and signed terms.
+        {onUploadClick
+          ? 'Upload compliance documents such as W-9, tax exemption certificates, credit applications, and signed terms.'
+          : 'No documents have been uploaded for this customer.'}
       </p>
-      <Button onClick={onUploadClick}>
-        <Upload className="mr-2 h-4 w-4" />
-        Upload Document
-      </Button>
+      {onUploadClick && (
+        <Button onClick={onUploadClick}>
+          <Upload className="mr-2 h-4 w-4" />
+          Upload Document
+        </Button>
+      )}
     </div>
   );
 }

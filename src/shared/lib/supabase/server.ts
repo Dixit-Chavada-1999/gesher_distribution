@@ -108,7 +108,11 @@ async function fetchUser() {
   } = await supabase.auth.getUser();
 
   if (error) {
-    console.error('Error getting user:', error.message);
+    // Only log unexpected errors, not "Auth session missing" which is expected
+    // when user is not logged in or session expired
+    if (!error.message.includes('Auth session missing')) {
+      console.error('Error getting user:', error.message);
+    }
     return null;
   }
 

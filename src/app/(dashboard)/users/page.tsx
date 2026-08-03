@@ -9,10 +9,12 @@
  */
 
 import { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 
 import { PageHeader } from '@/shared/components/layout';
 import { UsersContent } from '@/features/users/components';
 import { getUsers, getUserStatusCounts } from '@/features/users/actions';
+import { getCurrentUser, hasPermission } from '@/shared/lib/auth/check-permission';
 
 // ============================================
 // METADATA
@@ -28,6 +30,13 @@ export const metadata: Metadata = {
 // ============================================
 
 export default async function UsersPage() {
+  // Server-side permission check
+  const user = await getCurrentUser();
+
+  if (!user || !hasPermission(user, 'users.view_module')) {
+    redirect('/no-permission');
+  }
+
   // Fetch initial data server-side (parallel calls)
   const [usersResult, countsResult] = await Promise.all([
     getUsers({ page: 1, limit: 10 }),

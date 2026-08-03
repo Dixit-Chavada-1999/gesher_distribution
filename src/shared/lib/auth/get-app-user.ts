@@ -30,8 +30,7 @@ interface DbUser {
 interface DbRole {
   id: string;
   name: string;
-  slug: string;
-  level: number;
+  is_system_role: boolean;
 }
 
 /**
@@ -74,7 +73,7 @@ async function fetchAppUserByAuthId(authUserId: string): Promise<AppUser | null>
         // Get role data
         db
           .from('roles')
-          .select('id, name, slug, level')
+          .select('id, name, is_system_role')
           .eq('id', user.role_id)
           .single(),
         // Get permissions
@@ -113,8 +112,7 @@ async function fetchAppUserByAuthId(authUserId: string): Promise<AppUser | null>
         ? {
             id: role.id,
             name: role.name,
-            slug: role.slug,
-            level: role.level,
+            isSystemRole: role.is_system_role,
           }
         : null,
       permissions: permissionNames,

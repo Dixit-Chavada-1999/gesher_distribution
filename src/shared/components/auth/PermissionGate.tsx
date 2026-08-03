@@ -228,3 +228,74 @@ function GateLoading() {
     <div className="h-4 w-16 animate-pulse rounded bg-muted" />
   );
 }
+
+// ============================================
+// CAN COMPONENT (SIMPLIFIED ALIAS)
+// ============================================
+
+interface CanProps {
+  /** Single permission to check */
+  permission?: string;
+  /** Multiple permissions - ALL required */
+  permissions?: string[];
+  /** Multiple permissions - ANY required */
+  anyOf?: string[];
+  /** Content to render if authorized */
+  children: React.ReactNode;
+  /** Content to render if not authorized */
+  fallback?: React.ReactNode;
+}
+
+/**
+ * Simple permission check component
+ *
+ * Usage:
+ * <Can permission="users.delete">
+ *   <DeleteButton />
+ * </Can>
+ *
+ * <Can permissions={['users.view', 'users.edit']}>
+ *   <EditForm />
+ * </Can>
+ *
+ * <Can anyOf={['users.edit', 'users.delete']}>
+ *   <ActionMenu />
+ * </Can>
+ */
+export function Can({
+  permission,
+  permissions,
+  anyOf,
+  children,
+  fallback = null,
+}: CanProps) {
+  // Single permission
+  if (permission) {
+    return (
+      <PermissionGate permission={permission} fallback={fallback}>
+        {children}
+      </PermissionGate>
+    );
+  }
+
+  // All permissions required
+  if (permissions && permissions.length > 0) {
+    return (
+      <PermissionsGate permissions={permissions} fallback={fallback}>
+        {children}
+      </PermissionsGate>
+    );
+  }
+
+  // Any permission required
+  if (anyOf && anyOf.length > 0) {
+    return (
+      <AnyPermissionGate permissions={anyOf} fallback={fallback}>
+        {children}
+      </AnyPermissionGate>
+    );
+  }
+
+  // No permission specified - render children
+  return <>{children}</>;
+}

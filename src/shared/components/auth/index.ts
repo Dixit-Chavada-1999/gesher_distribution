@@ -14,4 +14,5 @@ export {
   RolesGate,
   AdminGate,
   SuperAdminGate,
+  Can,
 } from './PermissionGate';

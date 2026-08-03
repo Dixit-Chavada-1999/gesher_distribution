@@ -10,12 +10,13 @@
  */
 
 import { cache } from 'react';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { Suspense } from 'react';
 import { Loader2 } from 'lucide-react';
 
 import { getCustomer } from '@/features/customers/actions';
 import { CustomerDetailView } from '@/features/customers/components/CustomerDetailView';
+import { getCurrentUser, hasPermission } from '@/shared/lib/auth/check-permission';
 
 // ============================================
 // CACHED DATA FETCHING
@@ -42,6 +43,13 @@ interface CustomerDetailPageProps {
 // ============================================
 
 export default async function CustomerDetailPage({ params }: CustomerDetailPageProps) {
+  // Server-side permission check
+  const user = await getCurrentUser();
+
+  if (!user || !hasPermission(user, 'customers.view_detail')) {
+    redirect('/no-permission');
+  }
+
   const { id } = await params;
 
   // Fetch customer data (uses cached version - deduplicated with generateMetadata)

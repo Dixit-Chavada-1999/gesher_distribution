@@ -37,10 +37,10 @@ import { DOCUMENT_STATUS_LABELS, DOCUMENT_STATUS_COLORS } from '../types';
 
 interface CustomerDocumentsTableProps {
   documents: CustomerDocumentListItem[];
-  onView: (document: CustomerDocumentListItem) => void;
-  onDownload: (document: CustomerDocumentListItem) => void;
-  onReplace: (document: CustomerDocumentListItem) => void;
-  onArchive: (document: CustomerDocumentListItem) => void;
+  onView?: (document: CustomerDocumentListItem) => void;
+  onDownload?: (document: CustomerDocumentListItem) => void;
+  onReplace?: (document: CustomerDocumentListItem) => void;
+  onArchive?: (document: CustomerDocumentListItem) => void;
 }
 
 // ============================================
@@ -155,7 +155,7 @@ export function CustomerDocumentsTable({
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => isPreviewable(document.mimeType) && onView(document)}
+                      onClick={() => isPreviewable(document.mimeType) && onView?.(document)}
                       className={`font-medium text-left ${
                         isPreviewable(document.mimeType)
                           ? 'hover:underline cursor-pointer text-primary'
@@ -212,10 +212,10 @@ export function CustomerDocumentsTable({
                 <TableCell>
                   <DocumentActions
                     document={document}
-                    onView={() => onView(document)}
-                    onDownload={() => onDownload(document)}
-                    onReplace={() => onReplace(document)}
-                    onArchive={() => onArchive(document)}
+                    onView={onView ? () => onView(document) : undefined}
+                    onDownload={onDownload ? () => onDownload(document) : undefined}
+                    onReplace={onReplace ? () => onReplace(document) : undefined}
+                    onArchive={onArchive ? () => onArchive(document) : undefined}
                   />
                 </TableCell>
               </TableRow>

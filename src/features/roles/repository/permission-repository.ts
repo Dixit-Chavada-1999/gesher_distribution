@@ -398,12 +398,12 @@ class PermissionRepositoryImpl {
 
   /**
    * Get all permissions grouped by group_name with hierarchy
+   * Groups are sorted by the minimum sort_order of their root (parentId = null) permissions
    */
   async findAllGroupedByModuleHierarchical(permissionType?: RoleScope): Promise<HierarchicalPermissionGroup[]> {
     let query = db
       .from('permissions')
       .select('*')
-      .order('group_name', { ascending: true })
       .order('sort_order', { ascending: true });
 
     if (permissionType) {
@@ -418,20 +418,37 @@ class PermissionRepositoryImpl {
 
     // Group by group_name first
     const grouped: Record<string, Permission[]> = {};
+    // Track minimum sort_order of root permissions for each group
+    const groupSortOrder: Record<string, number> = {};
 
     for (const permission of data || []) {
       const perm = this.mapToPermission(permission as DbPermission);
       const groupKey = perm.groupName || 'Other';
       if (!grouped[groupKey]) {
         grouped[groupKey] = [];
+        groupSortOrder[groupKey] = Infinity;
       }
       grouped[groupKey]!.push(perm);
+
+      // Track minimum sort_order of root permissions (no parent)
+      if (!perm.parentId && perm.sortOrder < groupSortOrder[groupKey]!) {
+        groupSortOrder[groupKey] = perm.sortOrder;
+      }
     }
 
-    // Build hierarchy for each group
-    return Object.entries(grouped).map(([groupName, permissions]) => ({
+    // Build hierarchy for each group and sort groups by their root permission sort_order
+    const groups = Object.entries(grouped).map(([groupName, permissions]) => ({
       groupName,
       permissions: this.buildHierarchy(permissions),
+      sortOrder: groupSortOrder[groupName] ?? Infinity,
+    }));
+
+    // Sort groups by sortOrder then remove the sortOrder property
+    groups.sort((a, b) => a.sortOrder - b.sortOrder);
+
+    return groups.map(({ groupName, permissions }) => ({
+      groupName,
+      permissions,
     }));
   }
 }

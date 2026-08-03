@@ -16,10 +16,9 @@ import { z } from 'zod';
 // ============================================
 
 const updateRoleSchema = z.object({
-  name: z.string().min(1).max(50).optional(),
-  displayName: z.string().min(1).max(100).optional(),
+  name: z.string().min(1).max(100).optional(),
   description: z.string().max(500).optional(),
-  level: z.number().min(0).max(100).optional(),
+  scope: z.enum(['user', 'customer']).optional(),
   permissionIds: z.array(z.string().uuid()).optional(),
 });
 

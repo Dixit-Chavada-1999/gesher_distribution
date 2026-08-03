@@ -187,7 +187,7 @@ class RoleRepositoryImpl {
       query = query.eq('is_system_role', filters.isSystemRole);
     }
 
-    query = query.order('name', { ascending: true });
+    query = query.order('created_at', { ascending: true });
 
     const { data: rolesData, error: rolesError } = await query;
 

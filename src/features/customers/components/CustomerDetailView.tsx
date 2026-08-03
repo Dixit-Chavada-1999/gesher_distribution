@@ -7,8 +7,9 @@
  * Used in /customers/[id] page.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/shared/stores';
 import {
   ArrowLeft,
   Mail,
@@ -267,11 +268,31 @@ function CustomerDetailsTab({ customer }: { customer: Customer }) {
 
 export function CustomerDetailView({ customer: initialCustomer }: CustomerDetailViewProps) {
   const router = useRouter();
+  const { hasPermission } = useAuthStore();
   const [customer, setCustomer] = useState(initialCustomer);
   const [activeTab, setActiveTab] = useState('details');
   const [editDrawerOpen, setEditDrawerOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // ----------------------------------------
+  // HYDRATION GUARD
+  // ----------------------------------------
+
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  // ----------------------------------------
+  // PERMISSIONS (only check after hydration)
+  // ----------------------------------------
+
+  const canViewContacts = hasMounted && hasPermission('customers.view_contacts');
+  const canViewDocuments = hasMounted && hasPermission('customers.view_documents');
+  const canEdit = hasMounted && hasPermission('customers.edit');
+  const canDelete = hasMounted && hasPermission('customers.delete');
 
   // ----------------------------------------
   // HANDLERS
@@ -325,18 +346,22 @@ export function CustomerDetailView({ customer: initialCustomer }: CustomerDetail
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back
             </Button>
-            <Button variant="outline" onClick={handleEdit}>
-              <Pencil className="h-4 w-4 mr-2" />
-              Edit
-            </Button>
-            <Button
-              variant="outline"
-              className="text-destructive hover:text-destructive"
-              onClick={() => setDeleteDialogOpen(true)}
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete
-            </Button>
+            {canEdit && (
+              <Button variant="outline" onClick={handleEdit}>
+                <Pencil className="h-4 w-4 mr-2" />
+                Edit
+              </Button>
+            )}
+            {canDelete && (
+              <Button
+                variant="outline"
+                className="text-destructive hover:text-destructive"
+                onClick={() => setDeleteDialogOpen(true)}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </Button>
+            )}
           </div>
         }
       />
@@ -364,18 +389,22 @@ export function CustomerDetailView({ customer: initialCustomer }: CustomerDetail
             >
               Details
             </TabsTrigger>
-            <TabsTrigger
-              value="contacts"
-              className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 pb-3 font-medium"
-            >
-              Contacts
-            </TabsTrigger>
-            <TabsTrigger
-              value="documents"
-              className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 pb-3 font-medium"
-            >
-              Documents
-            </TabsTrigger>
+            {canViewContacts && (
+              <TabsTrigger
+                value="contacts"
+                className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 pb-3 font-medium"
+              >
+                Contacts
+              </TabsTrigger>
+            )}
+            {canViewDocuments && (
+              <TabsTrigger
+                value="documents"
+                className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 pb-3 font-medium"
+              >
+                Documents
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <div className="flex-1 pt-6 overflow-auto">
@@ -383,13 +412,17 @@ export function CustomerDetailView({ customer: initialCustomer }: CustomerDetail
               <CustomerDetailsTab customer={customer} />
             </TabsContent>
 
-            <TabsContent value="contacts" className="m-0 h-full">
-              <CustomerContactsList customerId={customer.id} />
-            </TabsContent>
+            {canViewContacts && (
+              <TabsContent value="contacts" className="m-0 h-full">
+                <CustomerContactsList customerId={customer.id} />
+              </TabsContent>
+            )}
 
-            <TabsContent value="documents" className="m-0 h-full">
-              <CustomerDocumentsTab customerId={customer.id} />
-            </TabsContent>
+            {canViewDocuments && (
+              <TabsContent value="documents" className="m-0 h-full">
+                <CustomerDocumentsTab customerId={customer.id} />
+              </TabsContent>
+            )}
           </div>
         </Tabs>
       </div>

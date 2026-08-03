@@ -93,14 +93,15 @@ export function CustomersTable({
   // COLUMNS
   // ----------------------------------------
 
+  // Only pass handlers that are enabled by permissions
   const columns = useMemo(
     () =>
       getCustomersTableColumns({
-        onView: handleView,
-        onEdit: handleEdit,
-        onDelete: handleDeleteClick,
+        onView: onRowClick ? handleView : undefined,
+        onEdit: onEdit ? handleEdit : undefined,
+        onDelete: onDelete ? handleDeleteClick : undefined,
       }),
-    []
+    [onRowClick, onEdit, onDelete]
   );
 
   // ----------------------------------------

@@ -48,7 +48,7 @@ const NAV_SECTIONS = [
         label: 'Dashboard',
         href: '/dashboard',
         icon: LayoutDashboard,
-        permission: null, // Dashboard is always visible
+        permission: 'dashboard.view_module',
       },
     ],
   },
@@ -63,28 +63,28 @@ const NAV_SECTIONS = [
   //       label: 'Products',
   //       href: '/products',
   //       icon: Package,
-  //       permission: null, // TODO: 'products.view'
+  //       permission: 'products.view_module',
   //     },
   //     {
   //       id: 'locations',
   //       label: 'Locations',
   //       href: '/locations',
   //       icon: MapPin,
-  //       permission: null, // TODO: 'locations.view'
+  //       permission: 'locations.view_module',
   //     },
       {
         id: 'customers',
         label: 'Customers',
         href: '/customers',
         icon: Building2,
-        permission: null, // TODO: 'customers.view'
+        permission: 'customers.view_module',
       },
   //     {
   //       id: 'pricing',
   //       label: 'Pricing',
   //       href: '/pricing',
   //       icon: DollarSign,
-  //       permission: null, // TODO: 'pricing.view'
+  //       permission: 'pricing.view_module',
   //     },
     ],
   },
@@ -96,14 +96,14 @@ const NAV_SECTIONS = [
         label: 'Quotes',
         href: '/quotes',
         icon: FileSignature,
-        permission: null, // TODO: Check permission
+        permission: 'quotes.view_module',
       },
       {
         id: 'sales-orders',
         label: 'Sales Orders',
         href: '/sales-orders',
         icon: ShoppingCart,
-        permission: null, // TODO: Check permission
+        permission: 'orders.view_module',
       },
       // Invoices module is temporarily hidden from the sidebar.
       // Uncomment this block (and the Receipt icon import) to bring it back.
@@ -112,7 +112,7 @@ const NAV_SECTIONS = [
       //   label: 'Invoices',
       //   href: '/invoices',
       //   icon: Receipt,
-      //   permission: null, // TODO: Check permission
+      //   permission: 'invoices.view_module',
       // },
     ],
   },
@@ -126,7 +126,7 @@ const NAV_SECTIONS = [
   //       label: 'Purchase Orders',
   //       href: '/purchase-orders',
   //       icon: ClipboardList,
-  //       permission: null, // TODO: Check permission
+  //       permission: 'purchase_orders.view_module',
   //     },
   //   ],
   // },
@@ -140,7 +140,7 @@ const NAV_SECTIONS = [
   //       label: 'Shipments',
   //       href: '/shipments',
   //       icon: Truck,
-  //       permission: null, // TODO: Check permission
+  //       permission: 'shipments.view_module',
   //     },
   //   ],
   // },
@@ -152,16 +152,14 @@ const NAV_SECTIONS = [
         label: 'Users',
         href: '/users',
         icon: Users,
-        // permission: 'users.view',
-        permission:null,
+        permission: 'users.view_module',
       },
       {
         id: 'roles',
         label: 'Roles',
         href: '/roles',
         icon: Shield,
-        // permission: 'roles.view',
-        permission:null,
+        permission: 'roles.view_module',
       },
       // Permissions is temporarily hidden from the sidebar.
       // The route still works if visited directly — only the nav entry is gone.
@@ -171,16 +169,14 @@ const NAV_SECTIONS = [
       //   label: 'Permissions',
       //   href: '/permissions',
       //   icon: Key,
-      //   // permission: 'permissions.view',
-      //   permission: null,
+      //   permission: 'permissions.view_module',
       // },
       {
         id: 'audit-logs',
         label: 'Audit Logs',
         href: '/audit-logs',
         icon: FileText,
-        // permission: 'audit_logs.view',
-        permission: null,
+        permission: 'audit.view_module',
       },
     ],
   },
@@ -192,8 +188,7 @@ const NAV_SECTIONS = [
         label: 'Settings',
         href: '/settings',
         icon: Settings,
-        // permission: 'settings.view',
-        permission: null,
+        permission: 'settings.view_module',
       },
     ],
   },
@@ -226,12 +221,39 @@ export function Sidebar() {
     return pathname.startsWith(href);
   };
 
+  // Skeleton loader for nav items
+  const NavSkeleton = () => (
+    <div className="space-y-6 animate-pulse">
+      {[1, 2, 3].map((section) => (
+        <div key={section}>
+          <div className="mb-2 px-3 h-3 w-16 bg-[hsl(var(--sidebar-accent))] rounded" />
+          <div className="space-y-1">
+            {[1, 2].map((item) => (
+              <div
+                key={item}
+                className="flex items-center gap-3 rounded-lg px-3 py-2.5"
+              >
+                <div className="h-5 w-5 bg-[hsl(var(--sidebar-accent))] rounded" />
+                <div className="h-4 w-24 bg-[hsl(var(--sidebar-accent))] rounded" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
   const sidebarContent = (
     <div className="flex h-full flex-col">
       {/* Navigation */}
       <ScrollArea className="flex-1 px-3 py-4 sidebar-scroll">
+        {/* Show skeleton until hydrated */}
+        {!hasMounted ? (
+          <NavSkeleton />
+        ) : (
         <nav className="space-y-6">
           {NAV_SECTIONS.map((section) => {
+            // Filter items by permissions
             const filteredItems = section.items.filter(
               (item) => !item.permission || hasPermission(item.permission)
             );
@@ -282,6 +304,7 @@ export function Sidebar() {
             );
           })}
         </nav>
+        )}
       </ScrollArea>
 
       {/* Sign Out Button */}

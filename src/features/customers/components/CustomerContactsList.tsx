@@ -7,8 +7,9 @@
  * Per client doc: contacts have role (purchasing, AP, receiving)
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Plus, Pencil, Trash2, User } from 'lucide-react';
+import { useAuthStore } from '@/shared/stores';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -72,6 +73,20 @@ interface CustomerContactsListProps {
 // ============================================
 
 export function CustomerContactsList({ customerId }: CustomerContactsListProps) {
+  const { hasPermission } = useAuthStore();
+
+  // Hydration guard
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  // Permissions (only check after hydration)
+  const canCreate = hasMounted && hasPermission('customers.create_contact');
+  const canEdit = hasMounted && hasPermission('customers.edit_contact');
+  const canDelete = hasMounted && hasPermission('customers.delete_contact');
+
   // State
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<CustomerContact | null>(null);
@@ -207,10 +222,12 @@ export function CustomerContactsList({ customerId }: CustomerContactsListProps) 
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-medium">Contacts ({contacts.length})</h3>
-        <Button size="sm" onClick={handleAddClick}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Contact
-        </Button>
+        {canCreate && (
+          <Button size="sm" onClick={handleAddClick}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Contact
+          </Button>
+        )}
       </div>
 
       {/* Contacts Table */}
@@ -221,9 +238,11 @@ export function CustomerContactsList({ customerId }: CustomerContactsListProps) 
               <User className="h-8 w-8 text-muted-foreground" />
             </div>
             <p className="text-muted-foreground mb-2">No contacts added yet.</p>
-            <Button variant="link" onClick={handleAddClick}>
-              Add your first contact
-            </Button>
+            {canCreate && (
+              <Button variant="link" onClick={handleAddClick}>
+                Add your first contact
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -237,7 +256,9 @@ export function CustomerContactsList({ customerId }: CustomerContactsListProps) 
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead>Mobile</TableHead>
-                  <TableHead className="w-[100px] text-right">Actions</TableHead>
+                  {(canEdit || canDelete) && (
+                    <TableHead className="w-[100px] text-right">Actions</TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -283,40 +304,46 @@ export function CustomerContactsList({ customerId }: CustomerContactsListProps) 
                     </TableCell>
 
                     {/* Actions */}
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={() => handleEditClick(contact)}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Edit</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-destructive hover:text-destructive"
-                                onClick={() => handleDeleteClick(contact)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Delete</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                    </TableCell>
+                    {(canEdit || canDelete) && (
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {canEdit && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => handleEditClick(contact)}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Edit</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                          {canDelete && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-destructive hover:text-destructive"
+                                    onClick={() => handleDeleteClick(contact)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Delete</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

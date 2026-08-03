@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import { Loader2, MapPin, Package, FileText, Calendar, User, Building2, Truck } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
+import { useAuthStore } from '@/shared/stores';
 import {
   Sheet,
   SheetContent,
@@ -140,6 +141,24 @@ export function ViewSalesOrderDrawer({
   onClose,
   onEdit,
 }: ViewSalesOrderDrawerProps) {
+  const { hasPermission } = useAuthStore();
+
+  // ----------------------------------------
+  // HYDRATION GUARD
+  // ----------------------------------------
+
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  // ----------------------------------------
+  // PERMISSIONS (only check after hydration)
+  // ----------------------------------------
+
+  const canEditPermission = hasMounted && hasPermission('orders.edit');
+
   // ----------------------------------------
   // STATE
   // ----------------------------------------
@@ -195,8 +214,8 @@ export function ViewSalesOrderDrawer({
     }
   };
 
-  // Can only edit draft or pending orders
-  const canEdit = order && ['draft', 'pending'].includes(order.status);
+  // Can only edit draft or pending orders (and must have permission)
+  const canEdit = order && ['draft', 'pending'].includes(order.status) && canEditPermission;
 
   // ----------------------------------------
   // RENDER

@@ -4,16 +4,13 @@
  * Layout for all authenticated dashboard pages.
  * Includes sidebar, header, and main content area.
  *
- * Performance Optimization:
- * - Uses cached profile from cookie to avoid DB calls on every page
- * - Profile is cached during login (Server Action)
- * - Only fetches from DB if cache is missing
+ * Note: Always fetches fresh user data from database to ensure
+ * permissions are up-to-date without requiring re-login.
  */
 
 import { redirect } from 'next/navigation';
 import { getUser } from '@/shared/lib/supabase/server';
 import { getAppUserByAuthId } from '@/shared/lib/auth';
-import { getCachedProfile } from '@/shared/lib/auth/profile-cache';
 import { AppLayout } from '@/shared/components/layout';
 import { AuthHydrator } from '@/shared/components/auth';
 
@@ -33,16 +30,9 @@ export default async function DashboardLayout({
     redirect('/login');
   }
 
-  // Try to get cached profile first (fast - no DB call)
-  let appUser = await getCachedProfile();
-
-  // If no cached profile, fetch from database
-  // Note: Profile caching happens during login (Server Action)
-  // If cache is missing, we fetch from DB but don't set cache here
-  // (cookies can't be set in Server Components)
-  if (!appUser) {
-    appUser = await getAppUserByAuthId(user.id);
-  }
+  // Always fetch fresh user data from database
+  // This ensures permissions are always up-to-date without re-login
+  const appUser = await getAppUserByAuthId(user.id);
 
   return (
     <AuthHydrator appUser={appUser}>

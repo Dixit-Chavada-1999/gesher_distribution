@@ -6,8 +6,10 @@
  */
 
 import { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { PageHeader } from '@/shared/components/layout';
 import { IntegrationsSettings } from '@/features/integrations';
+import { getCurrentUser, hasPermission } from '@/shared/lib/auth/check-permission';
 
 // ============================================
 // METADATA
@@ -22,7 +24,14 @@ export const metadata: Metadata = {
 // PAGE
 // ============================================
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  // Server-side permission check
+  const user = await getCurrentUser();
+
+  if (!user || !hasPermission(user, 'settings.view_module')) {
+    redirect('/no-permission');
+  }
+
   return (
     <div className="space-y-6">
       {/* Page Header */}

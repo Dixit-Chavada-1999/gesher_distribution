@@ -4,19 +4,20 @@
  * DashboardHeader Component
  *
  * Welcome header with user greeting and primary actions.
+ * Gets user name from auth store (hydrated by layout).
  */
 
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
+import { useAuthStore } from '@/shared/stores';
 
 // ============================================
 // TYPES
 // ============================================
 
 interface DashboardHeaderProps {
-  userName?: string;
   title?: string;
   description?: string;
 }
@@ -26,10 +27,11 @@ interface DashboardHeaderProps {
 // ============================================
 
 export function DashboardHeader({
-  userName = 'User',
   title = 'Dashboard',
   description,
 }: DashboardHeaderProps) {
+  const { appUser } = useAuthStore();
+  const userName = appUser?.firstName || 'User';
   const greeting = description || `Welcome back, ${userName}! Here's what's happening today.`;
 
   return (

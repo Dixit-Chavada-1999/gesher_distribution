@@ -49,9 +49,7 @@ export type UserStatus = 'active' | 'inactive' | 'suspended' | 'pending';
 export interface UserRole {
   id: string;
   name: string;
-  slug: string;
   description: string | null;
-  level: number;
   isSystemRole: boolean;
 }
 
