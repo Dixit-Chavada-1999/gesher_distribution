@@ -13,7 +13,9 @@
  */
 
 import { memo, useState, useMemo, useCallback, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/shared/components/layout';
+import { refreshProfileCache } from '@/shared/lib/auth/actions';
 import {
   Card,
   CardContent,
@@ -378,6 +380,7 @@ const PermissionModule = memo(function PermissionModule({
 // ============================================
 
 function RolesPageContentComponent() {
+  const router = useRouter();
   const { hasPermission } = useAuthStore();
 
   // ----------------------------------------
@@ -608,11 +611,19 @@ function RolesPageContentComponent() {
       setOriginalPermissionIds(new Set(pendingPermissionIds));
       await refetchRole();
       refetchRoles();
+
+      // Refresh the profile cache with fresh permissions from DB
+      // This is a Server Action so it can modify cookies
+      await refreshProfileCache();
+
+      // Refresh the page to get fresh auth data
+      router.refresh();
+
       toast.success('Permissions saved successfully');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to save permissions');
     }
-  }, [selectedRoleId, pendingPermissionIds, updateRole, refetchRole, refetchRoles]);
+  }, [selectedRoleId, pendingPermissionIds, updateRole, refetchRole, refetchRoles, router]);
 
   // Helper to count all permissions recursively in hierarchy
   const countHierarchicalPermissions = useCallback((permissions: HierarchicalPermission[]): { enabled: number; total: number } => {

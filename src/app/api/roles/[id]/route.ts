@@ -83,11 +83,20 @@ export async function PATCH(
 
     const role = await roleService.updateRole(id, data, ctx);
 
-    return NextResponse.json({
+    // Create response
+    const response = NextResponse.json({
       success: true,
       data: role,
       message: 'Role updated successfully',
     });
+
+    // Clear cached profile when permissions change
+    // Explicitly delete cookie in response headers to ensure browser receives it
+    if (data.permissionIds) {
+      response.cookies.delete('app_user_profile');
+    }
+
+    return response;
   } catch (error) {
     console.error('PATCH /api/roles/[id] error:', error);
 

@@ -6,6 +6,7 @@
 
 export { getAppUserByAuthId } from './get-app-user';
 export { getCachedProfile, setCachedProfile, clearCachedProfile } from './profile-cache';
+export { refreshProfileCache } from './actions';
 
 // Permission checking utilities
 export {

@@ -72,6 +72,7 @@ export function SalesOrdersPageContent() {
   // ----------------------------------------
 
   const canCreate = hasMounted && hasPermission('orders.create');
+  const canViewDetail = hasMounted && hasPermission('orders.view_detail');
   const canEdit = hasMounted && hasPermission('orders.edit');
   const canDelete = hasMounted && hasPermission('orders.delete');
   // const canApprove = hasMounted && hasPermission('orders.approve'); // TODO: Use when approve feature is implemented
@@ -235,8 +236,8 @@ export function SalesOrdersPageContent() {
       <SalesOrdersTable
         data={salesOrders}
         isLoading={isOrdersLoading}
-        onRowClick={handleRowClick}
-        onView={handleView}
+        onRowClick={canViewDetail ? handleRowClick : undefined}
+        onView={canViewDetail ? handleView : undefined}
         onEdit={canEdit ? handleEdit : undefined}
         onDelete={canDelete ? handleDeleteClick : undefined}
         toolbarContent={
