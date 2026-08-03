@@ -540,3 +540,57 @@ export async function getCustomersForDropdown(): Promise<ActionResult<CustomerDr
 
   return customerService.getForDropdown();
 }
+
+// ============================================
+// QBO SYNC ACTIONS
+// ============================================
+
+/**
+ * Get QBO sync status for a customer
+ */
+export async function getCustomerQboSyncStatus(
+  customerId: string
+): Promise<ActionResult<{
+  synced: boolean;
+  qboCustomerId?: string;
+  lastSyncedAt?: Date;
+  syncStatus?: string;
+  lastError?: string;
+}>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  return customerService.getQboSyncStatus(customerId);
+}
+
+/**
+ * Manually trigger QBO sync for a customer
+ */
+export async function resyncCustomerToQbo(
+  customerId: string
+): Promise<ActionResult<{ qboCustomerId?: string }>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
+  const result = await customerService.resyncCustomerToQbo(customerId, appUser.id);
+
+  if (result.success) {
+    revalidatePath(`/customers/${customerId}`);
+  }
+
+  return result;
+}

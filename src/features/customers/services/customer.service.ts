@@ -25,6 +25,16 @@ import type {
   CustomerDropdownItem,
 } from '../types';
 
+// QBO Sync Service (lazy import to avoid circular dependencies)
+let qboSyncModule: typeof import('@/modules/integrations/quickbooks') | null = null;
+
+async function getQboSyncService() {
+  if (!qboSyncModule) {
+    qboSyncModule = await import('@/modules/integrations/quickbooks');
+  }
+  return qboSyncModule.qboCustomerSyncService;
+}
+
 // ============================================
 // TYPES
 // ============================================
@@ -231,6 +241,11 @@ export const customerService = {
       // Create customer
       const customer = await customerRepository.create(validation.data, userId);
 
+      // Sync to QuickBooks (fire and forget - don't block customer creation)
+      this.syncCustomerToQbo(customer, userId).catch((err) => {
+        console.error('Background QBO sync failed:', err);
+      });
+
       return {
         success: true,
         data: customer,
@@ -286,6 +301,11 @@ export const customerService = {
 
       // Create customer
       const customer = await customerRepository.create(validation.data, userId);
+
+      // Sync to QuickBooks (fire and forget - don't block customer creation)
+      this.syncCustomerToQbo(customer, userId).catch((err) => {
+        console.error('Background QBO sync failed:', err);
+      });
 
       return {
         success: true,
@@ -354,6 +374,11 @@ export const customerService = {
 
       // Update customer
       const customer = await customerRepository.update(id, validation.data, userId);
+
+      // Sync to QuickBooks (fire and forget - don't block customer update)
+      this.syncCustomerToQbo(customer, userId).catch((err) => {
+        console.error('Background QBO sync failed:', err);
+      });
 
       return {
         success: true,
@@ -542,6 +567,110 @@ export const customerService = {
       return {
         success: false,
         error: 'Failed to fetch customers for dropdown',
+      };
+    }
+  },
+
+  // ==========================================
+  // QUICKBOOKS SYNC
+  // ==========================================
+
+  /**
+   * Sync customer to QuickBooks
+   * Called automatically after create/update
+   */
+  async syncCustomerToQbo(
+    customer: Customer,
+    userId?: string
+  ): Promise<ServiceResult<{ qboCustomerId?: string }>> {
+    try {
+      const qboSyncService = await getQboSyncService();
+      const result = await qboSyncService.syncCustomer({ customer, userId });
+
+      if (result.success) {
+        return {
+          success: true,
+          data: { qboCustomerId: result.qboCustomerId },
+        };
+      }
+
+      return {
+        success: false,
+        error: result.error || 'Failed to sync customer to QuickBooks',
+      };
+    } catch (error) {
+      console.error('CustomerService.syncCustomerToQbo error:', error);
+      return {
+        success: false,
+        error: 'Failed to sync customer to QuickBooks',
+      };
+    }
+  },
+
+  /**
+   * Get QBO sync status for a customer
+   */
+  async getQboSyncStatus(customerId: string): Promise<ServiceResult<{
+    synced: boolean;
+    qboCustomerId?: string;
+    lastSyncedAt?: Date;
+    syncStatus?: string;
+    lastError?: string;
+  }>> {
+    try {
+      const qboSyncService = await getQboSyncService();
+      const syncRecord = await qboSyncService.getSyncStatus(customerId);
+
+      if (!syncRecord) {
+        return {
+          success: true,
+          data: { synced: false },
+        };
+      }
+
+      return {
+        success: true,
+        data: {
+          synced: syncRecord.syncStatus === 'synced',
+          qboCustomerId: syncRecord.qboEntityId || undefined,
+          lastSyncedAt: syncRecord.lastSyncedAt || undefined,
+          syncStatus: syncRecord.syncStatus,
+          lastError: syncRecord.lastError || undefined,
+        },
+      };
+    } catch (error) {
+      console.error('CustomerService.getQboSyncStatus error:', error);
+      return {
+        success: false,
+        error: 'Failed to get QBO sync status',
+      };
+    }
+  },
+
+  /**
+   * Manually trigger QBO sync for a customer
+   */
+  async resyncCustomerToQbo(
+    customerId: string,
+    userId?: string
+  ): Promise<ServiceResult<{ qboCustomerId?: string }>> {
+    try {
+      // Get customer data
+      const customer = await customerRepository.findById(customerId);
+      if (!customer) {
+        return {
+          success: false,
+          error: 'Customer not found',
+        };
+      }
+
+      // Trigger sync
+      return await this.syncCustomerToQbo(customer, userId);
+    } catch (error) {
+      console.error('CustomerService.resyncCustomerToQbo error:', error);
+      return {
+        success: false,
+        error: 'Failed to resync customer to QuickBooks',
       };
     }
   },

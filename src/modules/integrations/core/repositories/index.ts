@@ -49,3 +49,6 @@ export {
   deleteOldSyncLogs,
   getSyncStats,
 } from './sync-log.repository';
+
+// QBO Entity Sync Repository
+export * as qboSyncRepository from './qbo-sync.repository';

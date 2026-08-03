@@ -14,6 +14,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getUser } from '@/shared/lib/supabase/server';
+import { getAppUserByAuthId } from '@/shared/lib/auth';
 import { quickBooksProvider } from '@/modules/integrations/providers/accounting/quickbooks';
 import {
   STATE_COOKIE_NAME,
@@ -67,11 +68,17 @@ export async function GET(request: Request) {
       state: state?.substring(0, 10) + '...',
     });
 
-    // Get current user ID (optional)
-    const user = await getUser();
-    const userId = user?.id;
+    // Get current user ID (must be the app user ID from public.users, not auth.users)
+    const authUser = await getUser();
+    let userId: string | undefined;
 
-    console.log('User ID:', userId);
+    if (authUser?.id) {
+      const appUser = await getAppUserByAuthId(authUser.id);
+      userId = appUser?.id;
+    }
+
+    console.log('Auth User ID:', authUser?.id);
+    console.log('App User ID:', userId);
 
     // Handle the OAuth callback using the provider
     const connection = await quickBooksProvider.handleOAuthCallback({ code, realmId }, userId);

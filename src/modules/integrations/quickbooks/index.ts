@@ -64,7 +64,7 @@ export {
   hasConnection,
 } from './repositories/quickbooks-connection.repository';
 
-// Service
+// Auth Service
 export {
   initiateOAuth,
   handleOAuthCallback,
@@ -72,3 +72,7 @@ export {
   getConnectionStatus,
   getAccessToken,
 } from './services/quickbooks-auth.service';
+
+// Customer Sync Service
+export { qboCustomerSyncService } from './services/qbo-customer-sync.service';
+export type { QboCustomerSyncService } from './services/qbo-customer-sync.service';
