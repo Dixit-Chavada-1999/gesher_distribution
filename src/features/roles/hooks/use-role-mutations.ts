@@ -43,6 +43,7 @@ export function useCreateRole(): UseCreateRoleResult {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify(data),
       });
 
@@ -83,6 +84,7 @@ export function useUpdateRole(): UseUpdateRoleResult {
           headers: {
             'Content-Type': 'application/json',
           },
+          credentials: 'include',
           body: JSON.stringify(data),
         });
 
@@ -121,6 +123,7 @@ export function useDeleteRole(): UseDeleteRoleResult {
 
       const response = await fetch(`/api/roles/${id}`, {
         method: 'DELETE',
+        credentials: 'include',
       });
 
       const result = await response.json();

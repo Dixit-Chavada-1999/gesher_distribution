@@ -55,12 +55,14 @@ export async function setCachedProfile(profile: AppUser): Promise<void> {
 
 /**
  * Clear cached user profile
+ * NOTE: Can only be called from Route Handlers or Server Actions
  */
 export async function clearCachedProfile(): Promise<void> {
   try {
     const cookieStore = await cookies();
     cookieStore.delete(PROFILE_COOKIE_NAME);
   } catch (error) {
+    // Silently fail - this may be called from a context where cookies cannot be modified
     console.error('[clearCachedProfile] Failed to clear profile:', error);
   }
 }

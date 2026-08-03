@@ -9,7 +9,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { roleService } from '@/features/roles';
 import { ValidationError, AppError, NotFoundError } from '@/shared/lib/errors';
-import { clearCachedProfile } from '@/shared/lib/auth/profile-cache';
 import { z } from 'zod';
 
 // ============================================
@@ -84,17 +83,20 @@ export async function PATCH(
 
     const role = await roleService.updateRole(id, data, ctx);
 
-    // Clear cached profile when permissions change
-    // This ensures the current admin user gets fresh permissions on next request
-    if (data.permissionIds) {
-      await clearCachedProfile();
-    }
-
-    return NextResponse.json({
+    // Create response
+    const response = NextResponse.json({
       success: true,
       data: role,
       message: 'Role updated successfully',
     });
+
+    // Clear cached profile when permissions change
+    // Explicitly delete cookie in response headers to ensure browser receives it
+    if (data.permissionIds) {
+      response.cookies.delete('app_user_profile');
+    }
+
+    return response;
   } catch (error) {
     console.error('PATCH /api/roles/[id] error:', error);
 

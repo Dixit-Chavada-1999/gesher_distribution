@@ -108,21 +108,23 @@ export async function getCurrentUser(): Promise<AppUser | null> {
       return null;
     }
 
-    // Try to get from cookie cache first
-    const { getCachedProfile, setCachedProfile } = await import('./profile-cache');
+    // Try to get from cookie cache first (READ ONLY - safe in server components)
+    const { getCachedProfile } = await import('./profile-cache');
     const cachedProfile = await getCachedProfile();
 
-    if (cachedProfile && cachedProfile.id) {
+    // Only use cache if it has valid data WITH permissions
+    // If cache has empty permissions, it's stale - fetch fresh from DB
+    if (cachedProfile && cachedProfile.id && cachedProfile.permissions.length > 0) {
       return cachedProfile;
     }
 
-    // Cache miss - fetch from database
+    // Cache miss or stale (empty permissions) - fetch from database
     const appUser = await getAppUserByAuthId(authUser.id);
 
-    // Cache the profile for future requests
-    if (appUser) {
-      await setCachedProfile(appUser);
-    }
+    // Note: We cannot set/clear cookies here because this function may be called
+    // from Server Components. Cookie modifications are only allowed in
+    // Route Handlers or Server Actions. The cache will be updated on next login
+    // or via the auth refresh API.
 
     return appUser;
   } catch (error) {
