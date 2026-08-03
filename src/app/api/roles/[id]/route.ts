@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { roleService } from '@/features/roles';
 import { ValidationError, AppError, NotFoundError } from '@/shared/lib/errors';
+import { clearCachedProfile } from '@/shared/lib/auth/profile-cache';
 import { z } from 'zod';
 
 // ============================================
@@ -82,6 +83,12 @@ export async function PATCH(
     };
 
     const role = await roleService.updateRole(id, data, ctx);
+
+    // Clear cached profile when permissions change
+    // This ensures the current admin user gets fresh permissions on next request
+    if (data.permissionIds) {
+      await clearCachedProfile();
+    }
 
     return NextResponse.json({
       success: true,
