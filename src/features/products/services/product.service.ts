@@ -9,6 +9,12 @@ import { productRepository, DuplicateSkuError } from '../repositories/product.re
 import { createProductSchema, updateProductSchema, type CreateProductInput, type UpdateProductInput } from '../lib/schemas';
 import type { Product, ProductListParams, ProductWithFormattedPrices, ProductTableRow } from '../types';
 
+// Lazy import to avoid circular dependencies
+const getQboProductSyncService = async () => {
+  const { qboProductSyncService } = await import('@/modules/integrations/quickbooks/services/qbo-product-sync.service');
+  return qboProductSyncService;
+};
+
 // ============================================
 // TYPES
 // ============================================
@@ -217,6 +223,11 @@ export const productService = {
       // Create product
       const product = await productRepository.create(data, userId);
 
+      // Trigger QBO sync (fire and forget)
+      this.syncProductToQbo(product, userId).catch((err) => {
+        console.error('Failed to trigger QBO product sync:', err);
+      });
+
       return {
         success: true,
         data: product,
@@ -288,6 +299,11 @@ export const productService = {
 
       // Update product
       const product = await productRepository.update(id, data, userId);
+
+      // Trigger QBO sync (fire and forget)
+      this.syncProductToQbo(product, userId).catch((err) => {
+        console.error('Failed to trigger QBO product sync:', err);
+      });
 
       return {
         success: true,
@@ -448,6 +464,66 @@ export const productService = {
       return {
         success: false,
         error: 'Failed to validate SKU',
+      };
+    }
+  },
+
+  // ============================================
+  // QBO SYNC METHODS
+  // ============================================
+
+  /**
+   * Sync a product to QuickBooks (internal helper)
+   */
+  async syncProductToQbo(product: Product, userId?: string): Promise<void> {
+    try {
+      const syncService = await getQboProductSyncService();
+      await syncService.syncProduct({ product, userId });
+    } catch (error) {
+      // Log but don't throw - sync is fire and forget
+      console.error('QBO product sync failed:', error);
+    }
+  },
+
+  /**
+   * Get QBO sync status for a product
+   */
+  async getQboSyncStatus(productId: string) {
+    try {
+      const syncService = await getQboProductSyncService();
+      return await syncService.getSyncStatus(productId);
+    } catch (error) {
+      console.error('Failed to get QBO sync status:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Manually trigger QBO sync for a product
+   */
+  async resyncProductToQbo(productId: string, userId?: string): Promise<ServiceResult<boolean>> {
+    try {
+      const product = await productRepository.findById(productId);
+      if (!product) {
+        return {
+          success: false,
+          error: 'Product not found',
+        };
+      }
+
+      const syncService = await getQboProductSyncService();
+      const result = await syncService.syncProduct({ product, userId });
+
+      return {
+        success: result.success,
+        data: result.success,
+        error: result.error,
+      };
+    } catch (error) {
+      console.error('ProductService.resyncProductToQbo error:', error);
+      return {
+        success: false,
+        error: 'Failed to sync product to QuickBooks',
       };
     }
   },

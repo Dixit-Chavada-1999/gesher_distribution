@@ -355,3 +355,59 @@ export async function validateProductSku(sku: string, excludeId?: string): Promi
 
   return productService.validateSku(sku, excludeId);
 }
+
+// ============================================
+// QBO SYNC ACTIONS
+// ============================================
+
+/**
+ * Get QBO sync status for a product
+ */
+export async function getProductQboSyncStatus(productId: string): Promise<ActionResult<{
+  synced: boolean;
+  qboItemId?: string;
+  lastSyncedAt?: Date;
+  lastError?: string;
+  status?: string;
+} | null>> {
+  const auth = await authorize('products.view_detail');
+  if (!auth.ok) {return auth.result;}
+
+  try {
+    const syncStatus = await productService.getQboSyncStatus(productId);
+
+    if (!syncStatus) {
+      return {
+        success: true,
+        data: null,
+      };
+    }
+
+    return {
+      success: true,
+      data: {
+        synced: syncStatus.syncStatus === 'synced',
+        qboItemId: syncStatus.qboEntityId || undefined,
+        lastSyncedAt: syncStatus.lastSyncedAt || undefined,
+        lastError: syncStatus.lastError || undefined,
+        status: syncStatus.syncStatus,
+      },
+    };
+  } catch (error) {
+    console.error('getProductQboSyncStatus error:', error);
+    return {
+      success: false,
+      error: 'Failed to get sync status',
+    };
+  }
+}
+
+/**
+ * Manually trigger QBO sync for a product
+ */
+export async function resyncProductToQbo(productId: string): Promise<ActionResult<boolean>> {
+  const auth = await authorize('products.edit');
+  if (!auth.ok) {return auth.result;}
+
+  return productService.resyncProductToQbo(productId, auth.user.id);
+}

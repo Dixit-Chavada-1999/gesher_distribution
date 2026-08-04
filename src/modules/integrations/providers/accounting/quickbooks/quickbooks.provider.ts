@@ -944,18 +944,210 @@ export class QuickBooksProvider implements IAccountingProvider {
   }
 
   async createProduct(
-    _connectionId: string,
-    _product: AccountingProduct
+    connectionId: string,
+    product: AccountingProduct
   ): Promise<AccountingProduct> {
-    throw new Error('Not implemented');
+    const tokenInfo = await this.getAccessToken(connectionId);
+    if (!tokenInfo) {
+      throw new Error(QBO_ERRORS.NOT_CONNECTED);
+    }
+
+    // Map product type to QBO Item type
+    const qboType = product.type === 'inventory'
+      ? 'Inventory'
+      : product.type === 'service'
+        ? 'Service'
+        : 'NonInventory';
+
+    // Get income account (required by QuickBooks for all item types)
+    const incomeAccount = await this.getIncomeAccount(
+      tokenInfo.accessToken,
+      tokenInfo.externalAccountId,
+      tokenInfo.environment
+    );
+
+    if (!incomeAccount) {
+      throw new Error('No income account found in QuickBooks. Please create a "Sales of Product Income" account.');
+    }
+
+    const qboItem: Partial<QuickBooksItem> = {
+      Name: product.name,
+      Sku: product.sku,
+      Description: product.description,
+      Type: qboType,
+      Active: product.active !== false,
+      UnitPrice: product.unitPrice ? product.unitPrice / 100 : undefined, // Convert cents to dollars
+      IncomeAccountRef: {
+        value: incomeAccount.id,
+        name: incomeAccount.name,
+      },
+    };
+
+    // For inventory items, we also need expense and asset accounts
+    if (qboType === 'Inventory') {
+      const expenseAccount = await this.getExpenseAccount(
+        tokenInfo.accessToken,
+        tokenInfo.externalAccountId,
+        tokenInfo.environment
+      );
+      if (expenseAccount) {
+        qboItem.ExpenseAccountRef = {
+          value: expenseAccount.id,
+          name: expenseAccount.name,
+        };
+      }
+    }
+
+    const url = `${getApiBaseUrl(tokenInfo.environment as QuickBooksEnvironment)}/v3/company/${tokenInfo.externalAccountId}/item?minorversion=${QBO_API_MINOR_VERSION}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${tokenInfo.accessToken}`,
+      },
+      body: JSON.stringify(qboItem),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error('Create item failed:', errorBody);
+      throw new Error(`${QBO_ERRORS.API_ERROR}: ${errorBody}`);
+    }
+
+    const data = await response.json();
+    return this.mapQuickBooksProduct(data.Item);
+  }
+
+  /**
+   * Get an income account from QuickBooks for item creation
+   * Looks for "Sales of Product Income" or any Income account
+   */
+  private async getIncomeAccount(
+    accessToken: string,
+    realmId: string,
+    environment: string
+  ): Promise<{ id: string; name: string } | null> {
+    // Query for income accounts
+    const query = `SELECT * FROM Account WHERE AccountType = 'Income' MAXRESULTS 10`;
+
+    const url = `${getApiBaseUrl(environment as QuickBooksEnvironment)}/v3/company/${realmId}/query?query=${encodeURIComponent(query)}&minorversion=${QBO_API_MINOR_VERSION}`;
+
+    const response = await fetch(url, {
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      console.error('Failed to fetch income accounts');
+      return null;
+    }
+
+    const data = await response.json();
+    const accounts = data.QueryResponse?.Account || [];
+
+    // Prefer "Sales of Product Income" or similar
+    const preferredAccount = accounts.find((acc: { Name: string }) =>
+      acc.Name.toLowerCase().includes('sales') && acc.Name.toLowerCase().includes('product')
+    );
+
+    if (preferredAccount) {
+      return { id: preferredAccount.Id, name: preferredAccount.Name };
+    }
+
+    // Otherwise use first available income account
+    if (accounts.length > 0) {
+      return { id: accounts[0].Id, name: accounts[0].Name };
+    }
+
+    return null;
+  }
+
+  /**
+   * Get an expense account from QuickBooks for inventory items
+   * Looks for "Cost of Goods Sold" or similar
+   */
+  private async getExpenseAccount(
+    accessToken: string,
+    realmId: string,
+    environment: string
+  ): Promise<{ id: string; name: string } | null> {
+    // Query for COGS accounts
+    const query = `SELECT * FROM Account WHERE AccountType = 'Cost of Goods Sold' MAXRESULTS 10`;
+
+    const url = `${getApiBaseUrl(environment as QuickBooksEnvironment)}/v3/company/${realmId}/query?query=${encodeURIComponent(query)}&minorversion=${QBO_API_MINOR_VERSION}`;
+
+    const response = await fetch(url, {
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      console.error('Failed to fetch expense accounts');
+      return null;
+    }
+
+    const data = await response.json();
+    const accounts = data.QueryResponse?.Account || [];
+
+    if (accounts.length > 0) {
+      return { id: accounts[0].Id, name: accounts[0].Name };
+    }
+
+    return null;
   }
 
   async updateProduct(
-    _connectionId: string,
-    _externalId: string,
-    _product: Partial<AccountingProduct>
+    connectionId: string,
+    externalId: string,
+    product: Partial<AccountingProduct>
   ): Promise<AccountingProduct> {
-    throw new Error('Not implemented');
+    const tokenInfo = await this.getAccessToken(connectionId);
+    if (!tokenInfo) {
+      throw new Error(QBO_ERRORS.NOT_CONNECTED);
+    }
+
+    // Get current item to get SyncToken
+    const current = await this.getProduct(connectionId, externalId);
+    if (!current) {
+      throw new Error('Item not found');
+    }
+
+    const qboItem: Partial<QuickBooksItem> = {
+      Id: externalId,
+      SyncToken: (current.metadata as { syncToken?: string })?.syncToken,
+      Name: product.name,
+      Sku: product.sku,
+      Description: product.description,
+      Active: product.active,
+      UnitPrice: product.unitPrice ? product.unitPrice / 100 : undefined,
+    };
+
+    const url = `${getApiBaseUrl(tokenInfo.environment as QuickBooksEnvironment)}/v3/company/${tokenInfo.externalAccountId}/item?minorversion=${QBO_API_MINOR_VERSION}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${tokenInfo.accessToken}`,
+      },
+      body: JSON.stringify(qboItem),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error('Update item failed:', errorBody);
+      throw new Error(`${QBO_ERRORS.API_ERROR}: ${errorBody}`);
+    }
+
+    const data = await response.json();
+    return this.mapQuickBooksProduct(data.Item);
   }
 
   // ============================================

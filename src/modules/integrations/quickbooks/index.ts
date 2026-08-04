@@ -76,3 +76,7 @@ export {
 // Customer Sync Service
 export { qboCustomerSyncService } from './services/qbo-customer-sync.service';
 export type { QboCustomerSyncService } from './services/qbo-customer-sync.service';
+
+// Product Sync Service
+export { qboProductSyncService } from './services/qbo-product-sync.service';
+export type { QboProductSyncService } from './services/qbo-product-sync.service';
