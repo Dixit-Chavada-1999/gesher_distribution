@@ -275,7 +275,7 @@ function QuoteFormComponent({
           taxRateId: currentItem?.taxRateId ?? '',
           lineTotal,
         };
-        setValue('items', updatedItems);
+        setValue('items', updatedItems, { shouldValidate: true });
       }
     } catch (error) {
       console.error('Failed to fetch product price:', error);

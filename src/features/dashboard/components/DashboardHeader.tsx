@@ -7,10 +7,6 @@
  * Gets user name from auth store (hydrated by layout).
  */
 
-import Link from 'next/link';
-import { Plus } from 'lucide-react';
-
-import { Button } from '@/shared/components/ui/button';
 import { useAuthStore } from '@/shared/stores';
 
 // ============================================
@@ -41,15 +37,6 @@ export function DashboardHeader({
         <p className="text-muted-foreground">{greeting}</p>
       </div>
       <div className="flex gap-2">
-        <Button variant="outline" size="sm" asChild>
-          <Link href="/customers">Add Customer</Link>
-        </Button>
-        <Button size="sm" className="bg-primary hover:bg-primary/90" asChild>
-          <Link href="/sales-orders">
-            <Plus className="mr-1 h-4 w-4" />
-            New Order
-          </Link>
-        </Button>
       </div>
     </div>
   );

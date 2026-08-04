@@ -79,6 +79,8 @@ export function QuotesPageContent() {
   const canEdit = hasMounted && hasPermission('quotes.edit');
   const canDelete = hasMounted && hasPermission('quotes.delete');
   const canApprove = hasMounted && hasPermission('quotes.approve');
+  const canSubmitForApproval = hasMounted && hasPermission('quotes.submit_for_approval');
+  const canConvertToOrder = hasMounted && hasPermission('quotes.convert_to_order');
 
   // ----------------------------------------
   // STATE
@@ -330,8 +332,8 @@ export function QuotesPageContent() {
         onView={canViewDetail ? handleView : undefined}
         onEdit={canEdit ? handleEdit : undefined}
         onDelete={canDelete ? handleDeleteClick : undefined}
-        onConvert={canEdit ? handleConvertClick : undefined}
-        onSubmitForApproval={canEdit ? handleSubmitForApproval : undefined}
+        onConvert={canConvertToOrder ? handleConvertClick : undefined}
+        onSubmitForApproval={canSubmitForApproval ? handleSubmitForApproval : undefined}
         onApprove={canApprove ? handleApproveClick : undefined}
         onReject={canApprove ? handleRejectClick : undefined}
         toolbarContent={
@@ -357,8 +359,8 @@ export function QuotesPageContent() {
         open={isViewDrawerOpen}
         onClose={handleViewDrawerClose}
         onEdit={canEdit ? handleEdit : undefined}
-        onConvert={canEdit ? handleConvertClick : undefined}
-        onSubmitForApproval={canEdit ? handleSubmitForApproval : undefined}
+        onConvert={canConvertToOrder ? handleConvertClick : undefined}
+        onSubmitForApproval={canSubmitForApproval ? handleSubmitForApproval : undefined}
         onApprove={canApprove ? handleApproveClick : undefined}
         onReject={canApprove ? handleRejectClick : undefined}
       />

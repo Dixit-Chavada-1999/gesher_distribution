@@ -406,20 +406,15 @@ export async function deleteQuote(id: string): Promise<ActionResult<Quote>> {
 
 /**
  * Submit quote for approval (draft -> pending_approval)
- * No special permission required beyond quotes.edit
+ * Requires quotes.submit_for_approval permission
  */
 export async function submitQuoteForApproval(id: string): Promise<ActionResult<Quote>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // Check for quotes.submit_for_approval permission
+  const { checkPermission } = await import('@/shared/lib/auth/check-permission');
+  const { hasAccess, user: appUser, error } = await checkPermission('quotes.submit_for_approval');
 
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
-
-  // Get app user ID (public.users.id) from auth user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
+  if (!hasAccess || !appUser) {
+    return { success: false, error: error || 'Permission denied' };
   }
 
   const result = await quoteService.submitForApproval(id, appUser.id);
@@ -512,22 +507,18 @@ export async function expireQuote(id: string): Promise<ActionResult<Quote>> {
 }
 
 /**
- * Convert an accepted quote to a sales order (accepted -> converted)
+ * Convert an approved quote to a sales order (approved -> converted)
+ * Requires quotes.convert_to_order permission
  */
 export async function convertQuoteToSalesOrder(
   id: string
 ): Promise<ActionResult<{ quote: Quote; salesOrderId: string }>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // Check for quotes.convert_to_order permission
+  const { checkPermission } = await import('@/shared/lib/auth/check-permission');
+  const { hasAccess, user: appUser, error } = await checkPermission('quotes.convert_to_order');
 
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
-
-  // Get app user ID (public.users.id) from auth user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
+  if (!hasAccess || !appUser) {
+    return { success: false, error: error || 'Permission denied' };
   }
 
   const result = await quoteService.convertToSalesOrder(id, appUser.id);

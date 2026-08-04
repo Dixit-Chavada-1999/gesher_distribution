@@ -6,7 +6,7 @@
 
 -- Add quotes.approve permission (child of quotes.view_module)
 INSERT INTO permissions (name, description, group_name, permission_type, parent_id, sort_order)
-SELECT 'quotes.approve', 'Approve or Reject Quote Submissions', 'Quotes', 'user', p.id, 5
+SELECT 'quotes.approve', 'Approve or Reject Quote Submissions', 'Quote Module', 'user', p.id, 5
 FROM permissions p WHERE p.name = 'quotes.view_module'
 ON CONFLICT (name) DO UPDATE SET
   description = EXCLUDED.description,

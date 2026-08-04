@@ -167,6 +167,8 @@ export function ViewQuoteDrawer({
 
   const canEditPermission = hasMounted && hasPermission('quotes.edit');
   const canApprovePermission = hasMounted && hasPermission('quotes.approve');
+  const canSubmitForApprovalPermission = hasMounted && hasPermission('quotes.submit_for_approval');
+  const canConvertToOrderPermission = hasMounted && hasPermission('quotes.convert_to_order');
 
   // ----------------------------------------
   // STATE
@@ -249,12 +251,12 @@ export function ViewQuoteDrawer({
 
   // Can only edit draft quotes (and must have permission)
   const canEdit = quote && quote.status === 'draft' && canEditPermission;
-  // Can submit draft quotes for approval (and must have edit permission)
-  const canSubmitForApproval = quote && quote.status === 'draft' && canEditPermission;
+  // Can submit draft quotes for approval (and must have submit_for_approval permission)
+  const canSubmitForApproval = quote && quote.status === 'draft' && canSubmitForApprovalPermission;
   // Can approve/reject pending_approval quotes (and must have approve permission)
   const canApproveReject = quote && quote.status === 'pending_approval' && canApprovePermission;
-  // Can only convert approved quotes (and must have edit permission)
-  const canConvert = quote && quote.status === 'approved' && canEditPermission;
+  // Can only convert approved quotes (and must have convert_to_order permission)
+  const canConvert = quote && quote.status === 'approved' && canConvertToOrderPermission;
 
   // ----------------------------------------
   // RENDER

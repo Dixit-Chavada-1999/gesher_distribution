@@ -200,7 +200,7 @@ function SalesOrderFormComponent({
           batchNumber: currentItem?.batchNumber,
           serialNumber: currentItem?.serialNumber,
         };
-        setValue('items', updatedItems);
+        setValue('items', updatedItems, { shouldValidate: true });
       }
     } catch (error) {
       console.error('Failed to fetch product price:', error);
