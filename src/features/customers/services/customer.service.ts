@@ -11,6 +11,7 @@ import {
   updateCustomerSchema,
   formToCreateDTO,
   formatCreditLimit,
+  formatOpenBalance,
   type CreateCustomerInput,
   type UpdateCustomerInput,
   type CustomerFormInput,
@@ -94,7 +95,7 @@ export const customerService = {
     try {
       const result = await customerRepository.findMany(params);
 
-      // Transform to table rows with formatted credit limit
+      // Transform to table rows with formatted credit limit and open balance
       const tableRows: CustomerTableRow[] = result.data.map((customer) => ({
         id: customer.id,
         customerCode: customer.customerCode,
@@ -107,6 +108,7 @@ export const customerService = {
         status: customer.status,
         creditStatus: customer.creditStatus,
         formattedCreditLimit: formatCreditLimit(customer.creditLimit),
+        formattedOpenBalance: formatOpenBalance(customer.openBalance),
       }));
 
       return {

@@ -45,7 +45,7 @@ import {
 } from '@/shared/components/ui/alert-dialog';
 import { PageHeader } from '@/shared/components/layout/PageHeader';
 
-import { formatCreditLimit } from '../lib/schemas';
+import { formatCreditLimit, formatOpenBalance } from '../lib/schemas';
 import { CustomerContactsList } from './CustomerContactsList';
 import { EditCustomerDrawer } from './EditCustomerDrawer';
 import { deleteCustomer } from '../actions';
@@ -212,7 +212,7 @@ function CustomerDetailsTab({ customer }: { customer: Customer }) {
                 <CreditCard className="h-4 w-4" />
                 Credit & Payment
               </h3>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Credit Status</div>
                   <Badge className={CREDIT_STATUS_COLORS[customer.creditStatus]}>
@@ -220,6 +220,7 @@ function CustomerDetailsTab({ customer }: { customer: Customer }) {
                   </Badge>
                 </div>
                 <InfoItem label="Credit Limit" value={formatCreditLimit(customer.creditLimit)} />
+                <InfoItem label="Open Balance" value={formatOpenBalance(customer.openBalance)} />
                 <InfoItem label="Payment Terms" value={customer.creditTerms || 'Net 30'} />
               </div>
             </div>

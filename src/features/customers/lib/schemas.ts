@@ -114,6 +114,7 @@ export const createCustomerSchema = z.object({
   // Credit
   creditStatus: creditStatusSchema.default('pending'),
   creditLimit: z.number().int().min(0).default(0),
+  openBalance: z.number().int().min(0).default(0),
   creditTerms: z.string().max(50).nullable().optional(),
 
   // Settings
@@ -178,6 +179,7 @@ export const customerFormSchema = z.object({
   // Credit
   creditStatus: creditStatusSchema.default('pending'),
   creditLimit: z.string().optional().default('0'),
+  openBalance: z.string().optional().default('0'),
   creditTerms: z.string().max(50).optional().default('Net 30'),
 
   // Settings
@@ -287,6 +289,7 @@ export function formToCreateDTO(form: CustomerFormInput): CreateCustomerInput {
     // Credit
     creditStatus: form.creditStatus,
     creditLimit: Math.round(parseFloat(form.creditLimit || '0') * 100), // dollars to cents
+    openBalance: Math.round(parseFloat(form.openBalance || '0') * 100), // dollars to cents
     creditTerms: form.creditTerms || null,
 
     // Settings
@@ -338,6 +341,7 @@ export function customerToFormValues(customer: Customer): CustomerFormValues {
     // Credit
     creditStatus: customer.creditStatus,
     creditLimit: (customer.creditLimit / 100).toFixed(2), // cents to dollars
+    openBalance: (customer.openBalance / 100).toFixed(2), // cents to dollars
     creditTerms: customer.creditTerms || 'Net 30',
 
     // Settings
@@ -356,6 +360,16 @@ export function customerToFormValues(customer: Customer): CustomerFormValues {
  * Format credit limit for display
  */
 export function formatCreditLimit(cents: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  }).format(cents / 100);
+}
+
+/**
+ * Format open balance for display
+ */
+export function formatOpenBalance(cents: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',

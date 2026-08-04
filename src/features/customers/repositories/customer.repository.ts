@@ -61,6 +61,7 @@ interface DbCustomer {
   // Credit
   credit_status: string;
   credit_limit: number;
+  open_balance: number;
   credit_terms: string | null;
 
   // Settings
@@ -119,6 +120,7 @@ class CustomerRepositoryImpl {
         status,
         credit_status,
         credit_limit,
+        open_balance,
         created_at
       `,
         { count: 'exact' }
@@ -159,6 +161,7 @@ class CustomerRepositoryImpl {
       status: 'status',
       creditStatus: 'credit_status',
       creditLimit: 'credit_limit',
+      openBalance: 'open_balance',
       createdAt: 'created_at',
       updatedAt: 'updated_at',
     };
@@ -513,6 +516,7 @@ class CustomerRepositoryImpl {
       // Credit
       credit_status: data.creditStatus || 'pending',
       credit_limit: data.creditLimit || 0,
+      open_balance: data.openBalance || 0,
       credit_terms: data.creditTerms || null,
 
       // Settings
@@ -585,6 +589,7 @@ class CustomerRepositoryImpl {
     // Credit
     if (data.creditStatus !== undefined) {updateData.credit_status = data.creditStatus;}
     if (data.creditLimit !== undefined) {updateData.credit_limit = data.creditLimit;}
+    if (data.openBalance !== undefined) {updateData.open_balance = data.openBalance;}
     if (data.creditTerms !== undefined) {updateData.credit_terms = data.creditTerms;}
 
     // Settings
@@ -694,6 +699,7 @@ class CustomerRepositoryImpl {
       // Credit
       creditStatus: data.credit_status as Customer['creditStatus'],
       creditLimit: data.credit_limit,
+      openBalance: data.open_balance,
       creditTerms: data.credit_terms,
 
       // Settings
@@ -723,6 +729,7 @@ class CustomerRepositoryImpl {
     status: string;
     credit_status: string;
     credit_limit: number;
+    open_balance: number;
     created_at: string;
   }): CustomerListItem {
     return {
@@ -737,6 +744,7 @@ class CustomerRepositoryImpl {
       status: data.status as CustomerListItem['status'],
       creditStatus: data.credit_status as CustomerListItem['creditStatus'],
       creditLimit: data.credit_limit,
+      openBalance: data.open_balance,
       createdAt: new Date(data.created_at),
     };
   }

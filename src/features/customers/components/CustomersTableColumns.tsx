@@ -18,8 +18,6 @@ import {
   CUSTOMER_STATUS_COLORS,
   CUSTOMER_CHANNEL_LABELS,
   CUSTOMER_CHANNEL_COLORS,
-  CREDIT_STATUS_LABELS,
-  CREDIT_STATUS_COLORS,
 } from '../types';
 
 // ============================================
@@ -181,34 +179,15 @@ export function getCustomersTableColumns(
       },
     },
 
-    // Credit Status
+    // Open Balance
     {
-      accessorKey: 'creditStatus',
+      accessorKey: 'formattedOpenBalance',
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Credit" />
-      ),
-      cell: ({ row }) => {
-        const creditStatus = row.getValue('creditStatus') as keyof typeof CREDIT_STATUS_LABELS;
-        return (
-          <Badge variant="outline" className={CREDIT_STATUS_COLORS[creditStatus]}>
-            {CREDIT_STATUS_LABELS[creditStatus]}
-          </Badge>
-        );
-      },
-      filterFn: (row, id, value) => {
-        return value.includes(row.getValue(id));
-      },
-    },
-
-    // Credit Limit
-    {
-      accessorKey: 'formattedCreditLimit',
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Credit Limit" />
+        <DataTableColumnHeader column={column} title="Open Balance" />
       ),
       cell: ({ row }) => (
         <div className="text-right font-mono text-sm">
-          {row.getValue('formattedCreditLimit')}
+          {row.getValue('formattedOpenBalance')}
         </div>
       ),
     },

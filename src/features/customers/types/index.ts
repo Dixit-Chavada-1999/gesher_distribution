@@ -129,6 +129,7 @@ export interface Customer {
   // Credit
   creditStatus: CreditStatus;
   creditLimit: number; // cents
+  openBalance: number; // cents - current outstanding balance
   creditTerms: string | null;
 
   // Settings
@@ -290,6 +291,7 @@ export interface CreateCustomerDTO {
   // Credit
   creditStatus?: CreditStatus;
   creditLimit?: number;
+  openBalance?: number;
   creditTerms?: string | null;
 
   // Settings
@@ -336,6 +338,7 @@ export interface UpdateCustomerDTO {
   // Credit
   creditStatus?: CreditStatus;
   creditLimit?: number;
+  openBalance?: number;
   creditTerms?: string | null;
 
   // Settings
@@ -372,6 +375,7 @@ export interface CustomerListItem {
   status: CustomerStatus;
   creditStatus: CreditStatus;
   creditLimit: number; // cents
+  openBalance: number; // cents
   createdAt: Date;
 }
 
@@ -403,6 +407,7 @@ export interface CustomerTableRow {
   status: CustomerStatus;
   creditStatus: CreditStatus;
   formattedCreditLimit: string;
+  formattedOpenBalance: string;
 }
 
 // ============================================
@@ -446,6 +451,7 @@ export interface CustomerFormValues {
   // Credit
   creditStatus?: CreditStatus;
   creditLimit?: string; // string for form input
+  openBalance?: string; // string for form input
   creditTerms?: string;
 
   // Settings
@@ -492,6 +498,7 @@ export const DEFAULT_CUSTOMER_FORM_VALUES: CustomerFormValues = {
   // Credit
   creditStatus: 'pending',
   creditLimit: '0',
+  openBalance: '0',
   creditTerms: 'Net 30',
 
   // Settings
