@@ -86,6 +86,34 @@ export const userKeys = {
 };
 
 /**
+ * Products query keys
+ */
+export const productKeys = {
+  /** Base key for all product-related queries */
+  all: ['products'] as const,
+
+  /** List of products with pagination and filters */
+  lists: () => [...productKeys.all, 'list'] as const,
+  list: (params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    status?: string;
+    category?: string;
+    isSellable?: boolean;
+    sortBy?: string;
+    sortOrder?: string;
+  }) => [...productKeys.lists(), params] as const,
+
+  /** Single product details */
+  details: () => [...productKeys.all, 'detail'] as const,
+  detail: (id: string) => [...productKeys.details(), id] as const,
+
+  /** Distinct product categories (for the filter dropdown) */
+  categories: () => [...productKeys.all, 'categories'] as const,
+};
+
+/**
  * Combined query keys export
  *
  * Usage:
@@ -99,4 +127,5 @@ export const queryKeys = {
   roles: roleKeys,
   permissions: permissionKeys,
   users: userKeys,
+  products: productKeys,
 } as const;

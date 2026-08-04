@@ -158,10 +158,12 @@ class PermissionServiceImpl {
       { name: 'settings.edit', description: 'Edit Settings', groupName: 'Settings', permissionType: 'user', sortOrder: 2 },
 
       // Products
-      { name: 'products.view', description: 'View Products', groupName: 'Products', permissionType: 'user', sortOrder: 1 },
-      { name: 'products.create', description: 'Create Products', groupName: 'Products', permissionType: 'user', sortOrder: 2 },
-      { name: 'products.edit', description: 'Edit Products', groupName: 'Products', permissionType: 'user', sortOrder: 3 },
-      { name: 'products.delete', description: 'Delete Products', groupName: 'Products', permissionType: 'user', sortOrder: 4 },
+      // Hierarchical names - see migration 039_seed_product_permissions.sql
+      { name: 'products.view_module', description: 'View Product Module', groupName: 'Products Module', permissionType: 'user', sortOrder: 0 },
+      { name: 'products.view_detail', description: 'View Product Detail', groupName: 'Products Module', permissionType: 'user', sortOrder: 1 },
+      { name: 'products.create', description: 'Create New Product', groupName: 'Products Module', permissionType: 'user', sortOrder: 2 },
+      { name: 'products.edit', description: 'Edit Product', groupName: 'Products Module', permissionType: 'user', sortOrder: 3 },
+      { name: 'products.delete', description: 'Delete Product', groupName: 'Products Module', permissionType: 'user', sortOrder: 4 },
 
       // Customers
       { name: 'customers.view', description: 'View Customers', groupName: 'Customers', permissionType: 'user', sortOrder: 1 },

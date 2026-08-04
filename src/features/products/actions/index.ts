@@ -3,6 +3,9 @@
  *
  * Server actions for the Products module.
  * Can be called directly from Server Components or via useFormState.
+ *
+ * Every action authenticates the caller and checks the matching
+ * `products.*` permission before touching the service layer.
  */
 
 'use server';
@@ -10,8 +13,9 @@
 import { revalidatePath } from 'next/cache';
 import { productService } from '../services/product.service';
 import { createProductSchema, updateProductSchema, productFormSchema, formToCreateDTO } from '../lib/schemas';
-import type { ProductListParams, Product } from '../types';
-import { createClient } from '@/shared/lib/supabase/server';
+import type { ProductListParams, Product, ProductTableRow, ProductWithFormattedPrices } from '../types';
+import { getCurrentUser, hasPermission, hasAnyPermission } from '@/shared/lib/auth';
+import type { AppUser } from '@/shared/stores/auth.store';
 
 // ============================================
 // TYPES
@@ -24,6 +28,76 @@ export interface ActionResult<T = unknown> {
   errors?: Record<string, string[]>;
 }
 
+export interface ProductListResult {
+  data: ProductTableRow[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+}
+
+// ============================================
+// AUTHORIZATION HELPER
+// ============================================
+
+type AuthorizeResult =
+  | { ok: true; user: AppUser }
+  | { ok: false; result: ActionResult<never> };
+
+/**
+ * Resolve the current application user and verify a permission.
+ *
+ * Returns the app user (users.id — NOT the Supabase auth id), which is what
+ * the `created_by` / `updated_by` foreign keys reference.
+ */
+async function authorize(permission: string): Promise<AuthorizeResult> {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return { ok: false, result: { success: false, error: 'Authentication required' } };
+  }
+
+  if (!hasPermission(user, permission)) {
+    return { ok: false, result: { success: false, error: `Permission denied: ${permission}` } };
+  }
+
+  return { ok: true, user };
+}
+
+/**
+ * Same as `authorize`, but any one of the permissions is enough.
+ *
+ * Used for reads that more than one role shape needs — editing a product, for
+ * example, requires loading it first.
+ */
+async function authorizeAny(permissions: string[]): Promise<AuthorizeResult> {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return { ok: false, result: { success: false, error: 'Authentication required' } };
+  }
+
+  if (!hasAnyPermission(user, permissions)) {
+    return {
+      ok: false,
+      result: { success: false, error: `Permission denied: requires one of [${permissions.join(', ')}]` },
+    };
+  }
+
+  return { ok: true, user };
+}
+
+/**
+ * Revalidate every route that renders product data
+ */
+function revalidateProducts(): void {
+  revalidatePath('/products');
+}
+
 // ============================================
 // LIST ACTIONS
 // ============================================
@@ -31,13 +105,9 @@ export interface ActionResult<T = unknown> {
 /**
  * Get paginated list of products
  */
-export async function getProducts(params: ProductListParams = {}): Promise<ActionResult> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
+export async function getProducts(params: ProductListParams = {}): Promise<ActionResult<ProductListResult>> {
+  const auth = await authorize('products.view_module');
+  if (!auth.ok) {return auth.result;}
 
   return productService.list(params);
 }
@@ -45,13 +115,9 @@ export async function getProducts(params: ProductListParams = {}): Promise<Actio
 /**
  * Get a single product by ID
  */
-export async function getProduct(id: string): Promise<ActionResult<Product>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
+export async function getProduct(id: string): Promise<ActionResult<ProductWithFormattedPrices>> {
+  const auth = await authorizeAny(['products.view_detail', 'products.edit']);
+  if (!auth.ok) {return auth.result;}
 
   return productService.getById(id);
 }
@@ -59,13 +125,9 @@ export async function getProduct(id: string): Promise<ActionResult<Product>> {
 /**
  * Get a single product by SKU
  */
-export async function getProductBySku(sku: string): Promise<ActionResult<Product>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
+export async function getProductBySku(sku: string): Promise<ActionResult<ProductWithFormattedPrices>> {
+  const auth = await authorizeAny(['products.view_detail', 'products.edit']);
+  if (!auth.ok) {return auth.result;}
 
   return productService.getBySku(sku);
 }
@@ -75,15 +137,11 @@ export async function getProductBySku(sku: string): Promise<ActionResult<Product
 // ============================================
 
 /**
- * Create a new product
+ * Create a new product from a submitted HTML form
  */
 export async function createProduct(formData: FormData): Promise<ActionResult<Product>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
+  const auth = await authorize('products.create');
+  if (!auth.ok) {return auth.result;}
 
   // Parse form data
   const rawData = {
@@ -123,11 +181,10 @@ export async function createProduct(formData: FormData): Promise<ActionResult<Pr
     };
   }
 
-  const result = await productService.create(validation.data, user.id);
+  const result = await productService.create(validation.data, auth.user.id);
 
   if (result.success) {
-    revalidatePath('/products');
-    revalidatePath('/api/products');
+    revalidateProducts();
   }
 
   return result;
@@ -137,12 +194,8 @@ export async function createProduct(formData: FormData): Promise<ActionResult<Pr
  * Create product from JSON data (for programmatic use)
  */
 export async function createProductFromData(data: unknown): Promise<ActionResult<Product>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
+  const auth = await authorize('products.create');
+  if (!auth.ok) {return auth.result;}
 
   // Validate
   const validation = createProductSchema.safeParse(data);
@@ -154,26 +207,21 @@ export async function createProductFromData(data: unknown): Promise<ActionResult
     };
   }
 
-  const result = await productService.create(validation.data, user.id);
+  const result = await productService.create(validation.data, auth.user.id);
 
   if (result.success) {
-    revalidatePath('/products');
-    revalidatePath('/api/products');
+    revalidateProducts();
   }
 
   return result;
 }
 
 /**
- * Update an existing product
+ * Update an existing product from a submitted HTML form
  */
 export async function updateProduct(id: string, formData: FormData): Promise<ActionResult<Product>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
+  const auth = await authorize('products.edit');
+  if (!auth.ok) {return auth.result;}
 
   // Parse form data (only include fields that were submitted)
   const rawData: Record<string, unknown> = {};
@@ -207,12 +255,10 @@ export async function updateProduct(id: string, formData: FormData): Promise<Act
     };
   }
 
-  const result = await productService.update(id, validation.data, user.id);
+  const result = await productService.update(id, validation.data, auth.user.id);
 
   if (result.success) {
-    revalidatePath('/products');
-    revalidatePath(`/products/${id}`);
-    revalidatePath('/api/products');
+    revalidateProducts();
   }
 
   return result;
@@ -222,12 +268,8 @@ export async function updateProduct(id: string, formData: FormData): Promise<Act
  * Update product from JSON data (for programmatic use)
  */
 export async function updateProductFromData(id: string, data: unknown): Promise<ActionResult<Product>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
+  const auth = await authorize('products.edit');
+  if (!auth.ok) {return auth.result;}
 
   // Validate
   const validation = updateProductSchema.safeParse(data);
@@ -239,12 +281,10 @@ export async function updateProductFromData(id: string, data: unknown): Promise<
     };
   }
 
-  const result = await productService.update(id, validation.data, user.id);
+  const result = await productService.update(id, validation.data, auth.user.id);
 
   if (result.success) {
-    revalidatePath('/products');
-    revalidatePath(`/products/${id}`);
-    revalidatePath('/api/products');
+    revalidateProducts();
   }
 
   return result;
@@ -254,18 +294,13 @@ export async function updateProductFromData(id: string, data: unknown): Promise<
  * Soft delete a product
  */
 export async function deleteProduct(id: string): Promise<ActionResult<Product>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const auth = await authorize('products.delete');
+  if (!auth.ok) {return auth.result;}
 
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
-
-  const result = await productService.delete(id, user.id);
+  const result = await productService.delete(id, auth.user.id);
 
   if (result.success) {
-    revalidatePath('/products');
-    revalidatePath('/api/products');
+    revalidateProducts();
   }
 
   return result;
@@ -275,18 +310,13 @@ export async function deleteProduct(id: string): Promise<ActionResult<Product>> 
  * Restore a soft-deleted product
  */
 export async function restoreProduct(id: string): Promise<ActionResult<Product>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const auth = await authorize('products.delete');
+  if (!auth.ok) {return auth.result;}
 
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
-
-  const result = await productService.restore(id, user.id);
+  const result = await productService.restore(id, auth.user.id);
 
   if (result.success) {
-    revalidatePath('/products');
-    revalidatePath('/api/products');
+    revalidateProducts();
   }
 
   return result;
@@ -300,12 +330,8 @@ export async function restoreProduct(id: string): Promise<ActionResult<Product>>
  * Get all product categories
  */
 export async function getProductCategories(): Promise<ActionResult<string[]>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
+  const auth = await authorize('products.view_module');
+  if (!auth.ok) {return auth.result;}
 
   return productService.getCategories();
 }
@@ -314,12 +340,8 @@ export async function getProductCategories(): Promise<ActionResult<string[]>> {
  * Get product counts by status
  */
 export async function getProductStatusCounts(): Promise<ActionResult<Record<string, number>>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
+  const auth = await authorize('products.view_module');
+  if (!auth.ok) {return auth.result;}
 
   return productService.getStatusCounts();
 }
@@ -328,12 +350,8 @@ export async function getProductStatusCounts(): Promise<ActionResult<Record<stri
  * Validate SKU uniqueness
  */
 export async function validateProductSku(sku: string, excludeId?: string): Promise<ActionResult<boolean>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
+  const auth = await authorize('products.view_module');
+  if (!auth.ok) {return auth.result;}
 
   return productService.validateSku(sku, excludeId);
 }

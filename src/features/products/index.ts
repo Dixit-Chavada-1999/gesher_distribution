@@ -18,3 +18,6 @@ export { productService } from './services/product.service';
 
 // Server Actions
 export * from './actions';
+
+// Hooks
+export { useProducts, useProductCategories } from './hooks/use-products';

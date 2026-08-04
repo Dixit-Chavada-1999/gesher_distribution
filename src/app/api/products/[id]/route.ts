@@ -15,10 +15,9 @@ import {
   badRequestResponse,
   validationErrorResponse,
   internalErrorResponse,
-  unauthorizedResponse,
   noContentResponse,
 } from '@/shared/lib/api/response';
-import { createClient } from '@/shared/lib/supabase/server';
+import { requirePermission } from '@/shared/lib/auth';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -32,13 +31,9 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
 
-    // Check authentication
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return unauthorizedResponse('Authentication required');
-    }
+    // Check authentication + permission
+    const guard = await requirePermission('products.view_detail');
+    if (guard.response) {return guard.response;}
 
     // Fetch product
     const result = await productService.getById(id);
@@ -65,15 +60,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
 
-    // Check authentication
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return unauthorizedResponse('Authentication required');
-    }
-
-    // TODO: Check permission (products.edit)
+    // Check authentication + permission
+    const guard = await requirePermission('products.edit');
+    if (guard.response) {return guard.response;}
 
     // Parse request body
     const body = await request.json();
@@ -85,7 +74,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     // Update product
-    const result = await productService.update(id, validation.data, user.id);
+    const result = await productService.update(id, validation.data, guard.user.id);
 
     if (!result.success) {
       if (result.error === 'Product not found') {
@@ -112,18 +101,12 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
 
-    // Check authentication
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return unauthorizedResponse('Authentication required');
-    }
-
-    // TODO: Check permission (products.delete)
+    // Check authentication + permission
+    const guard = await requirePermission('products.delete');
+    if (guard.response) {return guard.response;}
 
     // Delete product
-    const result = await productService.delete(id, user.id);
+    const result = await productService.delete(id, guard.user.id);
 
     if (!result.success) {
       if (result.error === 'Product not found') {

@@ -5,4 +5,4 @@
  */
 
 export { createQueryClient, getQueryClient } from './query-client';
-export { queryKeys, roleKeys, permissionKeys, userKeys } from './query-keys';
+export { queryKeys, roleKeys, permissionKeys, userKeys, productKeys } from './query-keys';

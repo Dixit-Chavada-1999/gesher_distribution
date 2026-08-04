@@ -51,6 +51,65 @@ interface PaginatedResult<T> {
 }
 
 // ============================================
+// CONSTANTS
+// ============================================
+
+/**
+ * Whitelist of sortable columns.
+ * Maps the camelCase API field to its snake_case database column so that an
+ * arbitrary `sortBy` value can never reach the query builder.
+ */
+const SORTABLE_COLUMNS: Record<string, string> = {
+  sku: 'sku',
+  name: 'name',
+  category: 'category',
+  status: 'status',
+  baseCost: 'base_cost',
+  basePrice: 'base_price',
+  isSellable: 'is_sellable',
+  createdAt: 'created_at',
+  updatedAt: 'updated_at',
+};
+
+const DEFAULT_SORT_COLUMN = 'created_at';
+
+// ============================================
+// ERRORS
+// ============================================
+
+/**
+ * Thrown when the database rejects a write because the SKU is already taken.
+ *
+ * The pre-flight `skuExists` check can lose a race against a concurrent insert,
+ * so the unique-index violation is translated here instead of surfacing as a
+ * generic failure.
+ */
+export class DuplicateSkuError extends Error {
+  constructor(sku?: string) {
+    super(sku ? `A product with SKU "${sku}" already exists` : 'A product with this SKU already exists');
+    this.name = 'DuplicateSkuError';
+  }
+}
+
+/** Postgres unique-violation error code */
+const UNIQUE_VIOLATION = '23505';
+
+// ============================================
+// HELPERS
+// ============================================
+
+/**
+ * Strip characters that carry meaning inside a PostgREST `or()` filter.
+ *
+ * The filter string is built as `col.ilike.%term%`, so a term containing
+ * commas, parentheses, backslashes or wildcards would change the shape of the
+ * query rather than being matched literally.
+ */
+function sanitizeSearchTerm(term: string): string {
+  return term.replace(/[\\%,()*"']/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// ============================================
 // REPOSITORY
 // ============================================
 
@@ -79,9 +138,10 @@ class ProductRepositoryImpl {
       .is('deleted_at', null);
 
     // Apply search filter
-    if (search) {
+    const searchTerm = search ? sanitizeSearchTerm(search) : '';
+    if (searchTerm) {
       query = query.or(
-        `sku.ilike.%${search}%,name.ilike.%${search}%,description.ilike.%${search}%,category.ilike.%${search}%`
+        `sku.ilike.%${searchTerm}%,name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%`
       );
     }
 
@@ -100,21 +160,8 @@ class ProductRepositoryImpl {
       query = query.eq('is_sellable', isSellable);
     }
 
-    // Map camelCase sort fields to snake_case
-    const sortFieldMap: Record<string, string> = {
-      shortDescription: 'short_description',
-      rimSize: 'rim_size',
-      tireSize: 'tire_size',
-      weightLbs: 'weight_lbs',
-      baseCost: 'base_cost',
-      basePrice: 'base_price',
-      isSellable: 'is_sellable',
-      imageUrl: 'image_url',
-      createdAt: 'created_at',
-      updatedAt: 'updated_at',
-    };
-
-    const dbSortField = sortFieldMap[sortBy] || sortBy || 'created_at';
+    // Map camelCase sort fields to snake_case (whitelisted)
+    const dbSortField = SORTABLE_COLUMNS[sortBy as string] ?? DEFAULT_SORT_COLUMN;
     query = query.order(dbSortField, { ascending: sortOrder === 'asc' });
 
     // Apply pagination
@@ -181,6 +228,24 @@ class ProductRepositoryImpl {
   }
 
   /**
+   * Find a product by ID including soft-deleted rows (used by restore)
+   */
+  async findByIdIncludingDeleted(id: string): Promise<Product | null> {
+    const { data, error } = await db
+      .from('products')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {return null;}
+      throw new Error(`Failed to fetch product: ${error.message}`);
+    }
+
+    return data ? this.mapToProduct(data as DbProduct) : null;
+  }
+
+  /**
    * Check if SKU exists (for validation)
    */
   async skuExists(sku: string, excludeId?: string): Promise<boolean> {
@@ -230,6 +295,9 @@ class ProductRepositoryImpl {
       .single();
 
     if (error) {
+      if (error.code === UNIQUE_VIOLATION) {
+        throw new DuplicateSkuError(data.sku);
+      }
       throw new Error(`Failed to create product: ${error.message}`);
     }
 
@@ -263,10 +331,14 @@ class ProductRepositoryImpl {
       .from('products')
       .update(updateData)
       .eq('id', id)
+      .is('deleted_at', null)
       .select()
       .single();
 
     if (error) {
+      if (error.code === UNIQUE_VIOLATION) {
+        throw new DuplicateSkuError(data.sku);
+      }
       throw new Error(`Failed to update product: ${error.message}`);
     }
 
@@ -285,6 +357,7 @@ class ProductRepositoryImpl {
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
+      .is('deleted_at', null)
       .select()
       .single();
 
@@ -307,10 +380,14 @@ class ProductRepositoryImpl {
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
+      .not('deleted_at', 'is', null)
       .select()
       .single();
 
     if (error) {
+      if (error.code === UNIQUE_VIOLATION) {
+        throw new DuplicateSkuError();
+      }
       throw new Error(`Failed to restore product: ${error.message}`);
     }
 

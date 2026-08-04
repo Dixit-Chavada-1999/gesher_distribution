@@ -35,12 +35,15 @@ export function getProductsTableColumns(options: ColumnOptions = {}): ColumnDef<
         />
       ),
       cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select row"
-          className="translate-y-[2px]"
-        />
+        // Stop propagation so ticking the checkbox does not open the row drawer
+        <div onClick={(e) => e.stopPropagation()}>
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+            aria-label="Select row"
+            className="translate-y-[2px]"
+          />
+        </div>
       ),
       enableSorting: false,
       enableHiding: false,
@@ -172,11 +175,14 @@ export function getProductsTableColumns(options: ColumnOptions = {}): ColumnDef<
           return null;
         }
 
+        // Stop propagation so the menu does not also open the row drawer
         return (
-          <DataTableRowActions
-            actions={actions}
-            separatorAfter={options.onDelete && actions.length > 1 ? [actions.length - 2] : undefined}
-          />
+          <div onClick={(e) => e.stopPropagation()}>
+            <DataTableRowActions
+              actions={actions}
+              separatorAfter={options.onDelete && actions.length > 1 ? [actions.length - 2] : undefined}
+            />
+          </div>
         );
       },
     },

@@ -22,7 +22,7 @@ import {
   // Only used by the hidden Permissions entry — uncomment with it.
   // Key,
   // Icons below are only used by the hidden Catalog section — uncomment with it.
-  // Package,
+  Package,
   // MapPin,
   Building2,
   // DollarSign,
@@ -58,13 +58,13 @@ const NAV_SECTIONS = [
   {
     title: 'Catalog',
     items: [
-  //     {
-  //       id: 'products',
-  //       label: 'Products',
-  //       href: '/products',
-  //       icon: Package,
-  //       permission: 'products.view_module',
-  //     },
+      {
+        id: 'products',
+        label: 'Products',
+        href: '/products',
+        icon: Package,
+        permission: 'products.view_module',
+      },
   //     {
   //       id: 'locations',
   //       label: 'Locations',

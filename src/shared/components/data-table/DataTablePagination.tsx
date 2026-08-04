@@ -42,7 +42,9 @@ export function DataTablePagination<TData>({
   const pageCount = table.getPageCount();
   const currentPage = table.getState().pagination.pageIndex;
   const pageSize = table.getState().pagination.pageSize;
-  const totalRows = table.getFilteredRowModel().rows.length;
+  // With server-side pagination the row model only holds the current page,
+  // so use the table's row count (falls back to the filtered rows client-side).
+  const totalRows = table.getRowCount();
   const selectedCount = table.getFilteredSelectedRowModel().rows.length;
 
   return (

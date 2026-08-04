@@ -14,9 +14,8 @@ import {
   badRequestResponse,
   validationErrorResponse,
   internalErrorResponse,
-  unauthorizedResponse,
 } from '@/shared/lib/api/response';
-import { createClient } from '@/shared/lib/supabase/server';
+import { requirePermission } from '@/shared/lib/auth';
 
 /**
  * GET /api/products
@@ -24,13 +23,9 @@ import { createClient } from '@/shared/lib/supabase/server';
  */
 export async function GET(request: NextRequest) {
   try {
-    // Check authentication
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return unauthorizedResponse('Authentication required');
-    }
+    // Check authentication + permission
+    const guard = await requirePermission('products.view_module');
+    if (guard.response) {return guard.response;}
 
     // Parse query parameters
     const { searchParams } = new URL(request.url);
@@ -74,16 +69,9 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    // Check authentication
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return unauthorizedResponse('Authentication required');
-    }
-
-    // TODO: Check permission (products.create)
-    // For now, any authenticated user can create products
+    // Check authentication + permission
+    const guard = await requirePermission('products.create');
+    if (guard.response) {return guard.response;}
 
     // Parse request body
     const body = await request.json();
@@ -95,7 +83,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create product
-    const result = await productService.create(validation.data, user.id);
+    const result = await productService.create(validation.data, guard.user.id);
 
     if (!result.success) {
       if (result.errors) {

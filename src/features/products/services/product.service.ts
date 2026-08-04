@@ -5,7 +5,7 @@
  * Handles validation, business rules, and orchestration.
  */
 
-import { productRepository } from '../repositories/product.repository';
+import { productRepository, DuplicateSkuError } from '../repositories/product.repository';
 import { createProductSchema, updateProductSchema, type CreateProductInput, type UpdateProductInput } from '../lib/schemas';
 import type { Product, ProductListParams, ProductWithFormattedPrices, ProductTableRow } from '../types';
 
@@ -99,7 +99,14 @@ export const productService = {
     };
   }>> {
     try {
-      const result = await productRepository.findMany(params);
+      // Clamp pagination — server actions receive these straight from the client
+      const safeParams: ProductListParams = {
+        ...params,
+        page: Math.max(1, Math.floor(params.page ?? 1)),
+        limit: Math.min(100, Math.max(1, Math.floor(params.limit ?? 10))),
+      };
+
+      const result = await productRepository.findMany(safeParams);
 
       return {
         success: true,
@@ -215,6 +222,13 @@ export const productService = {
         data: product,
       };
     } catch (error) {
+      if (error instanceof DuplicateSkuError) {
+        return {
+          success: false,
+          error: 'SKU already exists',
+          errors: { sku: [error.message] },
+        };
+      }
       console.error('ProductService.create error:', error);
       return {
         success: false,
@@ -280,6 +294,13 @@ export const productService = {
         data: product,
       };
     } catch (error) {
+      if (error instanceof DuplicateSkuError) {
+        return {
+          success: false,
+          error: 'SKU already exists',
+          errors: { sku: [error.message] },
+        };
+      }
       console.error('ProductService.update error:', error);
       return {
         success: false,
@@ -325,6 +346,33 @@ export const productService = {
    */
   async restore(id: string, userId?: string): Promise<ServiceResult<Product>> {
     try {
+      const existing = await productRepository.findByIdIncludingDeleted(id);
+
+      if (!existing) {
+        return {
+          success: false,
+          error: 'Product not found',
+        };
+      }
+
+      if (!existing.deletedAt) {
+        return {
+          success: false,
+          error: 'Product is not deleted',
+        };
+      }
+
+      // A different active product may have claimed the SKU while this one was
+      // deleted — the unique index only covers non-deleted rows.
+      const skuTaken = await productRepository.skuExists(existing.sku, id);
+      if (skuTaken) {
+        return {
+          success: false,
+          error: 'SKU already exists',
+          errors: { sku: [`Another product now uses SKU "${existing.sku}"`] },
+        };
+      }
+
       const product = await productRepository.restore(id, userId);
 
       return {
@@ -332,6 +380,13 @@ export const productService = {
         data: product,
       };
     } catch (error) {
+      if (error instanceof DuplicateSkuError) {
+        return {
+          success: false,
+          error: 'SKU already exists',
+          errors: { sku: [error.message] },
+        };
+      }
       console.error('ProductService.restore error:', error);
       return {
         success: false,

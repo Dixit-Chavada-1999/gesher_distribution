@@ -1,76 +1,63 @@
 /**
  * Products List Page
  *
- * Displays all products with filtering and pagination.
+ * Displays the product catalog with server-side search, filtering and paging.
+ *
+ * Performance:
+ * - Server-side permission check before anything renders
+ * - First page fetched on the server and handed to React Query as initialData
  */
 
-import { Suspense } from 'react';
-import Link from 'next/link';
-import { Plus } from 'lucide-react';
-import { Button } from '@/shared/components/ui/button';
+import { Metadata } from 'next';
+import { redirect } from 'next/navigation';
+
 import { PageHeader } from '@/shared/components/layout/PageHeader';
-import { LoadingState } from '@/shared/components/feedback/LoadingState';
 import { ProductsTable } from '@/features/products/components';
-import { getProducts } from '@/features/products/actions';
-import type { ProductTableRow } from '@/features/products/types';
+import { getProducts, getProductCategories } from '@/features/products/actions';
+import { getCurrentUser, hasPermission } from '@/shared/lib/auth';
 
-interface ProductsPageProps {
-  searchParams: Promise<{
-    page?: string;
-    limit?: string;
-    search?: string;
-    status?: string;
-    category?: string;
-  }>;
-}
+// ============================================
+// METADATA
+// ============================================
 
-async function ProductsContent({ searchParams }: ProductsPageProps) {
-  const params = await searchParams;
+export const metadata: Metadata = {
+  title: 'Products | Gesher Distribution',
+  description: 'Manage your product catalog',
+};
 
-  const result = await getProducts({
-    page: params.page ? parseInt(params.page) : 1,
-    limit: params.limit ? parseInt(params.limit) : 10,
-    search: params.search,
-    status: params.status as 'active' | 'inactive' | 'discontinued' | undefined,
-    category: params.category,
-  });
+// ============================================
+// PAGE
+// ============================================
 
-  if (!result.success) {
-    return (
-      <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-center text-destructive">
-        {result.error || 'Failed to load products'}
-      </div>
-    );
+export default async function ProductsPage() {
+  // Server-side permission check
+  const user = await getCurrentUser();
+
+  if (!user || !hasPermission(user, 'products.view_module')) {
+    redirect('/no-permission');
   }
 
-  const data = result.data as { data: ProductTableRow[]; meta: { totalPages: number } };
+  // Fetch the first page and the category list in parallel
+  const [productsResult, categoriesResult] = await Promise.all([
+    getProducts({ page: 1, limit: 10 }),
+    getProductCategories(),
+  ]);
 
-  return (
-    <ProductsTable
-      data={data.data}
-    />
-  );
-}
-
-export default async function ProductsPage(props: ProductsPageProps) {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Products"
         description="Manage your product catalog"
-        actions={
-          <Link href="/products/new">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Product
-            </Button>
-          </Link>
-        }
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Products' },
+        ]}
       />
 
-      <Suspense fallback={<LoadingState message="Loading products..." />}>
-        <ProductsContent searchParams={props.searchParams} />
-      </Suspense>
+      <ProductsTable
+        initialData={productsResult.success ? productsResult.data : undefined}
+        initialCategories={categoriesResult.success ? categoriesResult.data : undefined}
+      />
     </div>
   );
 }
