@@ -80,6 +80,7 @@ const DEFAULT_FORM_VALUES: CustomerFormInput = {
   taxExemptExpiryAt: '',
   creditStatus: 'pending',
   creditLimit: '0',
+  openBalance: '0',
   creditTerms: 'Net 30',
   preferredLocationId: '',
   defaultPaymentMethod: '',

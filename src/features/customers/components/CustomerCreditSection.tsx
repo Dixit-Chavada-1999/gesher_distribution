@@ -61,7 +61,7 @@ export function CustomerCreditSection() {
       <Separator />
 
       {/* Form Grid */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
         {/* Credit Status */}
         <div className="space-y-2">
           <Label htmlFor="creditStatus">Credit Status</Label>
@@ -103,6 +103,28 @@ export function CustomerCreditSection() {
           ) : (
             <p className="text-xs text-muted-foreground">
               Maximum credit amount in dollars
+            </p>
+          )}
+        </div>
+
+        {/* Open Balance */}
+        <div className="space-y-2">
+          <Label htmlFor="openBalance">Open Balance</Label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+            <Input
+              id="openBalance"
+              type="number"
+              placeholder="0.00"
+              className={`pl-7 ${errors.openBalance ? 'border-destructive' : ''}`}
+              {...register('openBalance')}
+            />
+          </div>
+          {errors.openBalance ? (
+            <p className="text-sm text-destructive">{errors.openBalance.message}</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Current outstanding balance
             </p>
           )}
         </div>

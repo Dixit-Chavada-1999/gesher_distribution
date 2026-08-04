@@ -180,6 +180,7 @@ export async function createCustomer(formData: FormData): Promise<ActionResult<C
     // Credit
     creditStatus: formData.get('creditStatus') as string || 'pending',
     creditLimit: formData.get('creditLimit') as string || '0',
+    openBalance: formData.get('openBalance') as string || '0',
     creditTerms: formData.get('creditTerms') as string || 'Net 30',
 
     // Settings
@@ -302,6 +303,12 @@ export async function updateCustomer(
     rawData.creditLimit = Math.round(parseFloat(creditLimitStr || '0') * 100);
   }
 
+  // Handle open balance (convert to cents)
+  if (formData.has('openBalance')) {
+    const openBalanceStr = formData.get('openBalance') as string;
+    rawData.openBalance = Math.round(parseFloat(openBalanceStr || '0') * 100);
+  }
+
   // Uppercase customer code if provided
   if (rawData.customerCode) {
     rawData.customerCode = (rawData.customerCode as string).toUpperCase();
@@ -350,12 +357,16 @@ export async function updateCustomerFromData(
     }
 
     // If data is form values, convert to DTO format
-    const convertedData = typeof data === 'object' && data !== null && 'creditLimit' in data
+    const dataObj = data as Record<string, unknown>;
+    const convertedData = typeof data === 'object' && data !== null
       ? {
           ...data,
-          creditLimit: typeof (data as Record<string, unknown>).creditLimit === 'string'
-            ? Math.round(parseFloat((data as Record<string, unknown>).creditLimit as string || '0') * 100)
-            : (data as Record<string, unknown>).creditLimit,
+          creditLimit: 'creditLimit' in dataObj && typeof dataObj.creditLimit === 'string'
+            ? Math.round(parseFloat(dataObj.creditLimit as string || '0') * 100)
+            : dataObj.creditLimit,
+          openBalance: 'openBalance' in dataObj && typeof dataObj.openBalance === 'string'
+            ? Math.round(parseFloat(dataObj.openBalance as string || '0') * 100)
+            : dataObj.openBalance,
         }
       : data;
 
