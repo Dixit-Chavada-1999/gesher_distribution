@@ -386,11 +386,11 @@ export async function getProductQboSyncStatus(productId: string): Promise<Action
     return {
       success: true,
       data: {
-        synced: syncStatus.syncStatus === 'synced',
-        qboItemId: syncStatus.qboEntityId || undefined,
-        lastSyncedAt: syncStatus.lastSyncedAt || undefined,
-        lastError: syncStatus.lastError || undefined,
-        status: syncStatus.syncStatus,
+        synced: syncStatus.synced,
+        qboItemId: syncStatus.qboItemId || undefined,
+        lastSyncedAt: syncStatus.qboSyncedAt || undefined,
+        lastError: syncStatus.qboSyncError || undefined,
+        status: syncStatus.synced ? 'synced' : (syncStatus.qboSyncError ? 'error' : 'pending'),
       },
     };
   } catch (error) {

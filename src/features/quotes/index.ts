@@ -28,7 +28,7 @@ export {
 } from './types';
 
 // Components
-export { QuotesTable, ViewQuoteDrawer, CreateQuoteDrawer, EditQuoteDrawer, QuoteForm } from './components';
+export { QuotesTable, ViewQuoteDrawer, CreateQuoteDrawer, EditQuoteDrawer, QuoteForm, ApproveQuoteDialog } from './components';
 
 // Hooks
 export { useQuotes, useQuote, useQuoteStatusCounts } from './hooks';
@@ -44,9 +44,9 @@ export {
   updateQuoteFromData,
   updateQuoteItems,
   deleteQuote,
-  sendQuote,
-  acceptQuote,
-  rejectQuote,
+  submitQuoteForApproval,
+  approveQuote,
+  rejectQuoteApproval,
   expireQuote,
   convertQuoteToSalesOrder,
   getQuoteStatusCounts,

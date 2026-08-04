@@ -24,6 +24,9 @@ interface ColumnOptions {
   onEdit?: (quote: QuoteListItem) => void;
   onDelete?: (quote: QuoteListItem) => void;
   onConvert?: (quote: QuoteListItem) => void;
+  onSubmitForApproval?: (quote: QuoteListItem) => void;
+  onApprove?: (quote: QuoteListItem) => void;
+  onReject?: (quote: QuoteListItem) => void;
 }
 
 // ============================================
@@ -199,9 +202,11 @@ export function getQuotesTableColumns(
       id: 'actions',
       cell: ({ row }) => {
         const quote = row.original;
-        const canConvert = quote.status === 'accepted';
-        const canEdit = ['draft', 'sent'].includes(quote.status);
+        const canConvert = quote.status === 'approved';
+        const canEdit = quote.status === 'draft';
         const canDelete = quote.status === 'draft';
+        const canSubmitForApproval = quote.status === 'draft';
+        const canApproveReject = quote.status === 'pending_approval';
 
         const { actions, separatorAfter } = createCommonRowActions({
           onView: options.onView ? () => options.onView?.(quote) : undefined,
@@ -209,10 +214,38 @@ export function getQuotesTableColumns(
           onDelete: canDelete && options.onDelete ? () => options.onDelete?.(quote) : undefined,
         });
 
-        // Add custom actions before delete (if present)
+        // Add workflow actions before delete (if present)
+        const deleteIndex = actions.findIndex(a => a.label === 'Delete');
+        let insertIndex = deleteIndex >= 0 ? deleteIndex : actions.length;
+
+        // Add submit for approval action
+        if (canSubmitForApproval && options.onSubmitForApproval) {
+          actions.splice(insertIndex, 0, {
+            label: 'Submit for Approval',
+            onClick: () => options.onSubmitForApproval?.(quote),
+          });
+          insertIndex++;
+        }
+
+        // Add approve/reject actions
+        if (canApproveReject && options.onApprove) {
+          actions.splice(insertIndex, 0, {
+            label: 'Approve',
+            onClick: () => options.onApprove?.(quote),
+          });
+          insertIndex++;
+        }
+
+        if (canApproveReject && options.onReject) {
+          actions.splice(insertIndex, 0, {
+            label: 'Reject',
+            onClick: () => options.onReject?.(quote),
+          });
+          insertIndex++;
+        }
+
+        // Add convert action
         if (canConvert && options.onConvert) {
-          const deleteIndex = actions.findIndex(a => a.label === 'Delete');
-          const insertIndex = deleteIndex >= 0 ? deleteIndex : actions.length;
           actions.splice(insertIndex, 0, {
             label: 'Convert to Order',
             onClick: () => options.onConvert?.(quote),

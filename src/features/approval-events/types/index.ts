@@ -13,12 +13,14 @@ export type ApprovalEventType =
   | 'credit_release'
   | 'price_override'
   | 'allocation'
+  | 'quote_approval'
   | 'other';
 
 export const APPROVAL_EVENT_TYPES: ApprovalEventType[] = [
   'credit_release',
   'price_override',
   'allocation',
+  'quote_approval',
   'other',
 ];
 
@@ -26,6 +28,7 @@ export const APPROVAL_EVENT_TYPE_LABELS: Record<ApprovalEventType, string> = {
   credit_release: 'Credit Release',
   price_override: 'Price Override',
   allocation: 'Allocation',
+  quote_approval: 'Quote Approval',
   other: 'Other',
 };
 

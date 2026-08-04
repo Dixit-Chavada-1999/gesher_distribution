@@ -45,7 +45,12 @@ import {
   EditQuoteDrawer,
   useQuotes,
 } from '@/features/quotes';
-import { deleteQuote, convertQuoteToSalesOrder } from '@/features/quotes/actions';
+import { ApproveQuoteDialog } from '@/features/quotes/components/ApproveQuoteDialog';
+import {
+  deleteQuote,
+  convertQuoteToSalesOrder,
+  submitQuoteForApproval,
+} from '@/features/quotes/actions';
 import type { QuoteListItem, QuoteStatus, QuoteWithItems } from '@/features/quotes/types';
 import { QUOTE_STATUS_LABELS } from '@/features/quotes/types';
 
@@ -75,6 +80,7 @@ export function QuotesPageContent() {
   const canViewDetail = hasMounted && hasPermission('quotes.view_detail');
   const canEdit = hasMounted && hasPermission('quotes.edit');
   const canDelete = hasMounted && hasPermission('quotes.delete');
+  const canApprove = hasMounted && hasPermission('quotes.approve');
 
   // ----------------------------------------
   // STATE
@@ -95,6 +101,14 @@ export function QuotesPageContent() {
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
   const [quoteToConvert, setQuoteToConvert] = useState<QuoteListItem | QuoteWithItems | null>(null);
   const [isConverting, setIsConverting] = useState(false);
+
+  // Submit for approval
+  const [isSubmittingForApproval, setIsSubmittingForApproval] = useState(false);
+
+  // Approval dialog
+  const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
+  const [quoteToApprove, setQuoteToApprove] = useState<QuoteListItem | QuoteWithItems | null>(null);
+  const [approvalAction, setApprovalAction] = useState<'approve' | 'reject'>('approve');
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'all'>('all');
@@ -205,10 +219,8 @@ export function QuotesPageContent() {
     try {
       const result = await convertQuoteToSalesOrder(quoteToConvert.id);
       if (result.success && result.data) {
-        toast.success(`Quote converted to Sales Order`);
+        toast.success(`Quote converted to Sales Order ${result.data.orderNumber}`);
         refetchQuotes();
-        // Navigate to the new sales order
-        router.push(`/sales-orders`);
       } else {
         toast.error(result.error || 'Failed to convert quote');
       }
@@ -225,6 +237,49 @@ export function QuotesPageContent() {
     setConvertDialogOpen(false);
     setQuoteToConvert(null);
   };
+
+  // Submit for Approval
+  const handleSubmitForApproval = useCallback(async (quote: QuoteListItem | QuoteWithItems) => {
+    setIsSubmittingForApproval(true);
+    try {
+      const result = await submitQuoteForApproval(quote.id);
+      if (result.success) {
+        toast.success(`Quote ${quote.quoteNumber} submitted for approval`);
+        refetchQuotes();
+        setIsViewDrawerOpen(false); // Close view drawer if open
+      } else {
+        toast.error(result.error || 'Failed to submit quote for approval');
+      }
+    } catch {
+      toast.error('Failed to submit quote for approval');
+    } finally {
+      setIsSubmittingForApproval(false);
+    }
+  }, [refetchQuotes]);
+
+  // Approve Quote
+  const handleApproveClick = useCallback((quote: QuoteListItem | QuoteWithItems) => {
+    setQuoteToApprove(quote);
+    setApprovalAction('approve');
+    setApprovalDialogOpen(true);
+  }, []);
+
+  // Reject Quote
+  const handleRejectClick = useCallback((quote: QuoteListItem | QuoteWithItems) => {
+    setQuoteToApprove(quote);
+    setApprovalAction('reject');
+    setApprovalDialogOpen(true);
+  }, []);
+
+  const handleApprovalDialogClose = useCallback(() => {
+    setApprovalDialogOpen(false);
+    setQuoteToApprove(null);
+  }, []);
+
+  const handleApprovalSuccess = useCallback(() => {
+    refetchQuotes();
+    setIsViewDrawerOpen(false); // Close view drawer if open
+  }, [refetchQuotes]);
 
   // Row click (opens view drawer)
   const handleRowClick = useCallback((quote: QuoteListItem) => {
@@ -272,12 +327,15 @@ export function QuotesPageContent() {
       {/* Quotes Table */}
       <QuotesTable
         data={quotes}
-        isLoading={isQuotesLoading}
+        isLoading={isQuotesLoading || isSubmittingForApproval}
         onRowClick={canViewDetail ? handleRowClick : undefined}
         onView={canViewDetail ? handleView : undefined}
         onEdit={canEdit ? handleEdit : undefined}
         onDelete={canDelete ? handleDeleteClick : undefined}
         onConvert={canEdit ? handleConvertClick : undefined}
+        onSubmitForApproval={canEdit ? handleSubmitForApproval : undefined}
+        onApprove={canApprove ? handleApproveClick : undefined}
+        onReject={canApprove ? handleRejectClick : undefined}
         toolbarContent={
           <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
             <SelectTrigger className="h-8 w-[150px]">
@@ -300,8 +358,11 @@ export function QuotesPageContent() {
         quoteId={selectedQuoteId}
         open={isViewDrawerOpen}
         onClose={handleViewDrawerClose}
-        onEdit={handleEdit}
-        onConvert={handleConvertClick}
+        onEdit={canEdit ? handleEdit : undefined}
+        onConvert={canEdit ? handleConvertClick : undefined}
+        onSubmitForApproval={canEdit ? handleSubmitForApproval : undefined}
+        onApprove={canApprove ? handleApproveClick : undefined}
+        onReject={canApprove ? handleRejectClick : undefined}
       />
 
       {/* Create Quote Drawer */}
@@ -369,6 +430,16 @@ export function QuotesPageContent() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Approve/Reject Quote Dialog */}
+      <ApproveQuoteDialog
+        open={approvalDialogOpen}
+        onClose={handleApprovalDialogClose}
+        quoteId={quoteToApprove?.id || null}
+        quoteNumber={quoteToApprove?.quoteNumber || null}
+        action={approvalAction}
+        onSuccess={handleApprovalSuccess}
+      />
     </div>
   );
 }

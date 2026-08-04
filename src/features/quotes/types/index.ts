@@ -11,16 +11,16 @@
 
 export type QuoteStatus =
   | 'draft'
-  | 'sent'
-  | 'accepted'
+  | 'pending_approval'
+  | 'approved'
   | 'rejected'
   | 'expired'
   | 'converted';
 
 export const QUOTE_STATUSES: QuoteStatus[] = [
   'draft',
-  'sent',
-  'accepted',
+  'pending_approval',
+  'approved',
   'rejected',
   'expired',
   'converted',
@@ -28,8 +28,8 @@ export const QUOTE_STATUSES: QuoteStatus[] = [
 
 export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
   draft: 'Draft',
-  sent: 'Sent',
-  accepted: 'Accepted',
+  pending_approval: 'Pending Approval',
+  approved: 'Approved',
   rejected: 'Rejected',
   expired: 'Expired',
   converted: 'Converted',
@@ -37,18 +37,18 @@ export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
 
 export const QUOTE_STATUS_COLORS: Record<QuoteStatus, string> = {
   draft: 'bg-stone-100 text-stone-700 border border-stone-200',
-  sent: 'bg-sky-100 text-sky-800 border border-sky-200',
-  accepted: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
+  pending_approval: 'bg-amber-100 text-amber-800 border border-amber-200',
+  approved: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
   rejected: 'bg-red-100 text-red-800 border border-red-200',
-  expired: 'bg-amber-100 text-amber-800 border border-amber-200',
+  expired: 'bg-slate-100 text-slate-600 border border-slate-200',
   converted: 'bg-teal-100 text-teal-800 border border-teal-200',
 };
 
 // Valid status transitions
 export const QUOTE_STATUS_TRANSITIONS: Record<QuoteStatus, QuoteStatus[]> = {
-  draft: ['sent'],
-  sent: ['accepted', 'rejected', 'expired'],
-  accepted: ['converted'],
+  draft: ['pending_approval'],
+  pending_approval: ['approved', 'rejected'],
+  approved: ['converted'],
   rejected: [],
   expired: [],
   converted: [],
@@ -423,6 +423,9 @@ export interface QuotesTableProps {
   onEdit?: (quote: QuoteListItem) => void;
   onDelete?: (quote: QuoteListItem) => void;
   onConvert?: (quote: QuoteListItem) => void;
+  onSubmitForApproval?: (quote: QuoteListItem) => void;
+  onApprove?: (quote: QuoteListItem) => void;
+  onReject?: (quote: QuoteListItem) => void;
   toolbarContent?: React.ReactNode;
 }
 

@@ -76,6 +76,12 @@ interface DbCustomer {
   created_by: string | null;
   updated_by: string | null;
   deleted_at: string | null;
+
+  // QuickBooks Sync
+  qbo_customer_id: string | null;
+  qbo_realm_id: string | null;
+  qbo_synced_at: string | null;
+  qbo_sync_error: string | null;
 }
 
 // ============================================
@@ -714,7 +720,78 @@ class CustomerRepositoryImpl {
       createdBy: data.created_by,
       updatedBy: data.updated_by,
       deletedAt: data.deleted_at ? new Date(data.deleted_at) : null,
+
+      // QuickBooks Sync (handle missing columns for backwards compatibility)
+      qboCustomerId: data.qbo_customer_id ?? null,
+      qboRealmId: data.qbo_realm_id ?? null,
+      qboSyncedAt: data.qbo_synced_at ? new Date(data.qbo_synced_at) : null,
+      qboSyncError: data.qbo_sync_error ?? null,
     };
+  }
+
+  // ==========================================
+  // QBO SYNC METHODS
+  // ==========================================
+
+  /**
+   * Update QBO sync fields for a customer
+   */
+  async updateQboSync(
+    id: string,
+    qboCustomerId: string,
+    qboRealmId: string
+  ): Promise<void> {
+    const { error } = await db
+      .from('customers')
+      .update({
+        qbo_customer_id: qboCustomerId,
+        qbo_realm_id: qboRealmId,
+        qbo_synced_at: new Date().toISOString(),
+        qbo_sync_error: null,
+      })
+      .eq('id', id);
+
+    if (error) {
+      throw new Error(`Failed to update QBO sync: ${error.message}`);
+    }
+  }
+
+  /**
+   * Update QBO sync error for a customer
+   */
+  async updateQboSyncError(id: string, errorMessage: string): Promise<void> {
+    const { error } = await db
+      .from('customers')
+      .update({
+        qbo_sync_error: errorMessage,
+      })
+      .eq('id', id);
+
+    if (error) {
+      throw new Error(`Failed to update QBO sync error: ${error.message}`);
+    }
+  }
+
+  /**
+   * Find customer by QBO Customer ID
+   */
+  async findByQboCustomerId(qboCustomerId: string, qboRealmId: string): Promise<Customer | null> {
+    const { data, error } = await db
+      .from('customers')
+      .select('*')
+      .eq('qbo_customer_id', qboCustomerId)
+      .eq('qbo_realm_id', qboRealmId)
+      .is('deleted_at', null)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {return null;}
+      throw new Error(`Failed to fetch customer by QBO ID: ${error.message}`);
+    }
+
+    if (!data) {return null;}
+
+    return this.mapToCustomer(data as DbCustomer);
   }
 
   private mapToListItem(data: {

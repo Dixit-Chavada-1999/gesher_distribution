@@ -2,13 +2,13 @@
  * QBO Customer Sync Service
  *
  * Handles syncing customers between our system and QuickBooks Online.
- * Creates/updates customers in QBO when they are created/updated in our system.
+ * Creates/updates customers in QBO when customers are created/updated in our system.
+ * Uses direct fields on customer table for sync tracking.
  */
 
-import { qboSyncRepository, getConnectionByProvider } from '@/modules/integrations/core';
+import { getConnectionByProvider } from '@/modules/integrations/core';
 import { quickBooksProvider } from '@/modules/integrations/providers/accounting/quickbooks';
 import type { Customer } from '@/features/customers/types';
-import type { QboSyncResult, QboEntitySync } from '@/modules/integrations/core/types/qbo-sync.types';
 import type { AccountingCustomer } from '@/modules/integrations/core';
 
 // ============================================
@@ -18,7 +18,6 @@ import type { AccountingCustomer } from '@/modules/integrations/core';
 interface SyncCustomerResult {
   success: boolean;
   qboCustomerId?: string;
-  syncRecord?: QboEntitySync;
   error?: string;
 }
 
@@ -61,7 +60,6 @@ function mapCustomerToQboFormat(customer: Customer): AccountingCustomer {
         }
       : undefined,
     taxExempt: customer.taxExempt,
-    // Store our customer code in QBO notes for reference
     metadata: {
       gesherCustomerCode: customer.customerCode,
       gesherCustomerId: customer.id,
@@ -102,18 +100,14 @@ export const qboCustomerSyncService = {
    * Called when a customer is created or updated
    */
   async syncCustomer(data: CustomerSyncData): Promise<SyncCustomerResult> {
-    const { customer, userId } = data;
+    const { customer } = data;
 
     try {
       // Get QBO connection
       const qboConnection = await getQboConnection();
 
       if (!qboConnection) {
-        // No QBO connection - create pending sync record for later
-        console.log('No QBO connection available, queueing sync for later');
-
-        // We can't create a sync record without a realm ID
-        // This will be handled when QBO is connected
+        console.log('No QBO connection available, skipping customer sync');
         return {
           success: false,
           error: 'QuickBooks not connected',
@@ -122,41 +116,25 @@ export const qboCustomerSyncService = {
 
       const { connectionId, realmId } = qboConnection;
 
-      // Check if customer already has a sync record
-      const existingSync = await qboSyncRepository.findByEntity(
-        'customer',
-        customer.id,
-        realmId
-      );
+      // Get customer repository
+      const { customerRepository } = await import('@/features/customers/repositories/customer.repository');
 
-      if (existingSync?.syncStatus === 'synced' && existingSync.qboEntityId) {
+      // Check if customer already has a QBO ID for this realm
+      if (customer.qboCustomerId && customer.qboRealmId === realmId) {
         // Customer already synced - update in QBO
         return await this.updateCustomerInQbo(
           customer,
-          existingSync,
           connectionId,
-          userId
+          customerRepository
         );
       }
-
-      // Create or get pending sync record
-      const syncRecord = existingSync || await qboSyncRepository.create(
-        {
-          entityType: 'customer',
-          entityId: customer.id,
-          qboRealmId: realmId,
-          syncStatus: 'pending',
-          syncDirection: 'push',
-        },
-        userId
-      );
 
       // Create customer in QBO
       return await this.createCustomerInQbo(
         customer,
-        syncRecord,
         connectionId,
-        userId
+        realmId,
+        customerRepository
       );
     } catch (error) {
       console.error('QboCustomerSyncService.syncCustomer error:', error);
@@ -172,9 +150,9 @@ export const qboCustomerSyncService = {
    */
   async createCustomerInQbo(
     customer: Customer,
-    syncRecord: QboEntitySync,
     connectionId: string,
-    userId?: string
+    realmId: string,
+    customerRepository: { updateQboSync: (id: string, qboId: string, realmId: string) => Promise<void>; updateQboSyncError: (id: string, error: string) => Promise<void> }
   ): Promise<SyncCustomerResult> {
     try {
       // Map customer to QBO format
@@ -190,11 +168,11 @@ export const qboCustomerSyncService = {
         throw new Error('QBO did not return a customer ID');
       }
 
-      // Mark sync as successful
-      const updatedSync = await qboSyncRepository.markSynced(
-        syncRecord.id,
+      // Update customer with QBO sync info
+      await customerRepository.updateQboSync(
+        customer.id,
         result.externalId,
-        userId
+        realmId
       );
 
       console.log(
@@ -204,14 +182,13 @@ export const qboCustomerSyncService = {
       return {
         success: true,
         qboCustomerId: result.externalId,
-        syncRecord: updatedSync,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Failed to create customer in QBO:', errorMessage);
 
-      // Mark sync as failed
-      await qboSyncRepository.markFailed(syncRecord.id, errorMessage, userId);
+      // Update customer with error
+      await customerRepository.updateQboSyncError(customer.id, errorMessage);
 
       return {
         success: false,
@@ -225,12 +202,11 @@ export const qboCustomerSyncService = {
    */
   async updateCustomerInQbo(
     customer: Customer,
-    syncRecord: QboEntitySync,
     connectionId: string,
-    userId?: string
+    customerRepository: { updateQboSync: (id: string, qboId: string, realmId: string) => Promise<void>; updateQboSyncError: (id: string, error: string) => Promise<void> }
   ): Promise<SyncCustomerResult> {
     try {
-      if (!syncRecord.qboEntityId) {
+      if (!customer.qboCustomerId || !customer.qboRealmId) {
         throw new Error('No QBO customer ID found');
       }
 
@@ -240,41 +216,31 @@ export const qboCustomerSyncService = {
       // Update in QBO
       const result = await quickBooksProvider.updateCustomer(
         connectionId,
-        syncRecord.qboEntityId,
+        customer.qboCustomerId,
         qboCustomer
       );
 
       // Update sync timestamp
-      const updatedSync = await qboSyncRepository.update(
-        syncRecord.id,
-        {
-          lastSyncedAt: new Date(),
-          lastError: null,
-        },
-        userId
+      await customerRepository.updateQboSync(
+        customer.id,
+        customer.qboCustomerId,
+        customer.qboRealmId
       );
 
       console.log(
-        `Customer ${customer.customerCode} updated in QBO (ID: ${syncRecord.qboEntityId})`
+        `Customer ${customer.customerCode} updated in QBO (ID: ${customer.qboCustomerId})`
       );
 
       return {
         success: true,
-        qboCustomerId: result.externalId || syncRecord.qboEntityId,
-        syncRecord: updatedSync,
+        qboCustomerId: result.externalId || customer.qboCustomerId,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Failed to update customer in QBO:', errorMessage);
 
-      // Mark sync as failed (but don't change status from synced if it was already synced)
-      await qboSyncRepository.update(
-        syncRecord.id,
-        {
-          lastError: errorMessage,
-        },
-        userId
-      );
+      // Update customer with error
+      await customerRepository.updateQboSyncError(customer.id, errorMessage);
 
       return {
         success: false,
@@ -284,162 +250,48 @@ export const qboCustomerSyncService = {
   },
 
   /**
-   * Queue a customer for sync (creates pending record)
-   * Used when QBO is not connected or for batch processing
-   */
-  async queueCustomerForSync(
-    customerId: string,
-    realmId: string,
-    userId?: string
-  ): Promise<QboEntitySync> {
-    return await qboSyncRepository.upsert(
-      {
-        entityType: 'customer',
-        entityId: customerId,
-        qboRealmId: realmId,
-        syncStatus: 'pending',
-        syncDirection: 'push',
-      },
-      userId
-    );
-  },
-
-  /**
-   * Process pending customer syncs
-   * Called by background job
-   */
-  async processPendingSyncs(limit: number = 50): Promise<QboSyncResult[]> {
-    const results: QboSyncResult[] = [];
-
-    // Get QBO connection
-    const qboConnection = await getQboConnection();
-    if (!qboConnection) {
-      console.log('No QBO connection, skipping pending sync processing');
-      return results;
-    }
-
-    // Get pending syncs
-    const pendingSyncs = await qboSyncRepository.getPendingSyncs(
-      'customer',
-      qboConnection.realmId,
-      limit
-    );
-
-    console.log(`Processing ${pendingSyncs.length} pending customer syncs`);
-
-    for (const pendingSync of pendingSyncs) {
-      try {
-        // Get customer data
-        const { customerRepository } = await import('@/features/customers/repositories');
-        const customer = await customerRepository.findById(pendingSync.entityId);
-
-        if (!customer) {
-          // Customer was deleted, remove sync record
-          await qboSyncRepository.remove(pendingSync.id);
-          results.push({
-            success: false,
-            entityType: 'customer',
-            entityId: pendingSync.entityId,
-            error: 'Customer not found',
-          });
-          continue;
-        }
-
-        // Get full sync record
-        const syncRecord = await qboSyncRepository.findById(pendingSync.id);
-        if (!syncRecord) {
-          continue;
-        }
-
-        // Sync customer
-        const result = await this.createCustomerInQbo(
-          customer,
-          syncRecord,
-          qboConnection.connectionId
-        );
-
-        results.push({
-          success: result.success,
-          entityType: 'customer',
-          entityId: customer.id,
-          qboEntityId: result.qboCustomerId,
-          error: result.error,
-        });
-      } catch (error) {
-        results.push({
-          success: false,
-          entityType: 'customer',
-          entityId: pendingSync.entityId,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-      }
-    }
-
-    return results;
-  },
-
-  /**
-   * Retry failed customer syncs
-   * Called by background job
-   */
-  async retryFailedSyncs(limit: number = 50): Promise<QboSyncResult[]> {
-    const results: QboSyncResult[] = [];
-
-    // Get QBO connection
-    const qboConnection = await getQboConnection();
-    if (!qboConnection) {
-      return results;
-    }
-
-    // Get failed syncs ready for retry
-    const failedSyncs = await qboSyncRepository.getFailedSyncsForRetry(
-      qboConnection.realmId,
-      limit
-    );
-
-    console.log(`Retrying ${failedSyncs.length} failed customer syncs`);
-
-    for (const failedSync of failedSyncs) {
-      // Reset to pending and process
-      await qboSyncRepository.resetToPending(failedSync.id);
-    }
-
-    // Process the reset pending syncs
-    return await this.processPendingSyncs(limit);
-  },
-
-  /**
    * Get sync status for a customer
    */
-  async getSyncStatus(
-    customerId: string,
-    realmId?: string
-  ): Promise<QboEntitySync | null> {
-    if (!realmId) {
-      const qboConnection = await getQboConnection();
-      if (!qboConnection) {
+  async getSyncStatus(customerId: string): Promise<{
+    synced: boolean;
+    qboCustomerId: string | null;
+    qboRealmId: string | null;
+    qboSyncedAt: Date | null;
+    qboSyncError: string | null;
+  } | null> {
+    try {
+      const { customerRepository } = await import('@/features/customers/repositories/customer.repository');
+      const customer = await customerRepository.findById(customerId);
+
+      if (!customer) {
         return null;
       }
-      realmId = qboConnection.realmId;
-    }
 
-    return await qboSyncRepository.findByEntity('customer', customerId, realmId);
+      return {
+        synced: !!customer.qboCustomerId,
+        qboCustomerId: customer.qboCustomerId,
+        qboRealmId: customer.qboRealmId,
+        qboSyncedAt: customer.qboSyncedAt,
+        qboSyncError: customer.qboSyncError,
+      };
+    } catch (error) {
+      console.error('Failed to get customer sync status:', error);
+      return null;
+    }
   },
 
   /**
    * Get QBO customer ID for a synced customer
    */
   async getQboCustomerId(customerId: string): Promise<string | null> {
-    const qboConnection = await getQboConnection();
-    if (!qboConnection) {
+    try {
+      const { customerRepository } = await import('@/features/customers/repositories/customer.repository');
+      const customer = await customerRepository.findById(customerId);
+      return customer?.qboCustomerId || null;
+    } catch (error) {
+      console.error('Failed to get QBO customer ID:', error);
       return null;
     }
-
-    return await qboSyncRepository.getQboEntityId(
-      'customer',
-      customerId,
-      qboConnection.realmId
-    );
   },
 
   /**
@@ -451,11 +303,14 @@ export const qboCustomerSyncService = {
       return false;
     }
 
-    return await qboSyncRepository.isSynced(
-      'customer',
-      customerId,
-      qboConnection.realmId
-    );
+    try {
+      const { customerRepository } = await import('@/features/customers/repositories/customer.repository');
+      const customer = await customerRepository.findById(customerId);
+      return !!(customer?.qboCustomerId && customer?.qboRealmId === qboConnection.realmId);
+    } catch (error) {
+      console.error('Failed to check customer sync status:', error);
+      return false;
+    }
   },
 };
 

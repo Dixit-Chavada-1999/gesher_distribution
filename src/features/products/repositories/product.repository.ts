@@ -32,6 +32,12 @@ interface DbProduct {
   created_by: string | null;
   updated_by: string | null;
   deleted_at: string | null;
+
+  // QuickBooks Sync
+  qbo_item_id: string | null;
+  qbo_realm_id: string | null;
+  qbo_synced_at: string | null;
+  qbo_sync_error: string | null;
 }
 
 // ============================================
@@ -465,7 +471,78 @@ class ProductRepositoryImpl {
       createdBy: data.created_by,
       updatedBy: data.updated_by,
       deletedAt: data.deleted_at ? new Date(data.deleted_at) : null,
+
+      // QuickBooks Sync (handle missing columns for backwards compatibility)
+      qboItemId: data.qbo_item_id ?? null,
+      qboRealmId: data.qbo_realm_id ?? null,
+      qboSyncedAt: data.qbo_synced_at ? new Date(data.qbo_synced_at) : null,
+      qboSyncError: data.qbo_sync_error ?? null,
     };
+  }
+
+  // ==========================================
+  // QBO SYNC METHODS
+  // ==========================================
+
+  /**
+   * Update QBO sync fields for a product
+   */
+  async updateQboSync(
+    id: string,
+    qboItemId: string,
+    qboRealmId: string
+  ): Promise<void> {
+    const { error } = await db
+      .from('products')
+      .update({
+        qbo_item_id: qboItemId,
+        qbo_realm_id: qboRealmId,
+        qbo_synced_at: new Date().toISOString(),
+        qbo_sync_error: null,
+      })
+      .eq('id', id);
+
+    if (error) {
+      throw new Error(`Failed to update QBO sync: ${error.message}`);
+    }
+  }
+
+  /**
+   * Update QBO sync error for a product
+   */
+  async updateQboSyncError(id: string, errorMessage: string): Promise<void> {
+    const { error } = await db
+      .from('products')
+      .update({
+        qbo_sync_error: errorMessage,
+      })
+      .eq('id', id);
+
+    if (error) {
+      throw new Error(`Failed to update QBO sync error: ${error.message}`);
+    }
+  }
+
+  /**
+   * Find product by QBO Item ID
+   */
+  async findByQboItemId(qboItemId: string, qboRealmId: string): Promise<Product | null> {
+    const { data, error } = await db
+      .from('products')
+      .select('*')
+      .eq('qbo_item_id', qboItemId)
+      .eq('qbo_realm_id', qboRealmId)
+      .is('deleted_at', null)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {return null;}
+      throw new Error(`Failed to fetch product by QBO ID: ${error.message}`);
+    }
+
+    if (!data) {return null;}
+
+    return this.mapToProduct(data as DbProduct);
   }
 }
 

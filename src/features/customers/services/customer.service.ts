@@ -621,9 +621,9 @@ export const customerService = {
   }>> {
     try {
       const qboSyncService = await getQboSyncService();
-      const syncRecord = await qboSyncService.getSyncStatus(customerId);
+      const syncStatus = await qboSyncService.getSyncStatus(customerId);
 
-      if (!syncRecord) {
+      if (!syncStatus) {
         return {
           success: true,
           data: { synced: false },
@@ -633,11 +633,11 @@ export const customerService = {
       return {
         success: true,
         data: {
-          synced: syncRecord.syncStatus === 'synced',
-          qboCustomerId: syncRecord.qboEntityId || undefined,
-          lastSyncedAt: syncRecord.lastSyncedAt || undefined,
-          syncStatus: syncRecord.syncStatus,
-          lastError: syncRecord.lastError || undefined,
+          synced: syncStatus.synced,
+          qboCustomerId: syncStatus.qboCustomerId || undefined,
+          lastSyncedAt: syncStatus.qboSyncedAt || undefined,
+          syncStatus: syncStatus.synced ? 'synced' : (syncStatus.qboSyncError ? 'error' : 'pending'),
+          lastError: syncStatus.qboSyncError || undefined,
         },
       };
     } catch (error) {

@@ -144,6 +144,12 @@ export interface Customer {
   createdBy: string | null;
   updatedBy: string | null;
   deletedAt: Date | null;
+
+  // QuickBooks Sync
+  qboCustomerId: string | null;
+  qboRealmId: string | null;
+  qboSyncedAt: Date | null;
+  qboSyncError: string | null;
 }
 
 /**

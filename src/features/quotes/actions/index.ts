@@ -405,9 +405,10 @@ export async function deleteQuote(id: string): Promise<ActionResult<Quote>> {
 // ============================================
 
 /**
- * Send a draft quote (draft -> sent)
+ * Submit quote for approval (draft -> pending_approval)
+ * No special permission required beyond quotes.edit
  */
-export async function sendQuote(id: string): Promise<ActionResult<Quote>> {
+export async function submitQuoteForApproval(id: string): Promise<ActionResult<Quote>> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -421,7 +422,7 @@ export async function sendQuote(id: string): Promise<ActionResult<Quote>> {
     return { success: false, error: 'User profile not found' };
   }
 
-  const result = await quoteService.send(id, appUser.id);
+  const result = await quoteService.submitForApproval(id, appUser.id);
 
   if (result.success) {
     revalidatePath('/quotes');
@@ -432,23 +433,22 @@ export async function sendQuote(id: string): Promise<ActionResult<Quote>> {
 }
 
 /**
- * Accept a sent quote (sent -> accepted)
+ * Approve a quote (pending_approval -> approved)
+ * Requires quotes.approve permission
  */
-export async function acceptQuote(id: string): Promise<ActionResult<Quote>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+export async function approveQuote(
+  id: string,
+  approvalNote: string | null = null
+): Promise<ActionResult<Quote>> {
+  // Check for quotes.approve permission
+  const { checkPermission } = await import('@/shared/lib/auth/check-permission');
+  const { hasAccess, user: appUser, error } = await checkPermission('quotes.approve');
 
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  if (!hasAccess || !appUser) {
+    return { success: false, error: error || 'Permission denied' };
   }
 
-  // Get app user ID (public.users.id) from auth user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
-  }
-
-  const result = await quoteService.accept(id, appUser.id);
+  const result = await quoteService.approveQuote(id, approvalNote, appUser.id);
 
   if (result.success) {
     revalidatePath('/quotes');
@@ -459,23 +459,22 @@ export async function acceptQuote(id: string): Promise<ActionResult<Quote>> {
 }
 
 /**
- * Reject a sent quote (sent -> rejected)
+ * Reject a quote approval (pending_approval -> rejected)
+ * Requires quotes.approve permission
  */
-export async function rejectQuote(id: string): Promise<ActionResult<Quote>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+export async function rejectQuoteApproval(
+  id: string,
+  rejectionNote: string | null = null
+): Promise<ActionResult<Quote>> {
+  // Check for quotes.approve permission
+  const { checkPermission } = await import('@/shared/lib/auth/check-permission');
+  const { hasAccess, user: appUser, error } = await checkPermission('quotes.approve');
 
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  if (!hasAccess || !appUser) {
+    return { success: false, error: error || 'Permission denied' };
   }
 
-  // Get app user ID (public.users.id) from auth user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
-  }
-
-  const result = await quoteService.reject(id, appUser.id);
+  const result = await quoteService.rejectQuoteApproval(id, rejectionNote, appUser.id);
 
   if (result.success) {
     revalidatePath('/quotes');

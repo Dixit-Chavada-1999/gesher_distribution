@@ -36,6 +36,12 @@ export interface Product {
   createdBy: string | null;
   updatedBy: string | null;
   deletedAt: Date | null;
+
+  // QuickBooks Sync
+  qboItemId: string | null;
+  qboRealmId: string | null;
+  qboSyncedAt: Date | null;
+  qboSyncError: string | null;
 }
 
 /**

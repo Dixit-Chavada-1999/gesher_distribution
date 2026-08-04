@@ -33,7 +33,10 @@ interface ServiceResult<T> {
 /**
  * Format price from cents to display string
  */
-function formatPrice(cents: number): string {
+function formatPrice(cents: number | null | undefined): string {
+  if (cents === null || cents === undefined || isNaN(cents)) {
+    return '$0.00';
+  }
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -43,9 +46,11 @@ function formatPrice(cents: number): string {
 /**
  * Calculate margin and margin percentage
  */
-function calculateMargin(cost: number, price: number): { margin: number; marginPercent: number } {
-  const margin = price - cost;
-  const marginPercent = cost > 0 ? ((price - cost) / cost) * 100 : 0;
+function calculateMargin(cost: number | null | undefined, price: number | null | undefined): { margin: number; marginPercent: number } {
+  const safeCost = cost ?? 0;
+  const safePrice = price ?? 0;
+  const margin = safePrice - safeCost;
+  const marginPercent = safeCost > 0 ? ((safePrice - safeCost) / safeCost) * 100 : 0;
   return { margin, marginPercent: Math.round(marginPercent * 100) / 100 };
 }
 

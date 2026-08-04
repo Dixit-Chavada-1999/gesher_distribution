@@ -231,11 +231,11 @@ export const quoteService = {
         };
       }
 
-      // Check if quote can be edited (only draft and sent)
-      if (!['draft', 'sent'].includes(existing.status)) {
+      // Check if quote can be edited (only draft)
+      if (existing.status !== 'draft') {
         return {
           success: false,
-          error: `Cannot edit quote in ${existing.status} status`,
+          error: `Cannot edit quote in ${existing.status} status. Only draft quotes can be edited.`,
         };
       }
 
@@ -283,11 +283,11 @@ export const quoteService = {
         };
       }
 
-      // Check if quote can be edited
-      if (!['draft', 'sent'].includes(existing.status)) {
+      // Check if quote can be edited (only draft)
+      if (existing.status !== 'draft') {
         return {
           success: false,
-          error: `Cannot edit items for quote in ${existing.status} status`,
+          error: `Cannot edit items for quote in ${existing.status} status. Only draft quotes can be edited.`,
         };
       }
 
@@ -360,28 +360,161 @@ export const quoteService = {
   // ==========================================
 
   /**
-   * Send quote (draft -> sent)
+   * Submit quote for approval (draft -> pending_approval)
+   * Creates an approval_event with type 'quote_approval'
    */
-  async send(id: string, userId?: string): Promise<ServiceResult<Quote>> {
-    return this.transitionStatus(id, 'sent', userId);
+  async submitForApproval(id: string, userId?: string): Promise<ServiceResult<Quote>> {
+    try {
+      const existing = await quoteRepository.findById(id);
+      if (!existing) {
+        return {
+          success: false,
+          error: 'Quote not found',
+        };
+      }
+
+      // Check if transition is valid
+      if (!isValidStatusTransition(existing.status, 'pending_approval')) {
+        return {
+          success: false,
+          error: `Cannot submit quote in ${existing.status} status for approval. Quote must be in draft status.`,
+        };
+      }
+
+      // Create approval event
+      const { approvalEventRepository } = await import('@/features/approval-events/repositories/approval-event.repository');
+      await approvalEventRepository.create({
+        eventType: 'quote_approval',
+        subjectType: 'quote',
+        subjectId: id,
+        reason: `Quote ${existing.quoteNumber} submitted for approval`,
+        metadata: {
+          quoteNumber: existing.quoteNumber,
+          customerId: existing.customerId,
+          grandTotal: existing.grandTotal,
+        },
+      }, userId);
+
+      // Update quote status
+      const quote = await quoteRepository.updateStatus(id, 'pending_approval', userId);
+
+      return {
+        success: true,
+        data: quote,
+      };
+    } catch (error) {
+      console.error('QuoteService.submitForApproval error:', error);
+      return {
+        success: false,
+        error: 'Failed to submit quote for approval',
+      };
+    }
   },
 
   /**
-   * Accept quote (sent -> accepted)
+   * Approve quote (pending_approval -> approved)
+   * Updates the approval_event to 'approved'
    */
-  async accept(id: string, userId?: string): Promise<ServiceResult<Quote>> {
-    return this.transitionStatus(id, 'accepted', userId);
+  async approveQuote(
+    id: string,
+    approvalNote: string | null,
+    userId?: string
+  ): Promise<ServiceResult<Quote>> {
+    try {
+      const existing = await quoteRepository.findById(id);
+      if (!existing) {
+        return {
+          success: false,
+          error: 'Quote not found',
+        };
+      }
+
+      // Check if transition is valid
+      if (!isValidStatusTransition(existing.status, 'approved')) {
+        return {
+          success: false,
+          error: `Cannot approve quote in ${existing.status} status. Quote must be pending approval.`,
+        };
+      }
+
+      // Find and update the pending approval event
+      const { approvalEventRepository } = await import('@/features/approval-events/repositories/approval-event.repository');
+      const approvalEvents = await approvalEventRepository.findBySubject('quote', id);
+      const pendingEvent = approvalEvents.find(e => e.status === 'pending' && e.eventType === 'quote_approval');
+
+      if (pendingEvent) {
+        await approvalEventRepository.approve(pendingEvent.id, approvalNote, userId);
+      }
+
+      // Update quote status
+      const quote = await quoteRepository.updateStatus(id, 'approved', userId);
+
+      return {
+        success: true,
+        data: quote,
+      };
+    } catch (error) {
+      console.error('QuoteService.approveQuote error:', error);
+      return {
+        success: false,
+        error: 'Failed to approve quote',
+      };
+    }
   },
 
   /**
-   * Reject quote (sent -> rejected)
+   * Reject quote approval (pending_approval -> rejected)
+   * Updates the approval_event to 'rejected'
    */
-  async reject(id: string, userId?: string): Promise<ServiceResult<Quote>> {
-    return this.transitionStatus(id, 'rejected', userId);
+  async rejectQuoteApproval(
+    id: string,
+    rejectionNote: string | null,
+    userId?: string
+  ): Promise<ServiceResult<Quote>> {
+    try {
+      const existing = await quoteRepository.findById(id);
+      if (!existing) {
+        return {
+          success: false,
+          error: 'Quote not found',
+        };
+      }
+
+      // Check if transition is valid
+      if (!isValidStatusTransition(existing.status, 'rejected')) {
+        return {
+          success: false,
+          error: `Cannot reject quote in ${existing.status} status. Quote must be pending approval.`,
+        };
+      }
+
+      // Find and update the pending approval event
+      const { approvalEventRepository } = await import('@/features/approval-events/repositories/approval-event.repository');
+      const approvalEvents = await approvalEventRepository.findBySubject('quote', id);
+      const pendingEvent = approvalEvents.find(e => e.status === 'pending' && e.eventType === 'quote_approval');
+
+      if (pendingEvent) {
+        await approvalEventRepository.reject(pendingEvent.id, rejectionNote, userId);
+      }
+
+      // Update quote status
+      const quote = await quoteRepository.updateStatus(id, 'rejected', userId);
+
+      return {
+        success: true,
+        data: quote,
+      };
+    } catch (error) {
+      console.error('QuoteService.rejectQuoteApproval error:', error);
+      return {
+        success: false,
+        error: 'Failed to reject quote',
+      };
+    }
   },
 
   /**
-   * Mark quote as expired (sent -> expired)
+   * Mark quote as expired
    */
   async expire(id: string, userId?: string): Promise<ServiceResult<Quote>> {
     return this.transitionStatus(id, 'expired', userId);
@@ -408,7 +541,7 @@ export const quoteService = {
       if (!isValidStatusTransition(existing.status, 'converted')) {
         return {
           success: false,
-          error: `Cannot convert quote in ${existing.status} status. Quote must be accepted first.`,
+          error: `Cannot convert quote in ${existing.status} status. Quote must be approved first.`,
         };
       }
 

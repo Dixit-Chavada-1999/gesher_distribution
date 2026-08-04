@@ -97,7 +97,7 @@ function ProductFormDialogComponent({
           ? await updateProductFromData(productId, dto)
           : await createProductFromData(dto);
 
-        if (result.success) {
+        if (result.success && result.data) {
           toast.success(productId ? 'Product updated' : 'Product created');
           onOpenChange(false);
           onSuccess?.();

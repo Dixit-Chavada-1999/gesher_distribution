@@ -11,6 +11,7 @@ export { QuoteForm } from './QuoteForm';
 export { CreateQuoteDrawer } from './CreateQuoteDrawer';
 export { EditQuoteDrawer } from './EditQuoteDrawer';
 export { ViewQuoteDrawer } from './ViewQuoteDrawer';
+export { ApproveQuoteDialog } from './ApproveQuoteDialog';
 
 // Form Sections
 export { QuoteInfoSection } from './QuoteInfoSection';

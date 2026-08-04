@@ -346,8 +346,8 @@ class QuoteRepositoryImpl {
 
     const counts: Record<QuoteStatus, number> = {
       draft: 0,
-      sent: 0,
-      accepted: 0,
+      pending_approval: 0,
+      approved: 0,
       rejected: 0,
       expired: 0,
       converted: 0,

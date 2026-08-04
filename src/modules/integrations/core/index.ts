@@ -142,6 +142,4 @@ export {
   cancelSyncLog,
   deleteOldSyncLogs,
   getSyncStats,
-  // QBO Entity Sync Repository
-  qboSyncRepository,
 } from './repositories';

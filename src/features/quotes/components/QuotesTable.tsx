@@ -28,6 +28,9 @@ export function QuotesTable({
   onEdit,
   onDelete,
   onConvert,
+  onSubmitForApproval,
+  onApprove,
+  onReject,
   toolbarContent,
 }: QuotesTableProps) {
   // ----------------------------------------
@@ -41,8 +44,11 @@ export function QuotesTable({
         onEdit,
         onDelete,
         onConvert,
+        onSubmitForApproval,
+        onApprove,
+        onReject,
       }),
-    [onView, onEdit, onDelete, onConvert, onRowClick]
+    [onView, onEdit, onDelete, onConvert, onSubmitForApproval, onApprove, onReject, onRowClick]
   );
 
   // ----------------------------------------

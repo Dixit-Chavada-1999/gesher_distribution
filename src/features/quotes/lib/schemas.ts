@@ -14,8 +14,8 @@ import type { QuoteStatus } from '../types';
 
 export const quoteStatusSchema = z.enum([
   'draft',
-  'sent',
-  'accepted',
+  'pending_approval',
+  'approved',
   'rejected',
   'expired',
   'converted',

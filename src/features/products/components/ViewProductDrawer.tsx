@@ -8,7 +8,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, Package, Ruler, Weight, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { Loader2, Package, Ruler, Weight, Trash2 } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { useAuthStore } from '@/shared/stores';
@@ -146,10 +146,12 @@ export function ViewProductDrawer({
       if (result.success && result.data) {
         setProduct(result.data);
       } else {
+        console.error('Failed to load product:', result);
         setError(result.error || 'Failed to load product');
       }
-    } catch {
-      setError('Failed to load product');
+    } catch (err) {
+      console.error('Error loading product:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load product');
     } finally {
       setIsLoading(false);
     }
@@ -287,22 +289,6 @@ export function ViewProductDrawer({
                       label="Weight"
                       value={product.weightLbs ? `${product.weightLbs} lbs` : null}
                       icon={<Weight className="h-4 w-4" />}
-                    />
-                    <InfoItem
-                      label="Image URL"
-                      value={
-                        product.imageUrl ? (
-                          <a
-                            href={product.imageUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary underline underline-offset-2"
-                          >
-                            Open image
-                          </a>
-                        ) : null
-                      }
-                      icon={<ImageIcon className="h-4 w-4" />}
                     />
                   </div>
                 </Section>

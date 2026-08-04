@@ -45,6 +45,9 @@ interface ViewQuoteDrawerProps {
   onClose: () => void;
   onEdit?: (quote: QuoteWithItems) => void;
   onConvert?: (quote: QuoteWithItems) => void;
+  onSubmitForApproval?: (quote: QuoteWithItems) => void;
+  onApprove?: (quote: QuoteWithItems) => void;
+  onReject?: (quote: QuoteWithItems) => void;
 }
 
 // ============================================
@@ -142,6 +145,9 @@ export function ViewQuoteDrawer({
   onClose,
   onEdit,
   onConvert,
+  onSubmitForApproval,
+  onApprove,
+  onReject,
 }: ViewQuoteDrawerProps) {
   const { hasPermission } = useAuthStore();
 
@@ -160,6 +166,7 @@ export function ViewQuoteDrawer({
   // ----------------------------------------
 
   const canEditPermission = hasMounted && hasPermission('quotes.edit');
+  const canApprovePermission = hasMounted && hasPermission('quotes.approve');
 
   // ----------------------------------------
   // STATE
@@ -222,10 +229,32 @@ export function ViewQuoteDrawer({
     }
   };
 
-  // Can only edit draft or sent quotes (and must have permission)
-  const canEdit = quote && ['draft', 'sent'].includes(quote.status) && canEditPermission;
-  // Can only convert accepted quotes (and must have edit permission)
-  const canConvert = quote && quote.status === 'accepted' && canEditPermission;
+  const handleSubmitForApproval = () => {
+    if (quote) {
+      onSubmitForApproval?.(quote);
+    }
+  };
+
+  const handleApprove = () => {
+    if (quote) {
+      onApprove?.(quote);
+    }
+  };
+
+  const handleReject = () => {
+    if (quote) {
+      onReject?.(quote);
+    }
+  };
+
+  // Can only edit draft quotes (and must have permission)
+  const canEdit = quote && quote.status === 'draft' && canEditPermission;
+  // Can submit draft quotes for approval (and must have edit permission)
+  const canSubmitForApproval = quote && quote.status === 'draft' && canEditPermission;
+  // Can approve/reject pending_approval quotes (and must have approve permission)
+  const canApproveReject = quote && quote.status === 'pending_approval' && canApprovePermission;
+  // Can only convert approved quotes (and must have edit permission)
+  const canConvert = quote && quote.status === 'approved' && canEditPermission;
 
   // ----------------------------------------
   // RENDER
@@ -451,6 +480,21 @@ export function ViewQuoteDrawer({
               <Button variant="outline" onClick={onClose}>
                 Close
               </Button>
+              {canApproveReject && onReject && (
+                <Button variant="destructive" onClick={handleReject}>
+                  Reject
+                </Button>
+              )}
+              {canApproveReject && onApprove && (
+                <Button variant="default" onClick={handleApprove}>
+                  Approve
+                </Button>
+              )}
+              {canSubmitForApproval && onSubmitForApproval && (
+                <Button variant="secondary" onClick={handleSubmitForApproval}>
+                  Submit for Approval
+                </Button>
+              )}
               {canConvert && onConvert && (
                 <Button variant="secondary" onClick={handleConvert}>
                   Convert to Order
