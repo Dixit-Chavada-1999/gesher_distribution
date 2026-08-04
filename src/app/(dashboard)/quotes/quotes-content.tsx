@@ -15,7 +15,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
-import { useRouter } from 'next/navigation';
 
 import { Button } from '@/shared/components/ui/button';
 import { useAuthStore } from '@/shared/stores';
@@ -59,7 +58,6 @@ import { QUOTE_STATUS_LABELS } from '@/features/quotes/types';
 // ============================================
 
 export function QuotesPageContent() {
-  const router = useRouter();
   const { hasPermission } = useAuthStore();
 
   // ----------------------------------------
@@ -219,7 +217,7 @@ export function QuotesPageContent() {
     try {
       const result = await convertQuoteToSalesOrder(quoteToConvert.id);
       if (result.success && result.data) {
-        toast.success(`Quote converted to Sales Order ${result.data.orderNumber}`);
+        toast.success(`Quote converted to Sales Order successfully`);
         refetchQuotes();
       } else {
         toast.error(result.error || 'Failed to convert quote');
