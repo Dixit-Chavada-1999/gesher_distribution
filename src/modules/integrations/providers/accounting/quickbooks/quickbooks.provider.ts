@@ -57,6 +57,52 @@ import type {
   QuickBooksItem,
   QuickBooksQueryResponse,
 } from './types';
+import { auditService } from '@/shared/lib/audit/audit-service';
+
+// ============================================
+// AUDIT LOGGING HELPER
+// ============================================
+
+interface QboApiLogParams {
+  operation: 'create' | 'update' | 'read' | 'query';
+  entityType: string;
+  entityId?: string;
+  externalId?: string;
+  realmId: string;
+  success: boolean;
+  error?: string;
+  requestData?: Record<string, unknown>;
+  responseData?: Record<string, unknown>;
+}
+
+async function logQboApiCall(params: QboApiLogParams): Promise<void> {
+  const { operation, entityType, entityId, externalId, realmId, success, error, requestData, responseData } = params;
+
+  const action = operation === 'create' || operation === 'update' ? 'export' : 'import';
+  const description = success
+    ? `QuickBooks API: ${operation} ${entityType}${externalId ? ` (QBO ID: ${externalId})` : ''}`
+    : `QuickBooks API failed: ${operation} ${entityType}`;
+
+  auditService.log({
+    action,
+    module: 'integrations',
+    entityType,
+    entityId,
+    description,
+    metadata: {
+      integration: 'quickbooks',
+      apiOperation: operation,
+      qboRealmId: realmId,
+      qboEntityId: externalId,
+      success,
+      error,
+      requestData: requestData ? JSON.stringify(requestData).substring(0, 1000) : undefined,
+      responseData: responseData ? JSON.stringify(responseData).substring(0, 1000) : undefined,
+    },
+  }).catch((err) => {
+    console.error('Failed to log QBO API call:', err);
+  });
+}
 
 // ============================================
 // PROVIDER METADATA
@@ -521,10 +567,33 @@ export class QuickBooksProvider implements IAccountingProvider {
     if (!response.ok) {
       const errorBody = await response.text();
       console.error('Create customer failed:', errorBody);
+
+      // Log API failure
+      logQboApiCall({
+        operation: 'create',
+        entityType: 'Customer',
+        realmId: tokenInfo.externalAccountId,
+        success: false,
+        error: errorBody,
+        requestData: qboCustomer as Record<string, unknown>,
+      });
+
       throw new Error(QBO_ERRORS.API_ERROR);
     }
 
     const data = await response.json();
+
+    // Log successful API call
+    logQboApiCall({
+      operation: 'create',
+      entityType: 'Customer',
+      externalId: data.Customer?.Id,
+      realmId: tokenInfo.externalAccountId,
+      success: true,
+      requestData: qboCustomer as Record<string, unknown>,
+      responseData: { id: data.Customer?.Id, displayName: data.Customer?.DisplayName },
+    });
+
     return this.mapQuickBooksCustomer(data.Customer);
   }
 
@@ -568,10 +637,34 @@ export class QuickBooksProvider implements IAccountingProvider {
     if (!response.ok) {
       const errorBody = await response.text();
       console.error('Update customer failed:', errorBody);
+
+      // Log API failure
+      logQboApiCall({
+        operation: 'update',
+        entityType: 'Customer',
+        externalId,
+        realmId: tokenInfo.externalAccountId,
+        success: false,
+        error: errorBody,
+        requestData: qboCustomer as Record<string, unknown>,
+      });
+
       throw new Error(QBO_ERRORS.API_ERROR);
     }
 
     const data = await response.json();
+
+    // Log successful API call
+    logQboApiCall({
+      operation: 'update',
+      entityType: 'Customer',
+      externalId,
+      realmId: tokenInfo.externalAccountId,
+      success: true,
+      requestData: qboCustomer as Record<string, unknown>,
+      responseData: { id: data.Customer?.Id, displayName: data.Customer?.DisplayName },
+    });
+
     return this.mapQuickBooksCustomer(data.Customer);
   }
 
@@ -717,10 +810,33 @@ export class QuickBooksProvider implements IAccountingProvider {
     if (!response.ok) {
       const errorBody = await response.text();
       console.error('Create invoice failed:', errorBody);
+
+      // Log API failure
+      logQboApiCall({
+        operation: 'create',
+        entityType: 'Invoice',
+        realmId: tokenInfo.externalAccountId,
+        success: false,
+        error: errorBody,
+        requestData: qboInvoice as Record<string, unknown>,
+      });
+
       throw new Error(QBO_ERRORS.API_ERROR);
     }
 
     const data = await response.json();
+
+    // Log successful API call
+    logQboApiCall({
+      operation: 'create',
+      entityType: 'Invoice',
+      externalId: data.Invoice?.Id,
+      realmId: tokenInfo.externalAccountId,
+      success: true,
+      requestData: { customerId: invoice.customerId, total: invoice.total },
+      responseData: { id: data.Invoice?.Id, docNumber: data.Invoice?.DocNumber },
+    });
+
     return this.mapQuickBooksInvoice(data.Invoice);
   }
 
@@ -866,10 +982,33 @@ export class QuickBooksProvider implements IAccountingProvider {
     if (!response.ok) {
       const errorBody = await response.text();
       console.error('Create payment failed:', errorBody);
+
+      // Log API failure
+      logQboApiCall({
+        operation: 'create',
+        entityType: 'Payment',
+        realmId: tokenInfo.externalAccountId,
+        success: false,
+        error: errorBody,
+        requestData: qboPayment as Record<string, unknown>,
+      });
+
       throw new Error(QBO_ERRORS.API_ERROR);
     }
 
     const data = await response.json();
+
+    // Log successful API call
+    logQboApiCall({
+      operation: 'create',
+      entityType: 'Payment',
+      externalId: data.Payment?.Id,
+      realmId: tokenInfo.externalAccountId,
+      success: true,
+      requestData: { customerId: payment.customerId, amount: payment.amount },
+      responseData: { id: data.Payment?.Id },
+    });
+
     return this.mapQuickBooksPayment(data.Payment);
   }
 
@@ -1013,10 +1152,33 @@ export class QuickBooksProvider implements IAccountingProvider {
     if (!response.ok) {
       const errorBody = await response.text();
       console.error('Create item failed:', errorBody);
+
+      // Log API failure
+      logQboApiCall({
+        operation: 'create',
+        entityType: 'Product',
+        realmId: tokenInfo.externalAccountId,
+        success: false,
+        error: errorBody,
+        requestData: qboItem as Record<string, unknown>,
+      });
+
       throw new Error(`${QBO_ERRORS.API_ERROR}: ${errorBody}`);
     }
 
     const data = await response.json();
+
+    // Log successful API call
+    logQboApiCall({
+      operation: 'create',
+      entityType: 'Product',
+      externalId: data.Item?.Id,
+      realmId: tokenInfo.externalAccountId,
+      success: true,
+      requestData: { name: product.name, sku: product.sku },
+      responseData: { id: data.Item?.Id, name: data.Item?.Name },
+    });
+
     return this.mapQuickBooksProduct(data.Item);
   }
 
@@ -1112,20 +1274,39 @@ export class QuickBooksProvider implements IAccountingProvider {
       throw new Error(QBO_ERRORS.NOT_CONNECTED);
     }
 
-    // Get current item to get SyncToken
-    const current = await this.getProduct(connectionId, externalId);
-    if (!current) {
+    // Get current item from QBO to get SyncToken, Type, and IncomeAccountRef
+    const currentItemUrl = `${getApiBaseUrl(tokenInfo.environment as QuickBooksEnvironment)}/v3/company/${tokenInfo.externalAccountId}/item/${externalId}?minorversion=${QBO_API_MINOR_VERSION}`;
+    const currentResponse = await fetch(currentItemUrl, {
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${tokenInfo.accessToken}`,
+      },
+    });
+
+    if (!currentResponse.ok) {
+      throw new Error('Item not found in QuickBooks');
+    }
+
+    const currentData = await currentResponse.json();
+    const currentItem = currentData.Item as QuickBooksItem;
+
+    if (!currentItem) {
       throw new Error('Item not found');
     }
 
+    // Build update request with required fields from current item
     const qboItem: Partial<QuickBooksItem> = {
       Id: externalId,
-      SyncToken: (current.metadata as { syncToken?: string })?.syncToken,
-      Name: product.name,
-      Sku: product.sku,
-      Description: product.description,
-      Active: product.active,
-      UnitPrice: product.unitPrice ? product.unitPrice / 100 : undefined,
+      SyncToken: currentItem.SyncToken,
+      Name: product.name ?? currentItem.Name,
+      Sku: product.sku ?? currentItem.Sku,
+      Description: product.description ?? currentItem.Description,
+      Active: product.active ?? currentItem.Active,
+      UnitPrice: product.unitPrice ? product.unitPrice / 100 : currentItem.UnitPrice,
+      // Required fields for Minor Version 75+
+      Type: currentItem.Type,
+      IncomeAccountRef: currentItem.IncomeAccountRef,
+      ExpenseAccountRef: currentItem.ExpenseAccountRef,
     };
 
     const url = `${getApiBaseUrl(tokenInfo.environment as QuickBooksEnvironment)}/v3/company/${tokenInfo.externalAccountId}/item?minorversion=${QBO_API_MINOR_VERSION}`;
@@ -1143,10 +1324,34 @@ export class QuickBooksProvider implements IAccountingProvider {
     if (!response.ok) {
       const errorBody = await response.text();
       console.error('Update item failed:', errorBody);
+
+      // Log API failure
+      logQboApiCall({
+        operation: 'update',
+        entityType: 'Product',
+        externalId,
+        realmId: tokenInfo.externalAccountId,
+        success: false,
+        error: errorBody,
+        requestData: qboItem as Record<string, unknown>,
+      });
+
       throw new Error(`${QBO_ERRORS.API_ERROR}: ${errorBody}`);
     }
 
     const data = await response.json();
+
+    // Log successful API call
+    logQboApiCall({
+      operation: 'update',
+      entityType: 'Product',
+      externalId,
+      realmId: tokenInfo.externalAccountId,
+      success: true,
+      requestData: { name: product.name, sku: product.sku },
+      responseData: { id: data.Item?.Id, name: data.Item?.Name },
+    });
+
     return this.mapQuickBooksProduct(data.Item);
   }
 

@@ -244,7 +244,14 @@ export function ProductForm({
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                         $
                       </span>
-                      <Input {...field} className="pl-7" placeholder="350.00" />
+                      <Input
+                        {...field}
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        className="pl-7"
+                        placeholder="350.00"
+                      />
                     </div>
                   </FormControl>
                   <FormDescription>Your cost per unit</FormDescription>
@@ -264,7 +271,14 @@ export function ProductForm({
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                         $
                       </span>
-                      <Input {...field} className="pl-7" placeholder="450.00" />
+                      <Input
+                        {...field}
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        className="pl-7"
+                        placeholder="450.00"
+                      />
                     </div>
                   </FormControl>
                   <FormDescription>Default selling price</FormDescription>

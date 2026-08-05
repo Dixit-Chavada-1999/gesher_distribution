@@ -10,6 +10,7 @@ import { getConnectionByProvider } from '@/modules/integrations/core';
 import { quickBooksProvider } from '@/modules/integrations/providers/accounting/quickbooks';
 import type { Customer } from '@/features/customers/types';
 import type { AccountingCustomer } from '@/modules/integrations/core';
+import { auditService } from '@/shared/lib/audit/audit-service';
 
 // ============================================
 // TYPES
@@ -108,6 +109,23 @@ export const qboCustomerSyncService = {
 
       if (!qboConnection) {
         console.log('No QBO connection available, skipping customer sync');
+
+        // Log that sync was skipped (fire and forget)
+        auditService.log({
+          action: 'export',
+          module: 'integrations',
+          entityType: 'Customer',
+          entityId: customer.id,
+          description: `QuickBooks sync skipped: Not connected (Customer: ${customer.name})`,
+          metadata: {
+            integration: 'quickbooks',
+            reason: 'not_connected',
+            customerName: customer.name,
+          },
+        }).catch((err) => {
+          console.error('Failed to log QBO skip audit:', err);
+        });
+
         return {
           success: false,
           error: 'QuickBooks not connected',
@@ -179,6 +197,23 @@ export const qboCustomerSyncService = {
         `Customer ${customer.customerCode} synced to QBO with ID ${result.externalId}`
       );
 
+      // Log audit event for QBO sync (fire and forget)
+      auditService.log({
+        action: 'export',
+        module: 'integrations',
+        entityType: 'Customer',
+        entityId: customer.id,
+        description: `Customer synced to QuickBooks: ${customer.customerCode} (QBO ID: ${result.externalId})`,
+        metadata: {
+          syncType: 'create',
+          qboCustomerId: result.externalId,
+          qboRealmId: realmId,
+          integration: 'quickbooks',
+        },
+      }).catch((err) => {
+        console.error('Failed to log QBO sync audit:', err);
+      });
+
       return {
         success: true,
         qboCustomerId: result.externalId,
@@ -189,6 +224,22 @@ export const qboCustomerSyncService = {
 
       // Update customer with error
       await customerRepository.updateQboSyncError(customer.id, errorMessage);
+
+      // Log audit event for sync failure (fire and forget)
+      auditService.log({
+        action: 'export',
+        module: 'integrations',
+        entityType: 'Customer',
+        entityId: customer.id,
+        description: `Failed to sync customer to QuickBooks: ${customer.customerCode}`,
+        metadata: {
+          syncType: 'create',
+          error: errorMessage,
+          integration: 'quickbooks',
+        },
+      }).catch((err) => {
+        console.error('Failed to log QBO sync error audit:', err);
+      });
 
       return {
         success: false,
@@ -231,6 +282,23 @@ export const qboCustomerSyncService = {
         `Customer ${customer.customerCode} updated in QBO (ID: ${customer.qboCustomerId})`
       );
 
+      // Log audit event for QBO sync (fire and forget)
+      auditService.log({
+        action: 'export',
+        module: 'integrations',
+        entityType: 'Customer',
+        entityId: customer.id,
+        description: `Customer updated in QuickBooks: ${customer.customerCode} (QBO ID: ${customer.qboCustomerId})`,
+        metadata: {
+          syncType: 'update',
+          qboCustomerId: customer.qboCustomerId,
+          qboRealmId: customer.qboRealmId,
+          integration: 'quickbooks',
+        },
+      }).catch((err) => {
+        console.error('Failed to log QBO sync audit:', err);
+      });
+
       return {
         success: true,
         qboCustomerId: result.externalId || customer.qboCustomerId,
@@ -241,6 +309,23 @@ export const qboCustomerSyncService = {
 
       // Update customer with error
       await customerRepository.updateQboSyncError(customer.id, errorMessage);
+
+      // Log audit event for sync failure (fire and forget)
+      auditService.log({
+        action: 'export',
+        module: 'integrations',
+        entityType: 'Customer',
+        entityId: customer.id,
+        description: `Failed to update customer in QuickBooks: ${customer.customerCode}`,
+        metadata: {
+          syncType: 'update',
+          qboCustomerId: customer.qboCustomerId,
+          error: errorMessage,
+          integration: 'quickbooks',
+        },
+      }).catch((err) => {
+        console.error('Failed to log QBO sync error audit:', err);
+      });
 
       return {
         success: false,

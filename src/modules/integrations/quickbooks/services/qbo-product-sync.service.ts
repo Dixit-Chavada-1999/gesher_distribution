@@ -10,6 +10,7 @@ import { getConnectionByProvider } from '@/modules/integrations/core';
 import { quickBooksProvider } from '@/modules/integrations/providers/accounting/quickbooks';
 import type { Product } from '@/features/products/types';
 import type { AccountingProduct } from '@/modules/integrations/core';
+import { auditService } from '@/shared/lib/audit/audit-service';
 
 // ============================================
 // TYPES
@@ -92,6 +93,24 @@ export const qboProductSyncService = {
 
       if (!qboConnection) {
         console.log('No QBO connection available, skipping product sync');
+
+        // Log that sync was skipped (fire and forget)
+        auditService.log({
+          action: 'export',
+          module: 'integrations',
+          entityType: 'Product',
+          entityId: product.id,
+          description: `QuickBooks sync skipped: Not connected (Product: ${product.sku})`,
+          metadata: {
+            integration: 'quickbooks',
+            reason: 'not_connected',
+            productSku: product.sku,
+            productName: product.name,
+          },
+        }).catch((err) => {
+          console.error('Failed to log QBO skip audit:', err);
+        });
+
         return {
           success: false,
           error: 'QuickBooks not connected',
@@ -163,6 +182,23 @@ export const qboProductSyncService = {
         `Product ${product.sku} synced to QBO with ID ${result.externalId}`
       );
 
+      // Log audit event for QBO sync (fire and forget)
+      auditService.log({
+        action: 'export',
+        module: 'products',
+        entityType: 'Product',
+        entityId: product.id,
+        description: `Product synced to QuickBooks: ${product.sku} (QBO ID: ${result.externalId})`,
+        metadata: {
+          syncType: 'create',
+          qboItemId: result.externalId,
+          qboRealmId: realmId,
+          integration: 'quickbooks',
+        },
+      }).catch((err) => {
+        console.error('Failed to log QBO sync audit:', err);
+      });
+
       return {
         success: true,
         qboItemId: result.externalId,
@@ -173,6 +209,22 @@ export const qboProductSyncService = {
 
       // Update product with error
       await productRepository.updateQboSyncError(product.id, errorMessage);
+
+      // Log audit event for sync failure (fire and forget)
+      auditService.log({
+        action: 'export',
+        module: 'products',
+        entityType: 'Product',
+        entityId: product.id,
+        description: `Failed to sync product to QuickBooks: ${product.sku}`,
+        metadata: {
+          syncType: 'create',
+          error: errorMessage,
+          integration: 'quickbooks',
+        },
+      }).catch((err) => {
+        console.error('Failed to log QBO sync error audit:', err);
+      });
 
       return {
         success: false,
@@ -215,6 +267,23 @@ export const qboProductSyncService = {
         `Product ${product.sku} updated in QBO (ID: ${product.qboItemId})`
       );
 
+      // Log audit event for QBO sync (fire and forget)
+      auditService.log({
+        action: 'export',
+        module: 'products',
+        entityType: 'Product',
+        entityId: product.id,
+        description: `Product updated in QuickBooks: ${product.sku} (QBO ID: ${product.qboItemId})`,
+        metadata: {
+          syncType: 'update',
+          qboItemId: product.qboItemId,
+          qboRealmId: product.qboRealmId,
+          integration: 'quickbooks',
+        },
+      }).catch((err) => {
+        console.error('Failed to log QBO sync audit:', err);
+      });
+
       return {
         success: true,
         qboItemId: result.externalId || product.qboItemId,
@@ -225,6 +294,23 @@ export const qboProductSyncService = {
 
       // Update product with error
       await productRepository.updateQboSyncError(product.id, errorMessage);
+
+      // Log audit event for sync failure (fire and forget)
+      auditService.log({
+        action: 'export',
+        module: 'products',
+        entityType: 'Product',
+        entityId: product.id,
+        description: `Failed to update product in QuickBooks: ${product.sku}`,
+        metadata: {
+          syncType: 'update',
+          qboItemId: product.qboItemId,
+          error: errorMessage,
+          integration: 'quickbooks',
+        },
+      }).catch((err) => {
+        console.error('Failed to log QBO sync error audit:', err);
+      });
 
       return {
         success: false,

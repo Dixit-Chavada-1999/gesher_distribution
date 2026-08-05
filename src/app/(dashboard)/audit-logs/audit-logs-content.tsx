@@ -13,12 +13,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Loader2, Download, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import { useAuditLogs } from '@/features/audit-logs/hooks';
 import {
   AUDIT_ACTION_OPTIONS,
   AUDIT_MODULE_OPTIONS,
   type AuditAction,
+  type AuditLog,
   type AuditLogListParams,
 } from '@/features/audit-logs/types';
 import { format } from 'date-fns';
@@ -56,6 +63,10 @@ export function AuditLogsContent() {
   const [selectedModule, setSelectedModule] = useState<string>('all');
   const [page, setPage] = useState(1);
 
+  // Detail dialog state
+  const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+
   // Build params
   const params = useMemo<AuditLogListParams>(() => ({
     page,
@@ -92,9 +103,22 @@ export function AuditLogsContent() {
     setPage((p) => p + 1);
   }, []);
 
+  const handleViewDetail = useCallback((log: AuditLog) => {
+    setSelectedLog(log);
+    setIsDetailOpen(true);
+  }, []);
+
   // Format date for display
   const formatDate = (date: Date) => {
     return format(date, 'yyyy-MM-dd HH:mm:ss');
+  };
+
+  // Format JSON for display
+  const formatJson = (data: Record<string, unknown> | null | undefined) => {
+    if (!data || Object.keys(data).length === 0) {
+      return null;
+    }
+    return JSON.stringify(data, null, 2);
   };
 
   return (
@@ -157,6 +181,105 @@ export function AuditLogsContent() {
         </CardContent>
       </Card>
 
+      {/* Detail Dialog */}
+      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Audit Log Details</DialogTitle>
+          </DialogHeader>
+          {selectedLog && (
+            <div className="space-y-4">
+              {/* Basic Info */}
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="font-medium text-muted-foreground">Timestamp:</span>
+                  <div className="mt-1">{formatDate(selectedLog.createdAt)}</div>
+                </div>
+                <div>
+                  <span className="font-medium text-muted-foreground">Action:</span>
+                  <div className="mt-1">
+                    <Badge
+                      variant="outline"
+                      className={actionColors[selectedLog.action] || ''}
+                    >
+                      {selectedLog.action}
+                    </Badge>
+                  </div>
+                </div>
+                <div>
+                  <span className="font-medium text-muted-foreground">Module:</span>
+                  <div className="mt-1 capitalize">{selectedLog.module.replace(/_/g, ' ')}</div>
+                </div>
+                <div>
+                  <span className="font-medium text-muted-foreground">User:</span>
+                  <div className="mt-1">{selectedLog.userName || selectedLog.userEmail || '-'}</div>
+                </div>
+                {selectedLog.entityType && (
+                  <div>
+                    <span className="font-medium text-muted-foreground">Entity Type:</span>
+                    <div className="mt-1">{selectedLog.entityType}</div>
+                  </div>
+                )}
+                {selectedLog.entityId && (
+                  <div>
+                    <span className="font-medium text-muted-foreground">Entity ID:</span>
+                    <div className="mt-1 font-mono text-xs">{selectedLog.entityId}</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Description */}
+              {selectedLog.description && (
+                <div>
+                  <span className="font-medium text-muted-foreground text-sm">Description:</span>
+                  <div className="text-sm mt-1">{selectedLog.description}</div>
+                </div>
+              )}
+
+              {/* Changes */}
+              {selectedLog.changes && Object.keys(selectedLog.changes).length > 0 && (
+                <div>
+                  <span className="font-medium text-muted-foreground text-sm">Changes:</span>
+                  <pre className="mt-1 rounded-md bg-muted p-3 text-xs overflow-x-auto">
+                    {formatJson(selectedLog.changes)}
+                  </pre>
+                </div>
+              )}
+
+              {/* Old Data */}
+              {selectedLog.oldData && Object.keys(selectedLog.oldData).length > 0 && (
+                <div>
+                  <span className="font-medium text-muted-foreground text-sm">Previous Data:</span>
+                  <pre className="mt-1 rounded-md bg-muted p-3 text-xs overflow-x-auto">
+                    {formatJson(selectedLog.oldData)}
+                  </pre>
+                </div>
+              )}
+
+              {/* New Data */}
+              {selectedLog.newData && Object.keys(selectedLog.newData).length > 0 && (
+                <div>
+                  <span className="font-medium text-muted-foreground text-sm">New Data:</span>
+                  <pre className="mt-1 rounded-md bg-muted p-3 text-xs overflow-x-auto">
+                    {formatJson(selectedLog.newData)}
+                  </pre>
+                </div>
+              )}
+
+              {/* Metadata */}
+              {selectedLog.metadata && Object.keys(selectedLog.metadata).length > 0 && (
+                <div>
+                  <span className="font-medium text-muted-foreground text-sm">Metadata:</span>
+                  <pre className="mt-1 rounded-md bg-muted p-3 text-xs overflow-x-auto">
+                    {formatJson(selectedLog.metadata)}
+                  </pre>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Logs Table */}
       <Card>
         <CardContent className="p-0">
@@ -216,8 +339,8 @@ export function AuditLogsContent() {
                       <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">
                         Description
                       </th>
-                      <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">
-                        IP Address
+                      <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">
+                        Actions
                       </th>
                     </tr>
                   </thead>
@@ -244,8 +367,15 @@ export function AuditLogsContent() {
                         <td className="max-w-xs truncate px-4 py-3 text-sm">
                           {log.description || '-'}
                         </td>
-                        <td className="px-4 py-3 text-sm font-mono text-muted-foreground">
-                          {log.ipAddress || '-'}
+                        <td className="px-4 py-3 text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleViewDetail(log)}
+                          >
+                            <Eye className="mr-1 h-4 w-4" />
+                            View
+                          </Button>
                         </td>
                       </tr>
                     ))}

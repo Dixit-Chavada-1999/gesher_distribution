@@ -8,12 +8,29 @@
 import { productRepository, DuplicateSkuError } from '../repositories/product.repository';
 import { createProductSchema, updateProductSchema, type CreateProductInput, type UpdateProductInput } from '../lib/schemas';
 import type { Product, ProductListParams, ProductWithFormattedPrices, ProductTableRow } from '../types';
+import { auditService } from '@/shared/lib/audit/audit-service';
 
 // Lazy import to avoid circular dependencies
 const getQboProductSyncService = async () => {
   const { qboProductSyncService } = await import('@/modules/integrations/quickbooks/services/qbo-product-sync.service');
   return qboProductSyncService;
 };
+
+// Helper to convert product to audit data (exclude large/sensitive fields)
+function productToAuditData(product: Product): Record<string, unknown> {
+  return {
+    id: product.id,
+    sku: product.sku,
+    name: product.name,
+    category: product.category,
+    baseCost: product.baseCost,
+    basePrice: product.basePrice,
+    status: product.status,
+    isSellable: product.isSellable,
+    qboItemId: product.qboItemId,
+    qboRealmId: product.qboRealmId,
+  };
+}
 
 // ============================================
 // TYPES
@@ -228,6 +245,18 @@ export const productService = {
       // Create product
       const product = await productRepository.create(data, userId);
 
+      // Log audit event (fire and forget)
+      auditService.logCreate(
+        'products',
+        'Product',
+        product.id,
+        productToAuditData(product),
+        { userId },
+        `Created product: ${product.sku} - ${product.name}`
+      ).catch((err) => {
+        console.error('Failed to log product create audit:', err);
+      });
+
       // Trigger QBO sync (fire and forget)
       this.syncProductToQbo(product, userId).catch((err) => {
         console.error('Failed to trigger QBO product sync:', err);
@@ -302,8 +331,24 @@ export const productService = {
         };
       }
 
+      // Capture old data for audit before update
+      const oldAuditData = productToAuditData(existing);
+
       // Update product
       const product = await productRepository.update(id, data, userId);
+
+      // Log audit event (fire and forget)
+      auditService.logUpdate(
+        'products',
+        'Product',
+        product.id,
+        oldAuditData,
+        productToAuditData(product),
+        { userId },
+        `Updated product: ${product.sku} - ${product.name}`
+      ).catch((err) => {
+        console.error('Failed to log product update audit:', err);
+      });
 
       // Trigger QBO sync (fire and forget)
       this.syncProductToQbo(product, userId).catch((err) => {
@@ -348,6 +393,18 @@ export const productService = {
       // For now, just soft delete
 
       const product = await productRepository.softDelete(id, userId);
+
+      // Log audit event (fire and forget)
+      auditService.logDelete(
+        'products',
+        'Product',
+        product.id,
+        productToAuditData(existing),
+        { userId },
+        `Deleted product: ${product.sku} - ${product.name}`
+      ).catch((err) => {
+        console.error('Failed to log product delete audit:', err);
+      });
 
       return {
         success: true,
@@ -395,6 +452,17 @@ export const productService = {
       }
 
       const product = await productRepository.restore(id, userId);
+
+      // Log audit event (fire and forget)
+      auditService.logRestore(
+        'products',
+        'Product',
+        product.id,
+        { userId },
+        `Restored product: ${product.sku} - ${product.name}`
+      ).catch((err) => {
+        console.error('Failed to log product restore audit:', err);
+      });
 
       return {
         success: true,

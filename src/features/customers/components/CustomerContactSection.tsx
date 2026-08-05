@@ -7,11 +7,12 @@
  * Contains contact information fields: phone, email, website.
  */
 
-import { useFormContext } from 'react-hook-form';
+import { useFormContext, Controller } from 'react-hook-form';
 
 import { Label } from '@/shared/components/ui/label';
 import { Input } from '@/shared/components/ui/input';
 import { Separator } from '@/shared/components/ui/separator';
+import { PhoneInput } from '@/shared/components/ui/phone-input';
 
 import type { CustomerFormInput } from '../lib/schemas';
 
@@ -20,7 +21,7 @@ import type { CustomerFormInput } from '../lib/schemas';
 // ============================================
 
 export function CustomerContactSection() {
-  const { register, formState: { errors } } = useFormContext<CustomerFormInput>();
+  const { register, control, formState: { errors } } = useFormContext<CustomerFormInput>();
 
   return (
     <div className="space-y-6">
@@ -41,12 +42,19 @@ export function CustomerContactSection() {
         {/* Phone */}
         <div className="space-y-2">
           <Label htmlFor="phone">Phone</Label>
-          <Input
-            id="phone"
-            type="tel"
-            placeholder="(555) 123-4567"
-            className={errors.phone ? 'border-destructive' : ''}
-            {...register('phone')}
+          <Controller
+            name="phone"
+            control={control}
+            render={({ field }) => (
+              <PhoneInput
+                id="phone"
+                placeholder="(555) 123-4567"
+                className={errors.phone ? 'border-destructive' : ''}
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+              />
+            )}
           />
           {errors.phone && (
             <p className="text-sm text-destructive">{errors.phone.message}</p>
