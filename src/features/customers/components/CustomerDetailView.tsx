@@ -140,8 +140,16 @@ function CustomerDetailsTab({ customer }: { customer: Customer }) {
                 Contact Information
               </h3>
               <div className="grid grid-cols-2 gap-4">
-                <InfoItem label="Email" value={customer.email} icon={<Mail className="h-4 w-4" />} />
                 <InfoItem label="Phone" value={customer.phone} icon={<Phone className="h-4 w-4" />} />
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Status</div>
+                  <div className="text-sm font-medium text-foreground">
+                    {CUSTOMER_STATUS_LABELS[customer.status]}
+                  </div>
+                </div>
+                {customer.email && (
+                  <InfoItem label="Email" value={customer.email} icon={<Mail className="h-4 w-4" />} />
+                )}
                 {customer.website && (
                   <InfoItem label="Website" value={customer.website} icon={<Globe className="h-4 w-4" />} />
                 )}
@@ -366,19 +374,6 @@ export function CustomerDetailView({ customer: initialCustomer }: CustomerDetail
           </div>
         }
       />
-
-      {/* Status Badges */}
-      <div className="px-6 pb-4 flex flex-wrap gap-2">
-        <Badge className={CUSTOMER_STATUS_COLORS[customer.status]}>
-          {CUSTOMER_STATUS_LABELS[customer.status]}
-        </Badge>
-        <Badge className={CUSTOMER_CHANNEL_COLORS[customer.channel]}>
-          {CUSTOMER_CHANNEL_LABELS[customer.channel]}
-        </Badge>
-        <Badge className={CREDIT_STATUS_COLORS[customer.creditStatus]}>
-          {CREDIT_STATUS_LABELS[customer.creditStatus]}
-        </Badge>
-      </div>
 
       {/* Tabs */}
       <div className="flex-1 px-6 pb-6">
