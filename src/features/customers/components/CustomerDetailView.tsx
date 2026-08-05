@@ -53,9 +53,7 @@ import type { Customer } from '../types';
 import { CustomerDocumentsTab } from '@/modules/customer-documents';
 import {
   CUSTOMER_STATUS_LABELS,
-  CUSTOMER_STATUS_COLORS,
   CUSTOMER_CHANNEL_LABELS,
-  CUSTOMER_CHANNEL_COLORS,
   CREDIT_STATUS_LABELS,
   CREDIT_STATUS_COLORS,
 } from '../types';
