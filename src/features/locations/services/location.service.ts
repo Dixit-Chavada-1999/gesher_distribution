@@ -234,7 +234,7 @@ export const locationService = {
       console.error('LocationService.create error:', error);
       return {
         success: false,
-        error: 'Failed to create location',
+        error: error instanceof Error ? error.message : 'Failed to create location',
       };
     }
   },
@@ -386,6 +386,47 @@ export const locationService = {
       return {
         success: false,
         error: 'Failed to validate location code',
+      };
+    }
+  },
+
+  /**
+   * Get next auto-generated location code
+   */
+  async getNextCode(): Promise<ServiceResult<string>> {
+    try {
+      const code = await locationRepository.getNextLocationCode();
+      return {
+        success: true,
+        data: code,
+      };
+    } catch (error) {
+      console.error('LocationService.getNextCode error:', error);
+      return {
+        success: false,
+        error: 'Failed to generate location code',
+      };
+    }
+  },
+
+  /**
+   * Create a new location with auto-generated code
+   */
+  async createWithAutoCode(
+    input: Omit<CreateLocationInput, 'locationCode'>,
+    userId?: string
+  ): Promise<ServiceResult<Location>> {
+    try {
+      // Auto-generate location code
+      const locationCode = await locationRepository.getNextLocationCode();
+
+      // Create with auto-generated code
+      return this.create({ ...input, locationCode }, userId);
+    } catch (error) {
+      console.error('LocationService.createWithAutoCode error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to create location',
       };
     }
   },

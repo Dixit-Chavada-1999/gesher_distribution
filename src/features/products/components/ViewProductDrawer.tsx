@@ -25,6 +25,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui
 
 import { getProduct } from '../actions';
 import type { ProductWithFormattedPrices, ProductStatus } from '../types';
+import { ProductPriceMatrix } from '@/features/price-matrix/components';
 
 // ============================================
 // TYPES
@@ -237,8 +238,8 @@ export function ViewProductDrawer({
                   </div>
                 </Section>
 
-                {/* Pricing */}
-                <Section title="Pricing">
+                {/* Base Pricing */}
+                <Section title="Base Pricing">
                   <div className="grid grid-cols-2 gap-4">
                     <InfoItem
                       label="Base Cost"
@@ -271,6 +272,9 @@ export function ViewProductDrawer({
                     />
                   </div>
                 </Section>
+
+                {/* Channel Pricing (Price Matrix) */}
+                <ProductPriceMatrix productId={product.id} />
 
                 {/* Specifications */}
                 <Section title="Specifications">

@@ -10,6 +10,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
+import { PhoneInput } from '@/shared/components/ui/phone-input';
 import { Switch } from '@/shared/components/ui/switch';
 import {
   Form,
@@ -28,7 +29,7 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 import { locationFormSchema, type LocationFormInput, locationToFormValues } from '../lib/schemas';
-import { DEFAULT_LOCATION_FORM_VALUES, LOCATION_TYPE_OPTIONS, US_STATES } from '../types';
+import { DEFAULT_LOCATION_FORM_VALUES, LOCATION_TYPE_OPTIONS } from '../types';
 
 interface LocationFormProps {
   initialData?: {
@@ -51,6 +52,8 @@ interface LocationFormProps {
   onCancel?: () => void;
   isLoading?: boolean;
   submitLabel?: string;
+  isCodeReadOnly?: boolean;
+  hideButtons?: boolean;
 }
 
 export function LocationForm({
@@ -59,6 +62,8 @@ export function LocationForm({
   onCancel,
   isLoading = false,
   submitLabel = 'Save Location',
+  isCodeReadOnly = false,
+  hideButtons = false,
 }: LocationFormProps) {
   const form = useForm<LocationFormInput>({
     resolver: zodResolver(locationFormSchema),
@@ -73,78 +78,123 @@ export function LocationForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+      <form id="location-form" onSubmit={form.handleSubmit(handleSubmit)} className="space-y-5">
         {/* Basic Info Section */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium">Basic Information</h3>
+        <div className="space-y-3">
+          <h3 className="text-base font-medium">Basic Information</h3>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <FormField
-              control={form.control}
-              name="locationCode"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Location Code *</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      placeholder="WH-NE"
-                      className="uppercase"
-                      onChange={(e) => field.onChange(e.target.value.toUpperCase())}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Unique code (e.g., WH-NE, WH-KS)
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Name *</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="Nebraska Warehouse" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="locationType"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Type</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+          {/* When auto-generating code: Name (2/3) + Type (1/3) */}
+          {isCodeReadOnly ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem className="md:col-span-2">
+                    <FormLabel>Name *</FormLabel>
                     <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select type" />
-                      </SelectTrigger>
+                      <Input {...field} placeholder="Nebraska Warehouse" />
                     </FormControl>
-                    <SelectContent>
-                      {LOCATION_TYPE_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="locationType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Type</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {LOCATION_TYPE_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          ) : (
+            /* When showing code field: Code + Name + Type (equal thirds) */
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <FormField
+                control={form.control}
+                name="locationCode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Location Code *</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        placeholder="WH-NE"
+                        className="uppercase"
+                        onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Unique code (e.g., WH-NE, WH-KS)
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name *</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Nebraska Warehouse" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="locationType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Type</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {LOCATION_TYPE_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          )}
         </div>
 
         {/* Address Section */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium">Address</h3>
+        <div className="space-y-3">
+          <h3 className="text-base font-medium">Address</h3>
 
           <FormField
             control={form.control}
@@ -195,20 +245,9 @@ export function LocationForm({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>State</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select state" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {US_STATES.map((state) => (
-                        <SelectItem key={state.value} value={state.value}>
-                          {state.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <Input {...field} placeholder="NE" />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -245,8 +284,8 @@ export function LocationForm({
         </div>
 
         {/* Contact Section */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium">Contact Information</h3>
+        <div className="space-y-3">
+          <h3 className="text-base font-medium">Contact Information</h3>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <FormField
@@ -270,7 +309,7 @@ export function LocationForm({
                 <FormItem>
                   <FormLabel>Phone</FormLabel>
                   <FormControl>
-                    <Input {...field} placeholder="402-555-0100" />
+                    <PhoneInput {...field} placeholder="(402) 555-0100" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -294,8 +333,8 @@ export function LocationForm({
         </div>
 
         {/* Status Section */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium">Status</h3>
+        <div className="space-y-3">
+          <h3 className="text-base font-medium">Status</h3>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <FormField
@@ -336,17 +375,19 @@ export function LocationForm({
           </div>
         </div>
 
-        {/* Form Actions */}
-        <div className="flex justify-end gap-3 border-t pt-4">
-          {onCancel && (
-            <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
-              Cancel
+        {/* Form Actions - only show if not hidden */}
+        {!hideButtons && (
+          <div className="flex justify-end gap-3 border-t pt-4">
+            {onCancel && (
+              <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
+                Cancel
+              </Button>
+            )}
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? 'Saving...' : submitLabel}
             </Button>
-          )}
-          <Button type="submit" disabled={isLoading}>
-            {isLoading ? 'Saving...' : submitLabel}
-          </Button>
-        </div>
+          </div>
+        )}
       </form>
     </Form>
   );

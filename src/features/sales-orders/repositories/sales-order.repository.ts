@@ -16,6 +16,7 @@ import type {
   UpdateSalesOrderDTO,
   CreateSalesOrderItemDTO,
   OrderStatus,
+  OrderCreditStatus,
   PaginatedResult,
   CustomerSummary,
   UserSummary,
@@ -38,6 +39,7 @@ interface DbSalesOrder {
   currency_code: string;
   customer_po_number: string | null;
   status: OrderStatus;
+  credit_status?: OrderCreditStatus;
   billing_address_street: string | null;
   billing_address_city: string | null;
   billing_address_state: string | null;
@@ -127,6 +129,7 @@ class SalesOrderRepositoryImpl {
       limit = 10,
       search,
       status,
+      creditStatus,
       customerId,
       salesRepId,
       warehouseId,
@@ -149,6 +152,7 @@ class SalesOrderRepositoryImpl {
         order_date,
         requested_delivery_date,
         status,
+        credit_status,
         grand_total,
         currency_code,
         created_at,
@@ -170,6 +174,11 @@ class SalesOrderRepositoryImpl {
     // Apply status filter
     if (status) {
       query = query.eq('status', status);
+    }
+
+    // Apply credit status filter
+    if (creditStatus) {
+      query = query.eq('credit_status', creditStatus);
     }
 
     // Apply customer filter
@@ -909,6 +918,7 @@ class SalesOrderRepositoryImpl {
       currencyCode: data.currency_code,
       customerPoNumber: data.customer_po_number,
       status: data.status,
+      creditStatus: data.credit_status || 'ok',
       billingAddressStreet: data.billing_address_street,
       billingAddressCity: data.billing_address_city,
       billingAddressState: data.billing_address_state,
@@ -970,6 +980,7 @@ class SalesOrderRepositoryImpl {
       order_date: string;
       requested_delivery_date: string | null;
       status: OrderStatus;
+      credit_status?: OrderCreditStatus;
       grand_total: number;
       currency_code: string;
       created_at: string;
@@ -987,6 +998,7 @@ class SalesOrderRepositoryImpl {
       orderDate: data.order_date,
       requestedDeliveryDate: data.requested_delivery_date,
       status: data.status,
+      creditStatus: data.credit_status || 'ok',
       grandTotal: data.grand_total,
       currencyCode: data.currency_code,
       itemCount: itemCounts[data.id] || 0,

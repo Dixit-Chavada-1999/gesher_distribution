@@ -50,7 +50,7 @@ export const addressFormSchema = z.object({
 
 export const createOrderItemSchema = z.object({
   productId: z.string().uuid('Invalid product ID'),
-  sku: z.string().min(1, 'SKU is required').max(50),
+  sku: z.string().max(50).default(''), // SKU is auto-filled from product
   description: z.string().max(500).nullable(),
   quantity: z.number().int().positive('Quantity must be positive'),
   unitCode: z.string().min(1).max(10).default('EA'),
@@ -70,7 +70,7 @@ export const updateOrderItemSchema = createOrderItemSchema.partial().extend({
 export const orderItemFormSchema = z.object({
   id: z.string().optional(),
   productId: z.string().min(1, 'Product is required'),
-  sku: z.string().min(1, 'SKU is required'),
+  sku: z.string().default(''), // SKU is auto-filled when product is selected
   description: z.string().optional().default(''),
   quantity: z.union([z.string(), z.number()]).transform((val) => {
     const num = typeof val === 'string' ? parseInt(val, 10) : val;

@@ -177,7 +177,7 @@ export function EditCustomerDrawer({
 
         {/* Content */}
         <ScrollArea className="flex-1 overflow-auto">
-          <div className="px-6 py-6">
+          <div className="px-6 py-4">
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />

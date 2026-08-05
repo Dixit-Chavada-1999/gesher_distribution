@@ -2,15 +2,12 @@
  * Locations List Page
  *
  * Displays all locations with filtering and pagination.
+ * Uses drawers for create/edit/view operations.
  */
 
 import { Suspense } from 'react';
-import Link from 'next/link';
-import { Plus } from 'lucide-react';
-import { Button } from '@/shared/components/ui/button';
-import { PageHeader } from '@/shared/components/layout/PageHeader';
 import { LoadingState } from '@/shared/components/feedback/LoadingState';
-import { LocationsTable } from '@/features/locations/components';
+import { LocationsContent } from '@/features/locations/components/LocationsContent';
 import { getLocations } from '@/features/locations/actions';
 import type { LocationTableRow } from '@/features/locations/types';
 
@@ -24,7 +21,7 @@ interface LocationsPageProps {
   }>;
 }
 
-async function LocationsContent({ searchParams }: LocationsPageProps) {
+async function LocationsData({ searchParams }: LocationsPageProps) {
   const params = await searchParams;
 
   const result = await getLocations({
@@ -45,32 +42,13 @@ async function LocationsContent({ searchParams }: LocationsPageProps) {
 
   const data = result.data as { data: LocationTableRow[]; meta: { totalPages: number } };
 
-  return (
-    <LocationsTable
-      data={data.data}
-    />
-  );
+  return <LocationsContent data={data.data} />;
 }
 
 export default async function LocationsPage(props: LocationsPageProps) {
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader
-        title="Locations"
-        description="Manage warehouse and shipping locations"
-        actions={
-          <Link href="/locations/new">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Location
-            </Button>
-          </Link>
-        }
-      />
-
-      <Suspense fallback={<LoadingState message="Loading locations..." />}>
-        <LocationsContent searchParams={props.searchParams} />
-      </Suspense>
-    </div>
+    <Suspense fallback={<LoadingState message="Loading locations..." />}>
+      <LocationsData searchParams={props.searchParams} />
+    </Suspense>
   );
 }

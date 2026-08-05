@@ -45,13 +45,15 @@ export const CUSTOMER_CHANNEL_COLORS: Record<CustomerChannel, string> = {
   dealer: 'bg-amber-100 text-amber-800 border border-amber-200',
 };
 
-// Database enum: 'approved', 'pending', 'hold', 'rejected'
-export type CreditStatus = 'approved' | 'pending' | 'hold' | 'rejected';
+// Database enum: 'approved', 'pending', 'hold', 'suspended', 'blocked', 'rejected'
+export type CreditStatus = 'approved' | 'pending' | 'hold' | 'suspended' | 'blocked' | 'rejected';
 
 export const CREDIT_STATUSES: CreditStatus[] = [
   'approved',
   'pending',
   'hold',
+  'suspended',
+  'blocked',
   'rejected',
 ];
 
@@ -59,6 +61,8 @@ export const CREDIT_STATUS_LABELS: Record<CreditStatus, string> = {
   approved: 'Approved',
   pending: 'Pending',
   hold: 'On Hold',
+  suspended: 'Suspended',
+  blocked: 'Blocked',
   rejected: 'Rejected',
 };
 
@@ -66,6 +70,8 @@ export const CREDIT_STATUS_COLORS: Record<CreditStatus, string> = {
   approved: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
   pending: 'bg-amber-100 text-amber-800 border border-amber-200',
   hold: 'bg-orange-100 text-orange-800 border border-orange-200',
+  suspended: 'bg-red-100 text-red-800 border border-red-200',
+  blocked: 'bg-red-200 text-red-900 border border-red-300',
   rejected: 'bg-red-100 text-red-800 border border-red-200',
 };
 

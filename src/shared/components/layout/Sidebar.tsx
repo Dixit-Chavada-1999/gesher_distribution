@@ -21,13 +21,12 @@ import {
   ChevronRight,
   // Only used by the hidden Permissions entry — uncomment with it.
   // Key,
-  // Icons below are only used by the hidden Catalog section — uncomment with it.
   Package,
-  // MapPin,
+  MapPin,
   Building2,
   // DollarSign,
   FileSignature,
-  // ClipboardList, // Uncomment when Purchase Orders module is enabled
+  ClipboardList,
   // Truck, // Uncomment when Shipments module is enabled
   // Receipt, // Uncomment when Invoices module is enabled
 } from 'lucide-react';
@@ -65,13 +64,13 @@ const NAV_SECTIONS = [
         icon: Package,
         permission: 'products.view_module',
       },
-  //     {
-  //       id: 'locations',
-  //       label: 'Locations',
-  //       href: '/locations',
-  //       icon: MapPin,
-  //       permission: 'locations.view_module',
-  //     },
+      {
+        id: 'locations',
+        label: 'Locations',
+        href: '/locations',
+        icon: MapPin,
+        permission: 'locations.view_module',
+      },
       {
         id: 'customers',
         label: 'Customers',
@@ -105,8 +104,6 @@ const NAV_SECTIONS = [
         icon: ShoppingCart,
         permission: 'orders.view_module',
       },
-      // Invoices module is temporarily hidden from the sidebar.
-      // Uncomment this block (and the Receipt icon import) to bring it back.
       // {
       //   id: 'invoices',
       //   label: 'Invoices',
@@ -116,22 +113,18 @@ const NAV_SECTIONS = [
       // },
     ],
   },
-  // Procurement section is temporarily hidden from the sidebar.
-  // Uncomment this block (and the ClipboardList icon import) to bring it back.
-  // {
-  //   title: 'Procurement',
-  //   items: [
-  //     {
-  //       id: 'purchase-orders',
-  //       label: 'Purchase Orders',
-  //       href: '/purchase-orders',
-  //       icon: ClipboardList,
-  //       permission: 'purchase_orders.view_module',
-  //     },
-  //   ],
-  // },
-  // Operations section is temporarily hidden from the sidebar.
-  // Uncomment this block (and the Truck icon import) to bring it back.
+  {
+    title: 'Procurement',
+    items: [
+      {
+        id: 'purchase-orders',
+        label: 'Purchase Orders',
+        href: '/purchase-orders',
+        icon: ClipboardList,
+        permission: 'purchase_orders.view_module',
+      },
+    ],
+  },
   // {
   //   title: 'Operations',
   //   items: [

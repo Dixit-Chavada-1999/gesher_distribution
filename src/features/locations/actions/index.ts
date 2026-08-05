@@ -12,6 +12,7 @@ import { locationService } from '../services/location.service';
 import { createLocationSchema, updateLocationSchema, locationFormSchema, formToCreateDTO } from '../lib/schemas';
 import type { LocationListParams, Location } from '../types';
 import { createClient } from '@/shared/lib/supabase/server';
+import { getAppUserByAuthId } from '@/shared/lib/auth';
 
 // ============================================
 // TYPES
@@ -113,6 +114,12 @@ export async function createLocation(formData: FormData): Promise<ActionResult<L
     return { success: false, error: 'Authentication required' };
   }
 
+  // Get the internal user ID from public.users table
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
   // Parse form data
   const rawData = {
     locationCode: formData.get('locationCode') as string,
@@ -152,7 +159,7 @@ export async function createLocation(formData: FormData): Promise<ActionResult<L
     };
   }
 
-  const result = await locationService.create(validation.data, user.id);
+  const result = await locationService.create(validation.data, appUser.id);
 
   if (result.success) {
     revalidatePath('/locations');
@@ -173,6 +180,12 @@ export async function createLocationFromData(data: unknown): Promise<ActionResul
     return { success: false, error: 'Authentication required' };
   }
 
+  // Get the internal user ID from public.users table
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
   // Validate
   const validation = createLocationSchema.safeParse(data);
   if (!validation.success) {
@@ -183,7 +196,7 @@ export async function createLocationFromData(data: unknown): Promise<ActionResul
     };
   }
 
-  const result = await locationService.create(validation.data, user.id);
+  const result = await locationService.create(validation.data, appUser.id);
 
   if (result.success) {
     revalidatePath('/locations');
@@ -202,6 +215,12 @@ export async function updateLocation(id: string, formData: FormData): Promise<Ac
 
   if (!user) {
     return { success: false, error: 'Authentication required' };
+  }
+
+  // Get the internal user ID from public.users table
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
   }
 
   // Parse form data (only include fields that were submitted)
@@ -232,7 +251,7 @@ export async function updateLocation(id: string, formData: FormData): Promise<Ac
     };
   }
 
-  const result = await locationService.update(id, validation.data, user.id);
+  const result = await locationService.update(id, validation.data, appUser.id);
 
   if (result.success) {
     revalidatePath('/locations');
@@ -254,6 +273,12 @@ export async function updateLocationFromData(id: string, data: unknown): Promise
     return { success: false, error: 'Authentication required' };
   }
 
+  // Get the internal user ID from public.users table
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
   // Validate
   const validation = updateLocationSchema.safeParse(data);
   if (!validation.success) {
@@ -264,7 +289,7 @@ export async function updateLocationFromData(id: string, data: unknown): Promise
     };
   }
 
-  const result = await locationService.update(id, validation.data, user.id);
+  const result = await locationService.update(id, validation.data, appUser.id);
 
   if (result.success) {
     revalidatePath('/locations');
@@ -286,7 +311,13 @@ export async function deleteLocation(id: string): Promise<ActionResult<Location>
     return { success: false, error: 'Authentication required' };
   }
 
-  const result = await locationService.delete(id, user.id);
+  // Get the internal user ID from public.users table
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
+  const result = await locationService.delete(id, appUser.id);
 
   if (result.success) {
     revalidatePath('/locations');
@@ -307,7 +338,13 @@ export async function restoreLocation(id: string): Promise<ActionResult<Location
     return { success: false, error: 'Authentication required' };
   }
 
-  const result = await locationService.restore(id, user.id);
+  // Get the internal user ID from public.users table
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
+  const result = await locationService.restore(id, appUser.id);
 
   if (result.success) {
     revalidatePath('/locations');
@@ -347,4 +384,63 @@ export async function validateLocationCode(locationCode: string, excludeId?: str
   }
 
   return locationService.validateCode(locationCode, excludeId);
+}
+
+/**
+ * Get next auto-generated location code
+ */
+export async function getNextLocationCode(): Promise<ActionResult<string>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  return locationService.getNextCode();
+}
+
+/**
+ * Create a new location with auto-generated code
+ */
+export async function createLocationWithAutoCode(data: unknown): Promise<ActionResult<Location>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  // Get the internal user ID from public.users table
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
+  // Validate (without locationCode requirement)
+  const validation = createLocationSchema.omit({ locationCode: true }).safeParse(data);
+  if (!validation.success) {
+    return {
+      success: false,
+      error: 'Validation failed',
+      errors: validation.error.flatten().fieldErrors as Record<string, string[]>,
+    };
+  }
+
+  try {
+    const result = await locationService.createWithAutoCode(validation.data, appUser.id);
+
+    if (result.success) {
+      revalidatePath('/locations');
+      revalidatePath('/api/locations');
+    }
+
+    return result;
+  } catch (error) {
+    console.error('createLocationWithAutoCode error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to create location',
+    };
+  }
 }

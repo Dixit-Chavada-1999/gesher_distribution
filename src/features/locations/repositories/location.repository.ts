@@ -226,15 +226,15 @@ class LocationRepositoryImpl {
         location_code: data.locationCode,
         name: data.name,
         location_type: data.locationType || 'warehouse',
-        address_1: data.address1 ?? null,
-        address_2: data.address2 ?? null,
-        city: data.city ?? null,
-        state: data.state ?? null,
-        zip: data.zip ?? null,
+        address_1: data.address1 || null,
+        address_2: data.address2 || null,
+        city: data.city || null,
+        state: data.state || null,
+        zip: data.zip || null,
         country: data.country || 'US',
-        contact_name: data.contactName ?? null,
-        contact_phone: data.contactPhone ?? null,
-        contact_email: data.contactEmail ?? null,
+        contact_name: data.contactName || null,
+        contact_phone: data.contactPhone || null,
+        contact_email: data.contactEmail || null, // Empty string converts to null
         is_active: data.isActive ?? true,
         is_default: data.isDefault ?? false,
         created_by: userId ?? null,
@@ -262,15 +262,15 @@ class LocationRepositoryImpl {
     if (data.locationCode !== undefined) {updateData.location_code = data.locationCode;}
     if (data.name !== undefined) {updateData.name = data.name;}
     if (data.locationType !== undefined) {updateData.location_type = data.locationType;}
-    if (data.address1 !== undefined) {updateData.address_1 = data.address1;}
-    if (data.address2 !== undefined) {updateData.address_2 = data.address2;}
-    if (data.city !== undefined) {updateData.city = data.city;}
-    if (data.state !== undefined) {updateData.state = data.state;}
-    if (data.zip !== undefined) {updateData.zip = data.zip;}
-    if (data.country !== undefined) {updateData.country = data.country;}
-    if (data.contactName !== undefined) {updateData.contact_name = data.contactName;}
-    if (data.contactPhone !== undefined) {updateData.contact_phone = data.contactPhone;}
-    if (data.contactEmail !== undefined) {updateData.contact_email = data.contactEmail;}
+    if (data.address1 !== undefined) {updateData.address_1 = data.address1 || null;}
+    if (data.address2 !== undefined) {updateData.address_2 = data.address2 || null;}
+    if (data.city !== undefined) {updateData.city = data.city || null;}
+    if (data.state !== undefined) {updateData.state = data.state || null;}
+    if (data.zip !== undefined) {updateData.zip = data.zip || null;}
+    if (data.country !== undefined) {updateData.country = data.country || null;}
+    if (data.contactName !== undefined) {updateData.contact_name = data.contactName || null;}
+    if (data.contactPhone !== undefined) {updateData.contact_phone = data.contactPhone || null;}
+    if (data.contactEmail !== undefined) {updateData.contact_email = data.contactEmail || null;}
     if (data.isActive !== undefined) {updateData.is_active = data.isActive;}
     if (data.isDefault !== undefined) {updateData.is_default = data.isDefault;}
 
@@ -357,6 +357,37 @@ class LocationRepositoryImpl {
     });
 
     return counts;
+  }
+
+  /**
+   * Generate next location code in format LOC-0001, LOC-0002, etc.
+   */
+  async getNextLocationCode(): Promise<string> {
+    // Get the highest existing location code with LOC- prefix
+    const { data, error } = await db
+      .from('locations')
+      .select('location_code')
+      .like('location_code', 'LOC-%')
+      .order('location_code', { ascending: false })
+      .limit(1);
+
+    if (error) {
+      throw new Error(`Failed to get next location code: ${error.message}`);
+    }
+
+    let nextNumber = 1;
+
+    if (data && data.length > 0 && data[0]) {
+      const lastCode = data[0].location_code;
+      // Extract number from LOC-XXXX format
+      const match = lastCode.match(/^LOC-(\d+)$/);
+      if (match) {
+        nextNumber = parseInt(match[1], 10) + 1;
+      }
+    }
+
+    // Format with leading zeros (4 digits)
+    return `LOC-${nextNumber.toString().padStart(4, '0')}`;
   }
 
   /**

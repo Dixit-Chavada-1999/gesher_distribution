@@ -27,6 +27,7 @@ import { BillingShippingSection } from './BillingShippingSection';
 import { OrderItemsTable } from './OrderItemsTable';
 import { OrderSummaryCards } from './OrderSummaryCards';
 import { NotesSection } from './NotesSection';
+import { CreditWarning } from '@/shared/components/ui/credit-warning';
 
 import type { SalesOrderFormProps } from '../types';
 import { salesOrderFormSchema } from '../lib/schemas';
@@ -114,6 +115,7 @@ function SalesOrderFormComponent({
   // ----------------------------------------
 
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
+  const [_isCreditOverridden, setIsCreditOverridden] = useState(false);
 
   // ----------------------------------------
   // AUTO-FILL: Customer Addresses
@@ -157,31 +159,74 @@ function SalesOrderFormComponent({
     }
   }, [setValue]);
 
-  // Effect to auto-fill addresses when customer changes
+  // Effect to auto-fill addresses and update product prices when customer changes
   useEffect(() => {
     if (customerId) {
       handleCustomerChange(customerId);
+      // Reset credit override when customer changes
+      setIsCreditOverridden(false);
+
+      // Re-fetch prices for existing items based on new customer's channel
+      const updateItemPrices = async () => {
+        const currentItems = methods.getValues('items');
+        if (currentItems && currentItems.length > 0) {
+          const updatedItems = await Promise.all(
+            currentItems.map(async (item) => {
+              if (!item.productId) { return item; }
+
+              try {
+                const result = await getProductPrice(item.productId, customerId, Number(item.quantity) || 1);
+                if (result.success && result.data) {
+                  const unitPrice = result.data.unitPrice / 100;
+                  const discountPercent = Number(item.discountPercent) || 0;
+                  const quantity = Number(item.quantity) || 1;
+                  const lineTotal = quantity * unitPrice * (1 - discountPercent / 100);
+
+                  return {
+                    ...item,
+                    unitPrice,
+                    lineTotal,
+                  };
+                }
+              } catch (error) {
+                console.error('Failed to update price for product:', item.productId, error);
+              }
+              return item;
+            })
+          );
+          // Don't validate here - only validate on submit
+          setValue('items', updatedItems);
+        }
+      };
+      updateItemPrices();
     }
-  }, [customerId, handleCustomerChange]);
+  }, [customerId, handleCustomerChange, methods, setValue]);
+
+  // Credit check handlers
+  const handleCreditOverridden = useCallback(() => {
+    setIsCreditOverridden(true);
+  }, []);
 
   // ----------------------------------------
-  // AUTO-FILL: Product Price
+  // AUTO-FILL: Product Price (uses price matrix based on customer channel)
   // ----------------------------------------
 
   const handleProductSelect = useCallback(async (
     itemIndex: number,
     productId: string
   ) => {
-    if (!productId) {return;}
+    if (!productId) { return; }
 
     try {
-      const result = await getProductPrice(productId);
+      const currentItems = methods.getValues('items');
+      const currentItem = currentItems[itemIndex];
+      const quantity = Number(currentItem?.quantity ?? 1);
+
+      // Pass customerId for price matrix lookup
+      const result = await getProductPrice(productId, customerId || undefined, quantity);
 
       if (result.success && result.data) {
-        const currentItems = methods.getValues('items');
         const updatedItems = [...currentItems];
-        const currentItem = updatedItems[itemIndex];
-        const quantity = Number(currentItem?.quantity ?? 1);
         const discountPercent = Number(currentItem?.discountPercent ?? 0);
         const unitPrice = result.data.unitPrice / 100; // Convert cents to dollars
 
@@ -205,7 +250,7 @@ function SalesOrderFormComponent({
     } catch (error) {
       console.error('Failed to fetch product price:', error);
     }
-  }, [methods, setValue]);
+  }, [methods, setValue, customerId]);
 
   // ----------------------------------------
   // COMPUTED VALUES
@@ -290,7 +335,7 @@ function SalesOrderFormComponent({
           onProductSelect={handleProductSelect}
         />
 
-        {/* Section 4: Order Summary */}
+        {/* Section 4: Order Summary with Credit Check */}
         <OrderSummaryCards
           subtotal={orderSummary.subtotal}
           discount={orderSummary.discount}
@@ -298,6 +343,15 @@ function SalesOrderFormComponent({
           shipping={orderSummary.shipping}
           grandTotal={orderSummary.grandTotal}
           currencySymbol="$"
+          creditSlot={
+            customerId ? (
+              <CreditWarning
+                customerId={customerId}
+                orderTotal={orderSummary.grandTotal}
+                onCreditOverridden={handleCreditOverridden}
+              />
+            ) : undefined
+          }
         />
 
         {/* Section 5: Notes */}

@@ -522,12 +522,12 @@ export const quoteService = {
 
   /**
    * Convert quote to sales order (accepted -> converted)
-   * This also creates the sales order
+   * This also creates the sales order with credit check
    */
   async convertToSalesOrder(
     id: string,
     userId?: string
-  ): Promise<ServiceResult<{ quote: Quote; salesOrderId: string }>> {
+  ): Promise<ServiceResult<{ quote: Quote; salesOrderId: string; creditStatus: 'ok' | 'hold' }>> {
     try {
       const existing = await quoteRepository.findById(id);
       if (!existing) {
@@ -545,8 +545,13 @@ export const quoteService = {
         };
       }
 
-      // Import sales order service dynamically to avoid circular dependencies
+      // Import services dynamically to avoid circular dependencies
       const { salesOrderService } = await import('@/features/sales-orders/services');
+      const { creditCheckService } = await import('@/features/customers/services/credit-check.service');
+
+      // Check customer credit
+      const creditCheck = await creditCheckService.checkCredit(existing.customerId, existing.grandTotal);
+      const creditStatus: 'ok' | 'hold' = creditCheck.passed ? 'ok' : 'hold';
 
       // Create sales order from quote data
       const salesOrderResult = await salesOrderService.create(
@@ -601,18 +606,33 @@ export const quoteService = {
         userId
       );
 
-      // Update the sales order with quote reference
+      // Update the sales order with quote reference and credit status
       const { db } = await import('@/shared/lib/supabase/database');
       await db
         .from('sales_orders')
-        .update({ quote_id: id })
+        .update({
+          quote_id: id,
+          credit_status: creditStatus,
+        })
         .eq('id', salesOrderResult.data.id);
+
+      // If credit hold, log to approval_events
+      if (creditStatus === 'hold') {
+        await db.from('approval_events').insert({
+          type: 'credit_release',
+          subject_type: 'sales_order',
+          subject_id: salesOrderResult.data.id,
+          status: 'pending',
+          note: `Credit check failed: ${creditCheck.message || 'Awaiting finance approval'}`,
+        });
+      }
 
       return {
         success: true,
         data: {
           quote,
           salesOrderId: salesOrderResult.data.id,
+          creditStatus,
         },
       };
     } catch (error) {

@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Loader2, MapPin, Package, FileText, Calendar, User, Building2, Truck } from 'lucide-react';
+import { Loader2, MapPin, Package, FileText, Calendar, User, Building2, Truck, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { useAuthStore } from '@/shared/stores';
@@ -31,9 +31,15 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 
-import { getSalesOrder } from '../actions';
+import { getSalesOrder, releaseSalesOrderHold } from '../actions';
 import type { SalesOrderWithItems } from '../types';
-import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from '../types';
+import {
+  ORDER_STATUS_LABELS,
+  ORDER_STATUS_COLORS,
+  ORDER_CREDIT_STATUS_LABELS,
+  ORDER_CREDIT_STATUS_COLORS,
+} from '../types';
+import { toast } from 'sonner';
 
 // ============================================
 // TYPES
@@ -158,6 +164,7 @@ export function ViewSalesOrderDrawer({
   // ----------------------------------------
 
   const canEditPermission = hasMounted && hasPermission('orders.edit');
+  const canReleaseHold = hasMounted && hasPermission('sales_orders.release_hold');
 
   // ----------------------------------------
   // STATE
@@ -166,6 +173,7 @@ export function ViewSalesOrderDrawer({
   const [order, setOrder] = useState<SalesOrderWithItems | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isReleasingHold, setIsReleasingHold] = useState(false);
 
   // ----------------------------------------
   // EFFECTS
@@ -214,8 +222,31 @@ export function ViewSalesOrderDrawer({
     }
   };
 
+  const handleReleaseHold = async () => {
+    if (!order) return;
+
+    setIsReleasingHold(true);
+    try {
+      const result = await releaseSalesOrderHold(order.id);
+      if (result.success) {
+        toast.success('Credit hold released successfully');
+        // Refresh order data
+        await fetchOrder();
+      } else {
+        toast.error(result.error || 'Failed to release hold');
+      }
+    } catch {
+      toast.error('Failed to release hold');
+    } finally {
+      setIsReleasingHold(false);
+    }
+  };
+
   // Can only edit draft or pending orders (and must have permission)
   const canEdit = order && ['draft', 'pending'].includes(order.status) && canEditPermission;
+
+  // Check if order is on credit hold
+  const isOnHold = order?.creditStatus === 'hold';
 
   // ----------------------------------------
   // RENDER
@@ -253,12 +284,55 @@ export function ViewSalesOrderDrawer({
               </div>
             ) : order ? (
               <div className="space-y-4">
-                {/* Status Badge */}
+                {/* Status Badges */}
                 <div className="flex flex-wrap gap-2">
                   <Badge className={ORDER_STATUS_COLORS[order.status]}>
                     {ORDER_STATUS_LABELS[order.status]}
                   </Badge>
+                  {isOnHold && (
+                    <Badge className={ORDER_CREDIT_STATUS_COLORS['hold']}>
+                      {ORDER_CREDIT_STATUS_LABELS['hold']}
+                    </Badge>
+                  )}
                 </div>
+
+                {/* Credit Hold Banner */}
+                {isOnHold && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-4">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-amber-800 dark:text-amber-200">
+                          Credit Hold
+                        </h4>
+                        <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                          This order is on credit hold and cannot be processed until released by Finance.
+                        </p>
+                        {canReleaseHold && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-3 border-amber-300 text-amber-700 hover:bg-amber-100 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/50"
+                            onClick={handleReleaseHold}
+                            disabled={isReleasingHold}
+                          >
+                            {isReleasingHold ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Releasing...
+                              </>
+                            ) : (
+                              <>
+                                <ShieldCheck className="mr-2 h-4 w-4" />
+                                Release Hold
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Order Info */}
                 <Section title="Order Information">
