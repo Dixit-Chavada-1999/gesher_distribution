@@ -535,6 +535,7 @@ export class QuickBooksProvider implements IAccountingProvider {
       BillAddr: customer.billingAddress
         ? {
             Line1: customer.billingAddress.line1,
+            Line2: customer.billingAddress.line2,
             City: customer.billingAddress.city,
             CountrySubDivisionCode: customer.billingAddress.state,
             PostalCode: customer.billingAddress.postalCode,
@@ -544,6 +545,7 @@ export class QuickBooksProvider implements IAccountingProvider {
       ShipAddr: customer.shippingAddress
         ? {
             Line1: customer.shippingAddress.line1,
+            Line2: customer.shippingAddress.line2,
             City: customer.shippingAddress.city,
             CountrySubDivisionCode: customer.shippingAddress.state,
             PostalCode: customer.shippingAddress.postalCode,
@@ -620,6 +622,26 @@ export class QuickBooksProvider implements IAccountingProvider {
       CompanyName: customer.companyName,
       PrimaryEmailAddr: customer.email ? { Address: customer.email } : undefined,
       PrimaryPhone: customer.phone ? { FreeFormNumber: customer.phone } : undefined,
+      BillAddr: customer.billingAddress
+        ? {
+            Line1: customer.billingAddress.line1,
+            Line2: customer.billingAddress.line2,
+            City: customer.billingAddress.city,
+            CountrySubDivisionCode: customer.billingAddress.state,
+            PostalCode: customer.billingAddress.postalCode,
+            Country: customer.billingAddress.country,
+          }
+        : undefined,
+      ShipAddr: customer.shippingAddress
+        ? {
+            Line1: customer.shippingAddress.line1,
+            Line2: customer.shippingAddress.line2,
+            City: customer.shippingAddress.city,
+            CountrySubDivisionCode: customer.shippingAddress.state,
+            PostalCode: customer.shippingAddress.postalCode,
+            Country: customer.shippingAddress.country,
+          }
+        : undefined,
     };
 
     const url = `${getApiBaseUrl(tokenInfo.environment as QuickBooksEnvironment)}/v3/company/${tokenInfo.externalAccountId}/customer?minorversion=${QBO_API_MINOR_VERSION}`;
