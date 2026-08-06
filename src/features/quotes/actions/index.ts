@@ -598,6 +598,362 @@ export async function getCustomerAddresses(customerId: string): Promise<ActionRe
 }
 
 /**
+ * Find or create customer from PO extraction data
+ * Used when uploading PO to auto-create customer if not found
+ * Prevents duplicate customers by checking name similarity
+ */
+export async function findOrCreateCustomerFromPO(
+  customerName: string,
+  customerAddress?: string | null,
+  customerCity?: string | null,
+  customerState?: string | null,
+  customerZip?: string | null
+): Promise<ActionResult<{ customerId: string; customerName: string; created: boolean }>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
+  try {
+    // Clean the customer name for comparison
+    const cleanName = customerName.trim();
+
+    if (!cleanName) {
+      return { success: false, error: 'Customer name is required' };
+    }
+
+    // Step 1: Try exact match (case-insensitive)
+    const { data: exactMatch } = await db
+      .from('customers')
+      .select('id, name')
+      .ilike('name', cleanName)
+      .is('deleted_at', null)
+      .single();
+
+    if (exactMatch) {
+      return {
+        success: true,
+        data: {
+          customerId: exactMatch.id,
+          customerName: exactMatch.name,
+          created: false,
+        },
+      };
+    }
+
+    // Step 2: Try fuzzy match (contains search for first significant words)
+    // Extract first 2-3 significant words for fuzzy search
+    const words = cleanName.split(/[\s,]+/).filter((w) => w.length > 2).slice(0, 3);
+
+    if (words.length > 0) {
+      // Search for customers containing any of the significant words
+      const { data: fuzzyMatches } = await db
+        .from('customers')
+        .select('id, name')
+        .or(words.map((word) => `name.ilike.%${word}%`).join(','))
+        .is('deleted_at', null)
+        .limit(5);
+
+      if (fuzzyMatches && fuzzyMatches.length > 0) {
+        // Check if any match is similar enough (contains all significant words)
+        for (const match of fuzzyMatches) {
+          const matchNameLower = match.name.toLowerCase();
+          const allWordsMatch = words.every((word) =>
+            matchNameLower.includes(word.toLowerCase())
+          );
+
+          if (allWordsMatch) {
+            return {
+              success: true,
+              data: {
+                customerId: match.id,
+                customerName: match.name,
+                created: false,
+              },
+            };
+          }
+        }
+      }
+    }
+
+    // Step 3: No match found - create new customer
+    const { customerService } = await import('@/features/customers/services');
+
+    // Use provided address fields if available, otherwise parse from string
+    let address1 = customerAddress || '';
+    let city = customerCity || '';
+    let state = customerState || '';
+    let zip = customerZip || '';
+
+    // If separate fields not provided but address string exists, try to parse
+    if (customerAddress && !customerCity && !customerState && !customerZip) {
+      // Try to parse common address formats
+      // "123 Main St, City, ST 12345" or "123 Main St City ST 12345"
+      const addressParts = customerAddress.split(',').map((p) => p.trim());
+
+      if (addressParts.length >= 3) {
+        address1 = addressParts[0] || '';
+        city = addressParts[1] || '';
+        // Last part might be "ST 12345"
+        const lastPart = addressParts[addressParts.length - 1] || '';
+        const stateZipMatch = lastPart.match(/^([A-Z]{2})\s*(\d{5}(-\d{4})?)$/i);
+        if (stateZipMatch && stateZipMatch[1] && stateZipMatch[2]) {
+          state = stateZipMatch[1].toUpperCase();
+          zip = stateZipMatch[2];
+        } else {
+          state = lastPart;
+        }
+      } else if (addressParts.length === 2) {
+        address1 = addressParts[0] || '';
+        city = addressParts[1] || '';
+      } else {
+        address1 = customerAddress;
+      }
+    }
+
+    const createResult = await customerService.createFromForm({
+      customerCode: '', // Auto-generated
+      name: cleanName,
+      legalName: '',
+      channel: 'dealer',
+      address1,
+      address2: '',
+      city,
+      state,
+      zip,
+      country: 'US',
+      shippingAddress1: '',
+      shippingAddress2: '',
+      shippingCity: '',
+      shippingState: '',
+      shippingZip: '',
+      shippingCountry: 'US',
+      useSeparateShipping: false,
+      phone: '',
+      email: '',
+      website: '',
+      taxId: '',
+      taxExempt: false,
+      taxExemptNumber: '',
+      taxExemptExpiryAt: '',
+      creditStatus: 'pending',
+      creditLimit: '0',
+      openBalance: '0',
+      creditTerms: 'Net 30',
+      preferredLocationId: '',
+      defaultPaymentMethod: '',
+      status: 'active',
+      internalNotes: 'Auto-created from PO upload',
+    }, appUser.id);
+
+    if (createResult.success && createResult.data) {
+      return {
+        success: true,
+        data: {
+          customerId: createResult.data.id,
+          customerName: createResult.data.name,
+          created: true,
+        },
+      };
+    }
+
+    return {
+      success: false,
+      error: createResult.error || 'Failed to create customer',
+    };
+  } catch (error) {
+    console.error('findOrCreateCustomerFromPO error:', error);
+    return {
+      success: false,
+      error: 'Failed to find or create customer',
+    };
+  }
+}
+
+/**
+ * Find or create product from PO extraction data
+ * Used when uploading PO to auto-create products if not found
+ * Matches by SKU or tire size, creates new product if not found
+ */
+export async function findOrCreateProductFromPO(
+  sku: string | null,
+  description: string,
+  tireSize: string | null,
+  unitPrice: number // in dollars
+): Promise<ActionResult<{
+  productId: string;
+  sku: string;
+  name: string;
+  unitPrice: number; // in cents
+  created: boolean;
+}>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  // Get app user ID (public.users.id) from auth user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
+  try {
+    // Helper function to normalize tire size for comparison
+    const normalizeTireSize = (size: string): string => {
+      if (!size) {
+        return '';
+      }
+      const normalized = size.toUpperCase().trim().replace(/CW$/i, '');
+      const metricPattern = /(\d+)\/(\d+)[\-\s]?(\d+)/;
+      const metricMatch = normalized.match(metricPattern);
+      if (metricMatch && metricMatch[1] && metricMatch[2] && metricMatch[3]) {
+        return `${metricMatch[1]}/${metricMatch[2]}R${metricMatch[3]}`;
+      }
+      return normalized;
+    };
+
+    // Step 1: Try exact SKU match
+    if (sku) {
+      const { data: skuMatch } = await db
+        .from('products')
+        .select('id, sku, name, base_price, tire_size')
+        .ilike('sku', sku)
+        .is('deleted_at', null)
+        .single();
+
+      if (skuMatch) {
+        return {
+          success: true,
+          data: {
+            productId: skuMatch.id,
+            sku: skuMatch.sku,
+            name: skuMatch.name,
+            unitPrice: skuMatch.base_price,
+            created: false,
+          },
+        };
+      }
+    }
+
+    // Step 2: Try tire size match
+    if (tireSize) {
+      const normalizedTireSize = normalizeTireSize(tireSize);
+
+      const { data: products } = await db
+        .from('products')
+        .select('id, sku, name, base_price, tire_size')
+        .is('deleted_at', null)
+        .limit(20);
+
+      if (products && products.length > 0) {
+        for (const product of products) {
+          if (product.tire_size) {
+            const productTireSize = normalizeTireSize(product.tire_size);
+            if (productTireSize === normalizedTireSize) {
+              return {
+                success: true,
+                data: {
+                  productId: product.id,
+                  sku: product.sku,
+                  name: product.name,
+                  unitPrice: product.base_price,
+                  created: false,
+                },
+              };
+            }
+          }
+        }
+      }
+    }
+
+    // Step 3: No match found - create new product
+    const { productService } = await import('@/features/products/services/product.service');
+
+    // Generate a unique SKU based on tire size or description
+    let newSku = '';
+    if (tireSize) {
+      // Use tire size as SKU base (e.g., "290-85R38")
+      newSku = tireSize
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+    } else if (sku) {
+      // Use provided SKU, normalized
+      newSku = sku.toUpperCase().replace(/[^A-Z0-9\-]/g, '');
+    } else {
+      // Generate from description
+      newSku = description
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 20);
+    }
+
+    // Ensure SKU is unique
+    const { data: existingSku } = await db
+      .from('products')
+      .select('sku')
+      .ilike('sku', newSku)
+      .is('deleted_at', null)
+      .single();
+
+    if (existingSku) {
+      // Add timestamp suffix to make unique
+      newSku = `${newSku}-${Date.now().toString(36).toUpperCase()}`;
+    }
+
+    // Create the product
+    const createResult = await productService.create({
+      sku: newSku,
+      name: description || tireSize || newSku,
+      description: `Auto-created from PO upload. Original SKU: ${sku || 'N/A'}`,
+      tireSize: tireSize ? normalizeTireSize(tireSize) : null,
+      baseCost: Math.round(unitPrice * 100 * 0.7), // Assume 30% margin
+      basePrice: Math.round(unitPrice * 100), // Convert dollars to cents
+      status: 'active',
+      isSellable: true,
+    }, appUser.id);
+
+    if (createResult.success && createResult.data) {
+      return {
+        success: true,
+        data: {
+          productId: createResult.data.id,
+          sku: createResult.data.sku,
+          name: createResult.data.name,
+          unitPrice: createResult.data.basePrice,
+          created: true,
+        },
+      };
+    }
+
+    return {
+      success: false,
+      error: createResult.error || 'Failed to create product',
+    };
+  } catch (error) {
+    console.error('findOrCreateProductFromPO error:', error);
+    return {
+      success: false,
+      error: 'Failed to find or create product',
+    };
+  }
+}
+
+/**
  * Get product price for auto-fill
  */
 export async function getProductPrice(productId: string): Promise<ActionResult<{
@@ -728,6 +1084,163 @@ export async function getQuoteMasterData(): Promise<ActionResult<{
     return {
       success: false,
       error: 'Failed to fetch master data',
+    };
+  }
+}
+
+// ============================================
+// PO EXTRACTION STORAGE
+// ============================================
+
+/**
+ * Save PO extraction data to database
+ * Called when creating a quote from PO upload
+ */
+export async function savePOExtraction(data: {
+  quoteId?: string;
+  pdfFilename?: string;
+  pdfUrl?: string;
+  confidence: number;
+  poNumber?: string | null;
+  poDate?: string | null;
+  customer?: {
+    name?: string | null;
+    address?: string | null;
+    city?: string | null;
+    state?: string | null;
+    zip?: string | null;
+  };
+  shipTo?: {
+    name?: string | null;
+    address?: string | null;
+    city?: string | null;
+    state?: string | null;
+    zip?: string | null;
+  };
+  lineItems: Array<{
+    sku?: string | null;
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    tireSize?: string | null;
+  }>;
+  matchedCustomer?: {
+    customerId: string | null;
+    name: string;
+    matched: boolean;
+  };
+  matchedProducts?: Array<{
+    productId: string | null;
+    sku: string;
+    name: string;
+    matched: boolean;
+    quantity: number;
+    unitPrice: number;
+  }>;
+  rawJson?: Record<string, unknown>; // Complete original extraction data
+}): Promise<ActionResult<{ extractionId: string }>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
+  try {
+    const matchedCount = data.matchedProducts?.filter(p => p.matched).length || 0;
+    const unmatchedCount = data.matchedProducts?.filter(p => !p.matched).length || 0;
+
+    const { data: extraction, error } = await db
+      .from('po_extractions')
+      .insert({
+        quote_id: data.quoteId || null,
+        pdf_filename: data.pdfFilename || null,
+        pdf_url: data.pdfUrl || null,
+        confidence: data.confidence,
+        po_number: data.poNumber || null,
+        po_date: data.poDate || null,
+        customer_name: data.customer?.name || null,
+        customer_address: data.customer?.address || null,
+        customer_city: data.customer?.city || null,
+        customer_state: data.customer?.state || null,
+        customer_zip: data.customer?.zip || null,
+        ship_to_name: data.shipTo?.name || null,
+        ship_to_address: data.shipTo?.address || null,
+        ship_to_city: data.shipTo?.city || null,
+        ship_to_state: data.shipTo?.state || null,
+        ship_to_zip: data.shipTo?.zip || null,
+        line_items: data.lineItems,
+        matched_customer: data.matchedCustomer || null,
+        matched_products: data.matchedProducts || null,
+        raw_json: data.rawJson || null,
+        total_items: data.lineItems.length,
+        matched_items: matchedCount,
+        unmatched_items: unmatchedCount,
+        created_by: appUser.id,
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error('Save PO extraction error:', error);
+      return {
+        success: false,
+        error: 'Failed to save extraction data',
+      };
+    }
+
+    return {
+      success: true,
+      data: { extractionId: extraction.id },
+    };
+  } catch (error) {
+    console.error('savePOExtraction error:', error);
+    return {
+      success: false,
+      error: 'Failed to save extraction data',
+    };
+  }
+}
+
+/**
+ * Update PO extraction with quote ID after quote is created
+ */
+export async function linkExtractionToQuote(
+  extractionId: string,
+  quoteId: string
+): Promise<ActionResult<void>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  try {
+    const { error } = await db
+      .from('po_extractions')
+      .update({ quote_id: quoteId })
+      .eq('id', extractionId);
+
+    if (error) {
+      console.error('Link extraction to quote error:', error);
+      return {
+        success: false,
+        error: 'Failed to link extraction to quote',
+      };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('linkExtractionToQuote error:', error);
+    return {
+      success: false,
+      error: 'Failed to link extraction to quote',
     };
   }
 }

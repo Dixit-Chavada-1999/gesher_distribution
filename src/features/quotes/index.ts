@@ -20,6 +20,20 @@ export type {
   QuotesTableProps,
 } from './types';
 
+// PO Extraction Types
+export type {
+  ExtractedPOData,
+  ExtractedLineItem,
+  ExtractedShipTo,
+  ExtractedCustomer,
+  ProcessedPOData,
+  ProductMatch,
+  CustomerMatch,
+  POExtractionResponse,
+  POUploadResponse,
+  UploadDialogState,
+} from './types/po-extract.types';
+
 export {
   QUOTE_STATUSES,
   QUOTE_STATUS_LABELS,
@@ -28,7 +42,7 @@ export {
 } from './types';
 
 // Components
-export { QuotesTable, ViewQuoteDrawer, CreateQuoteDrawer, EditQuoteDrawer, QuoteForm, ApproveQuoteDialog } from './components';
+export { QuotesTable, ViewQuoteDrawer, CreateQuoteDrawer, EditQuoteDrawer, QuoteForm, ApproveQuoteDialog, UploadPODialog } from './components';
 
 // Hooks
 export { useQuotes, useQuote, useQuoteStatusCounts } from './hooks';
