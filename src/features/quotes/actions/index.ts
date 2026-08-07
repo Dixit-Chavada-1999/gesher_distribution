@@ -1009,6 +1009,7 @@ export async function findOrCreateProductFromPO(
       baseCost: baseCost !== null ? Math.round(baseCost * 100) : 0, // Convert dollars to cents, default 0
       basePrice: Math.round(unitPrice * 100), // Convert dollars to cents
       status: 'active',
+      itemType: 'inventory',
       isSellable: true,
     }, appUser.id);
 

@@ -24,7 +24,7 @@ import { Badge } from '@/shared/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 
 import { getProduct } from '../actions';
-import type { ProductWithFormattedPrices, ProductStatus } from '../types';
+import type { ProductWithFormattedPrices, ProductStatus, ProductItemType } from '../types';
 
 // ============================================
 // TYPES
@@ -48,6 +48,18 @@ const STATUS_VARIANTS: Record<ProductStatus, 'default' | 'secondary' | 'destruct
   active: 'default',
   inactive: 'secondary',
   discontinued: 'destructive',
+};
+
+const ITEM_TYPE_LABELS: Record<ProductItemType, string> = {
+  inventory: 'Inventory',
+  non_inventory: 'Non-Inventory',
+  service: 'Service',
+};
+
+const ITEM_TYPE_VARIANTS: Record<ProductItemType, 'default' | 'secondary' | 'outline'> = {
+  inventory: 'outline',
+  non_inventory: 'secondary',
+  service: 'secondary',
 };
 
 // ============================================
@@ -207,6 +219,9 @@ export function ViewProductDrawer({
                   <Badge variant={STATUS_VARIANTS[product.status]}>
                     {product.status.charAt(0).toUpperCase() + product.status.slice(1)}
                   </Badge>
+                  <Badge variant={ITEM_TYPE_VARIANTS[product.itemType]}>
+                    {ITEM_TYPE_LABELS[product.itemType]}
+                  </Badge>
                   <Badge variant={product.isSellable ? 'default' : 'outline'}>
                     {product.isSellable ? 'Sellable' : 'Not sellable'}
                   </Badge>
@@ -222,6 +237,16 @@ export function ViewProductDrawer({
                         value={<span className="font-mono">{product.sku}</span>}
                         icon={<Package className="h-4 w-4" />}
                       />
+                      <InfoItem
+                        label="Item Type"
+                        value={
+                          <Badge variant={ITEM_TYPE_VARIANTS[product.itemType]}>
+                            {ITEM_TYPE_LABELS[product.itemType]}
+                          </Badge>
+                        }
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
                       <InfoItem label="Category" value={product.category} />
                     </div>
                     <InfoItem label="Name" value={product.name} />

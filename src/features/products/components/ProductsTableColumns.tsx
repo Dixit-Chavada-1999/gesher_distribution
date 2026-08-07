@@ -63,6 +63,31 @@ export function getProductsTableColumns(options: ColumnOptions = {}): ColumnDef<
       ),
     },
     {
+      accessorKey: 'itemType',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
+      cell: ({ row }) => {
+        const itemType = row.getValue('itemType') as string;
+        const typeLabels: Record<string, string> = {
+          inventory: 'Inventory',
+          non_inventory: 'Non-Inventory',
+          service: 'Service',
+        };
+        const typeColors: Record<string, 'default' | 'secondary' | 'outline'> = {
+          inventory: 'outline',
+          non_inventory: 'secondary',
+          service: 'secondary',
+        };
+        return (
+          <Badge variant={typeColors[itemType] || 'outline'}>
+            {typeLabels[itemType] || itemType}
+          </Badge>
+        );
+      },
+      filterFn: (row, id, value) => {
+        return value.includes(row.getValue(id));
+      },
+    },
+    {
       accessorKey: 'category',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Category" />,
       cell: ({ row }) => {

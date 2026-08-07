@@ -9,6 +9,11 @@
  */
 export type ProductStatus = 'active' | 'inactive' | 'discontinued';
 
+/**
+ * Product item type enum
+ */
+export type ProductItemType = 'inventory' | 'non_inventory' | 'service';
+
 // ============================================
 // BASE TYPES
 // ============================================
@@ -29,6 +34,7 @@ export interface Product {
   baseCost: number;
   basePrice: number;
   status: ProductStatus;
+  itemType: ProductItemType;
   isSellable: boolean;
   imageUrl: string | null;
   createdAt: Date;
@@ -73,6 +79,7 @@ export interface CreateProductDTO {
   baseCost: number;
   basePrice: number;
   status?: ProductStatus;
+  itemType?: ProductItemType;
   isSellable?: boolean;
   imageUrl?: string | null;
 }
@@ -92,6 +99,7 @@ export interface UpdateProductDTO {
   baseCost?: number;
   basePrice?: number;
   status?: ProductStatus;
+  itemType?: ProductItemType;
   isSellable?: boolean;
   imageUrl?: string | null;
 }
@@ -108,6 +116,7 @@ export interface ProductListParams {
   limit?: number;
   search?: string;
   status?: ProductStatus;
+  itemType?: ProductItemType;
   category?: string;
   isSellable?: boolean;
   sortBy?: keyof Product;
@@ -148,6 +157,7 @@ export interface ProductFormValues {
   baseCost: string; // String in dollars, converted to cents
   basePrice: string; // String in dollars, converted to cents
   status: ProductStatus;
+  itemType: ProductItemType;
   isSellable: boolean;
   imageUrl: string;
 }
@@ -164,6 +174,7 @@ export interface ProductTableRow {
   sku: string;
   name: string;
   category: string | null;
+  itemType: ProductItemType;
   baseCost: number;
   basePrice: number;
   formattedBaseCost: string;
@@ -217,6 +228,15 @@ export const PRODUCT_STATUS_OPTIONS = [
 ] as const;
 
 /**
+ * Product item type options for select inputs
+ */
+export const PRODUCT_ITEM_TYPE_OPTIONS = [
+  { value: 'inventory', label: 'Inventory' },
+  { value: 'non_inventory', label: 'Non-Inventory' },
+  { value: 'service', label: 'Service' },
+] as const;
+
+/**
  * Default product form values
  */
 export const DEFAULT_PRODUCT_FORM_VALUES: ProductFormValues = {
@@ -231,6 +251,7 @@ export const DEFAULT_PRODUCT_FORM_VALUES: ProductFormValues = {
   baseCost: '',
   basePrice: '',
   status: 'active',
+  itemType: 'inventory',
   isSellable: true,
   imageUrl: '',
 };

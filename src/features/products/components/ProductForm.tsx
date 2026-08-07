@@ -29,7 +29,7 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 import { productFormSchema, type ProductFormInput, productToFormValues } from '../lib/schemas';
-import { DEFAULT_PRODUCT_FORM_VALUES, PRODUCT_STATUS_OPTIONS } from '../types';
+import { DEFAULT_PRODUCT_FORM_VALUES, PRODUCT_STATUS_OPTIONS, PRODUCT_ITEM_TYPE_OPTIONS } from '../types';
 
 interface ProductFormProps {
   initialData?: {
@@ -44,6 +44,7 @@ interface ProductFormProps {
     baseCost: number;
     basePrice: number;
     status: 'active' | 'inactive' | 'discontinued';
+    itemType: 'inventory' | 'non_inventory' | 'service';
     isSellable: boolean;
     imageUrl: string | null;
   };
@@ -321,22 +322,50 @@ export function ProductForm({
 
             <FormField
               control={form.control}
-              name="isSellable"
+              name="itemType"
               render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-base">Sellable</FormLabel>
-                    <FormDescription>
-                      Allow this product to be added to orders
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
+                <FormItem>
+                  <FormLabel>Item Type</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select item type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {PRODUCT_ITEM_TYPE_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    QuickBooks item type for syncing
+                  </FormDescription>
+                  <FormMessage />
                 </FormItem>
               )}
             />
           </div>
+
+          <FormField
+            control={form.control}
+            name="isSellable"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-base">Sellable</FormLabel>
+                  <FormDescription>
+                    Allow this product to be added to orders
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch checked={field.value} onCheckedChange={field.onChange} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
         </div>
 
         {/* Form Actions */}

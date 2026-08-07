@@ -95,6 +95,7 @@ function toTableRow(product: Product): ProductTableRow {
     sku: product.sku,
     name: product.name,
     category: product.category,
+    itemType: product.itemType,
     baseCost: product.baseCost,
     basePrice: product.basePrice,
     formattedBaseCost: formatPrice(product.baseCost),

@@ -26,7 +26,6 @@ import {
   Clock,
   User,
   ArrowRight,
-  ExternalLink,
   Loader2,
 } from 'lucide-react';
 import {
@@ -321,18 +320,6 @@ export function ViewEmailDrawer({
                 )}
               </div>
 
-              {/* Raw Payload (Debug) */}
-              <div className="space-y-3">
-                <details className="group">
-                  <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground flex items-center gap-2">
-                    <ExternalLink className="h-4 w-4" />
-                    View Raw Data
-                  </summary>
-                  <pre className="mt-2 text-xs bg-muted p-4 rounded-lg overflow-auto max-h-64">
-                    {JSON.stringify(emailDetails.raw_payload, null, 2)}
-                  </pre>
-                </details>
-              </div>
             </div>
           </ScrollArea>
         ) : (
