@@ -1,47 +1,32 @@
 /**
  * PO Upload API Route
  *
- * POST /api/po/upload - Upload PO PDF to local server storage
- * GET /api/po/upload?file=<path> - Download/view uploaded file
+ * POST /api/po/upload - Upload PO PDF to Supabase Storage
+ *
+ * Note: Uses Supabase Storage instead of local filesystem
+ * to work properly in serverless environments (Vercel)
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { writeFile, mkdir, readFile, stat } from 'fs/promises';
-import { existsSync } from 'fs';
-import path from 'path';
+import { NextRequest } from 'next/server';
 import {
   successResponse,
   badRequestResponse,
-  notFoundResponse,
   internalErrorResponse,
 } from '@/shared/lib/api/response';
 import { requirePermission } from '@/shared/lib/auth';
+import { createAdminClient } from '@/shared/lib/supabase/admin';
 
 // ============================================
 // CONSTANTS
 // ============================================
 
-// Store files in 'uploads' folder at project root (outside public for security)
-const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'po-documents');
+const BUCKET_NAME = 'po-documents';
 const MAX_FILE_SIZE_MB = 10;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
-
-/**
- * Ensure upload directory exists
- */
-async function ensureUploadDir(subDir?: string): Promise<string> {
-  const targetDir = subDir ? path.join(UPLOAD_DIR, subDir) : UPLOAD_DIR;
-
-  if (!existsSync(targetDir)) {
-    await mkdir(targetDir, { recursive: true });
-  }
-
-  return targetDir;
-}
 
 /**
  * Generate unique filename
@@ -53,12 +38,34 @@ function generateFilename(originalName: string): string {
   return `${timestamp}_${random}_${sanitizedName}`;
 }
 
+/**
+ * Ensure storage bucket exists
+ */
+async function ensureBucket(supabase: ReturnType<typeof createAdminClient>) {
+  const { data: buckets } = await supabase.storage.listBuckets();
+
+  const bucketExists = buckets?.some(b => b.name === BUCKET_NAME);
+
+  if (!bucketExists) {
+    const { error } = await supabase.storage.createBucket(BUCKET_NAME, {
+      public: false, // Private bucket - requires auth to access
+      fileSizeLimit: MAX_FILE_SIZE_BYTES,
+      allowedMimeTypes: ['application/pdf'],
+    });
+
+    if (error && !error.message.includes('already exists')) {
+      console.error('Error creating bucket:', error);
+      throw error;
+    }
+  }
+}
+
 // ============================================
 // POST /api/po/upload
 // ============================================
 
 /**
- * Upload PO PDF to local storage
+ * Upload PO PDF to Supabase Storage
  *
  * Request: FormData with 'file' field
  * Response: { path: string, url: string }
@@ -89,88 +96,59 @@ export async function POST(request: NextRequest) {
       return badRequestResponse(`File size exceeds ${MAX_FILE_SIZE_MB}MB limit`);
     }
 
-    // Determine subdirectory (organize by quote or uploads)
-    const subDir = quoteId ? `quotes/${quoteId}` : 'uploads';
-    const uploadDir = await ensureUploadDir(subDir);
+    // Create Supabase admin client
+    const supabase = createAdminClient();
 
-    // Generate unique filename
+    // Ensure bucket exists
+    await ensureBucket(supabase);
+
+    // Generate unique filename with path
     const filename = generateFilename(file.name);
-    const filepath = path.join(uploadDir, filename);
+    const storagePath = quoteId
+      ? `quotes/${quoteId}/${filename}`
+      : `uploads/${filename}`;
 
-    // Convert File to Buffer and write to disk
+    // Convert File to ArrayBuffer
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    await writeFile(filepath, buffer);
 
-    // Return relative path (from uploads folder)
-    const relativePath = path.join(subDir, filename).replace(/\\/g, '/');
+    // Upload to Supabase Storage
+    const { data, error } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(storagePath, buffer, {
+        contentType: 'application/pdf',
+        upsert: false,
+      });
 
-    // Generate URL for accessing the file
-    const fileUrl = `/api/po/upload?file=${encodeURIComponent(relativePath)}`;
+    if (error) {
+      console.error('Supabase storage upload error:', error);
+      return internalErrorResponse(`Failed to upload file: ${error.message}`);
+    }
+
+    // Get signed URL (valid for 1 year)
+    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .createSignedUrl(storagePath, 60 * 60 * 24 * 365); // 1 year
+
+    if (signedUrlError) {
+      console.error('Error creating signed URL:', signedUrlError);
+      // Fall back to path-based URL if signed URL fails
+      return successResponse({
+        path: data.path,
+        url: `${BUCKET_NAME}/${storagePath}`,
+        filename: filename,
+        storage: 'supabase',
+      });
+    }
 
     return successResponse({
-      path: relativePath,
-      url: fileUrl,
+      path: data.path,
+      url: signedUrlData.signedUrl,
       filename: filename,
+      storage: 'supabase',
     });
   } catch (error) {
     console.error('POST /api/po/upload error:', error);
     return internalErrorResponse('Failed to upload file');
-  }
-}
-
-// ============================================
-// GET /api/po/upload?file=<path>
-// ============================================
-
-/**
- * Download/view uploaded PO PDF
- */
-export async function GET(request: NextRequest) {
-  try {
-    // Check authentication + permission
-    const guard = await requirePermission('quotes.view_module');
-    if (guard.response) {
-      return guard.response;
-    }
-
-    // Get file path from query
-    const { searchParams } = new URL(request.url);
-    const filePath = searchParams.get('file');
-
-    if (!filePath) {
-      return badRequestResponse('File path is required');
-    }
-
-    // Sanitize path to prevent directory traversal
-    const sanitizedPath = filePath.replace(/\.\./g, '').replace(/^\//, '');
-    const fullPath = path.join(UPLOAD_DIR, sanitizedPath);
-
-    // Ensure file is within upload directory (security check)
-    if (!fullPath.startsWith(UPLOAD_DIR)) {
-      return badRequestResponse('Invalid file path');
-    }
-
-    // Check if file exists
-    try {
-      await stat(fullPath);
-    } catch {
-      return notFoundResponse('File');
-    }
-
-    // Read file
-    const fileBuffer = await readFile(fullPath);
-
-    // Return file with appropriate headers
-    return new NextResponse(fileBuffer, {
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `inline; filename="${path.basename(fullPath)}"`,
-        'Cache-Control': 'private, max-age=3600',
-      },
-    });
-  } catch (error) {
-    console.error('GET /api/po/upload error:', error);
-    return internalErrorResponse('Failed to retrieve file');
   }
 }

@@ -234,7 +234,8 @@ export function QuotesPageContent() {
             product.sku || null,
             product.description,
             extractedItem?.tireSize || extractedItem?.vendorItemNo || null,
-            product.extractedUnitPrice
+            product.extractedUnitPrice,
+            product.baseCost ?? null // Pass base cost if provided during edit
           );
 
           if (productResult.success && productResult.data) {
@@ -253,8 +254,14 @@ export function QuotesPageContent() {
               productsCreated++;
             }
           } else {
-            // Failed to create product - skip this item
-            console.error('Failed to create product:', product.sku, productResult.error);
+            // Failed to create product - log detailed error
+            console.error('Failed to process product:', {
+              sku: product.sku,
+              description: product.description,
+              error: productResult.error,
+              fullResult: productResult,
+            });
+            toast.error(`Failed to process product ${product.sku}: ${productResult.error}`);
           }
         }
       }

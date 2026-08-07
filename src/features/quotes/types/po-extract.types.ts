@@ -68,7 +68,8 @@ export interface ProductMatch {
   name: string;
   description: string;
   quantity: number;
-  unitPrice: number; // cents
+  unitPrice: number; // cents (selling price)
+  baseCost?: number | null; // cents (cost price)
   extractedUnitPrice: number; // from PO (dollars)
   matched: boolean;
   matchConfidence: number; // 0-100

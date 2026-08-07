@@ -65,7 +65,7 @@ export const createProductSchema = z.object({
     .max(10000, 'Weight too large')
     .optional()
     .nullable(),
-  baseCost: priceInCentsSchema,
+  baseCost: priceInCentsSchema.default(0),
   basePrice: priceInCentsSchema,
   status: productStatusSchema.default('active'),
   isSellable: z.boolean().default(true),

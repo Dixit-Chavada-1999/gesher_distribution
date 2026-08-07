@@ -233,8 +233,8 @@ export const productService = {
         };
       }
 
-      // Validate business rules
-      if (data.basePrice < data.baseCost) {
+      // Validate business rules (only if baseCost is provided)
+      if (data.baseCost !== null && data.basePrice < data.baseCost) {
         return {
           success: false,
           error: 'Price cannot be less than cost',

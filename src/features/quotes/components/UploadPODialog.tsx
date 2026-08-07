@@ -88,6 +88,7 @@ export function UploadPODialog({
   const [editLineItems, setEditLineItems] = useState<Array<{
     quantity: number;
     unitPrice: number;
+    baseCost: number | null;
   }>>([]);
 
   // Initialize editable fields when extraction completes
@@ -104,6 +105,7 @@ export function UploadPODialog({
         extractedData.products.map((p) => ({
           quantity: p.quantity,
           unitPrice: p.extractedUnitPrice,
+          baseCost: p.matched ? (p.baseCost ?? null) : null,
         }))
       );
     }
@@ -280,6 +282,7 @@ export function UploadPODialog({
         ...product,
         quantity: editLineItems[index]?.quantity ?? product.quantity,
         extractedUnitPrice: editLineItems[index]?.unitPrice ?? product.extractedUnitPrice,
+        baseCost: editLineItems[index]?.baseCost ?? product.baseCost ?? null,
       }));
 
       // Include the PDF file and edited data
@@ -748,10 +751,32 @@ export function UploadPODialog({
                                       newItems[index] = {
                                         quantity: parseInt(e.target.value) || 1,
                                         unitPrice: newItems[index]?.unitPrice ?? product.extractedUnitPrice,
+                                        baseCost: newItems[index]?.baseCost ?? null,
                                       };
                                       setEditLineItems(newItems);
                                     }}
                                     className="h-7 w-16 text-sm text-right"
+                                  />
+                                </div>
+                                <div className="space-y-0.5">
+                                  <Label className="text-[10px] text-muted-foreground">Cost</Label>
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    placeholder="Cost"
+                                    value={editLineItems[index]?.baseCost ?? ''}
+                                    onChange={(e) => {
+                                      const newItems = [...editLineItems];
+                                      const value = e.target.value;
+                                      newItems[index] = {
+                                        quantity: newItems[index]?.quantity ?? product.quantity,
+                                        unitPrice: newItems[index]?.unitPrice ?? product.extractedUnitPrice,
+                                        baseCost: value === '' ? null : parseFloat(value) || 0,
+                                      };
+                                      setEditLineItems(newItems);
+                                    }}
+                                    className="h-7 w-20 text-sm text-right"
                                   />
                                 </div>
                                 <div className="space-y-0.5">
@@ -766,22 +791,33 @@ export function UploadPODialog({
                                       newItems[index] = {
                                         quantity: newItems[index]?.quantity ?? product.quantity,
                                         unitPrice: parseFloat(e.target.value) || 0,
+                                        baseCost: newItems[index]?.baseCost ?? null,
                                       };
                                       setEditLineItems(newItems);
                                     }}
-                                    className="h-7 w-24 text-sm text-right"
+                                    className="h-7 w-20 text-sm text-right"
                                   />
                                 </div>
                               </div>
                             ) : (
                               <div className="text-right text-sm">
                                 <div>Qty: {editLineItems[index]?.quantity ?? product.quantity}</div>
+                                {editLineItems[index]?.baseCost !== null && editLineItems[index]?.baseCost !== undefined && (
+                                  <div className="text-muted-foreground text-xs">
+                                    Cost: {formatCurrency(editLineItems[index]?.baseCost ?? 0)}
+                                  </div>
+                                )}
                                 <div className="text-muted-foreground">
-                                  {formatCurrency(editLineItems[index]?.unitPrice ?? product.extractedUnitPrice)}
+                                  Price: {formatCurrency(editLineItems[index]?.unitPrice ?? product.extractedUnitPrice)}
                                 </div>
                               </div>
                             )}
                           </div>
+                          {!product.matched && editLineItems[index]?.baseCost === null && (
+                            <div className="text-xs text-amber-600 mt-1">
+                              ⚠ Cost not set - click Edit to add
+                            </div>
+                          )}
                           {product.matched && product.unitPrice !== (editLineItems[index]?.unitPrice ?? product.extractedUnitPrice) * 100 && (
                             <div className="text-xs text-blue-600 mt-1">
                               DB Price: {formatCurrency(product.unitPrice / 100)}

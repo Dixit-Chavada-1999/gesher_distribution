@@ -787,7 +787,8 @@ export async function findOrCreateProductFromPO(
   sku: string | null,
   description: string,
   tireSize: string | null,
-  unitPrice: number // in dollars
+  unitPrice: number, // in dollars (selling price)
+  baseCost: number | null = null // in dollars (cost price, optional)
 ): Promise<ActionResult<{
   productId: string;
   sku: string;
@@ -877,7 +878,90 @@ export async function findOrCreateProductFromPO(
       }
     }
 
-    // Step 3: No match found - create new product
+    // Step 3: Check if a deleted product with same SKU or tire size exists - restore it
+    console.log('[findOrCreateProductFromPO] Step 3: Checking for deleted product with SKU:', sku, 'or tire size:', tireSize);
+
+    let deletedProduct = null;
+
+    // First try by SKU
+    if (sku) {
+      const { data: deletedBySku } = await db
+        .from('products')
+        .select('id, sku, name, base_price, tire_size, deleted_at')
+        .ilike('sku', sku);
+
+      deletedProduct = deletedBySku?.find(p => p.deleted_at !== null);
+      console.log('[findOrCreateProductFromPO] Found by SKU:', deletedBySku?.length, 'Deleted:', deletedProduct ? 'Yes' : 'No');
+    }
+
+    // If not found by SKU, try by tire size
+    if (!deletedProduct && tireSize) {
+      const normalizedSearch = normalizeTireSize(tireSize);
+      console.log('[findOrCreateProductFromPO] Searching by tire size:', normalizedSearch);
+
+      const { data: allProducts, error: fetchAllError } = await db
+        .from('products')
+        .select('id, sku, name, base_price, tire_size, deleted_at');
+
+      console.log('[findOrCreateProductFromPO] Total products in DB:', allProducts?.length, 'Error:', fetchAllError);
+
+      // Log all deleted products for debugging
+      const deletedOnes = allProducts?.filter(p => p.deleted_at !== null);
+      console.log('[findOrCreateProductFromPO] Deleted products:', deletedOnes?.map(p => ({
+        sku: p.sku,
+        tire_size: p.tire_size,
+        normalized: p.tire_size ? normalizeTireSize(p.tire_size) : null
+      })));
+
+      // Find deleted product with matching tire size
+      deletedProduct = allProducts?.find(p => {
+        if (!p.deleted_at || !p.tire_size) {
+          return false;
+        }
+        const productTireSize = normalizeTireSize(p.tire_size);
+        const matches = productTireSize === normalizedSearch;
+        if (p.deleted_at) {
+          console.log('[findOrCreateProductFromPO] Comparing:', productTireSize, '===', normalizedSearch, '→', matches);
+        }
+        return matches;
+      });
+      console.log('[findOrCreateProductFromPO] Found by tire size:', deletedProduct ? 'Yes - ' + deletedProduct.sku : 'No');
+    }
+
+    if (deletedProduct) {
+      // Restore the deleted product
+      console.log('[findOrCreateProductFromPO] Restoring deleted product:', deletedProduct.id, deletedProduct.sku);
+      const { error: restoreError } = await db
+        .from('products')
+        .update({
+          deleted_at: null,
+          status: 'active',
+          base_price: Math.round(unitPrice * 100), // Update with new price
+          base_cost: baseCost !== null ? Math.round(baseCost * 100) : deletedProduct.base_price,
+          updated_at: new Date().toISOString(),
+          updated_by: appUser.id,
+        })
+        .eq('id', deletedProduct.id);
+
+      if (!restoreError) {
+        console.log('[findOrCreateProductFromPO] Product restored successfully:', deletedProduct.sku);
+        return {
+          success: true,
+          data: {
+            productId: deletedProduct.id,
+            sku: deletedProduct.sku,
+            name: deletedProduct.name,
+            unitPrice: Math.round(unitPrice * 100),
+            created: false, // Restored, not created
+          },
+        };
+      }
+      // If restore failed, continue to create new product with different SKU
+      console.error('[findOrCreateProductFromPO] Restore failed:', restoreError);
+    }
+
+    // Step 4: No match found - create new product
+    console.log('[findOrCreateProductFromPO] Step 4: Creating new product for SKU:', sku);
     const { productService } = await import('@/features/products/services/product.service');
 
     // Generate a unique SKU based on tire size or description
@@ -916,12 +1000,13 @@ export async function findOrCreateProductFromPO(
     }
 
     // Create the product
+    // baseCost is provided from user input during PO review, or defaults to 0
     const createResult = await productService.create({
       sku: newSku,
       name: description || tireSize || newSku,
       description: `Auto-created from PO upload. Original SKU: ${sku || 'N/A'}`,
       tireSize: tireSize ? normalizeTireSize(tireSize) : null,
-      baseCost: Math.round(unitPrice * 100 * 0.7), // Assume 30% margin
+      baseCost: baseCost !== null ? Math.round(baseCost * 100) : 0, // Convert dollars to cents, default 0
       basePrice: Math.round(unitPrice * 100), // Convert dollars to cents
       status: 'active',
       isSellable: true,
