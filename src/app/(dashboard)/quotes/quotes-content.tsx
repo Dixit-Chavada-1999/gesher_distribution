@@ -71,6 +71,7 @@ export function QuotesPageContent() {
   // ----------------------------------------
 
   const [hasMounted, setHasMounted] = useState(false);
+  const [isProcessingEmailPO, setProcessingEmailPO] = useState(false);
 
   useEffect(() => {
     setHasMounted(true);
@@ -136,32 +137,10 @@ export function QuotesPageContent() {
   );
 
   // ----------------------------------------
-  // HANDLERS
+  // SHARED PO PROCESSING FUNCTION
   // ----------------------------------------
 
-  // Create
-  const handleCreateClick = () => {
-    setIsCreateDrawerOpen(true);
-  };
-
-  const handleCreateDrawerClose = useCallback(() => {
-    setIsCreateDrawerOpen(false);
-  }, []);
-
-  const handleCreateSuccess = useCallback(() => {
-    refetchQuotes();
-  }, [refetchQuotes]);
-
-  // Upload PO
-  const handleUploadPOClick = () => {
-    setIsUploadPODialogOpen(true);
-  };
-
-  const handleUploadPODialogClose = useCallback(() => {
-    setIsUploadPODialogOpen(false);
-  }, []);
-
-  const handleUploadPOSuccess = useCallback(async (data: ProcessedPOData) => {
+  const processExtractedPOData = useCallback(async (data: ProcessedPOData) => {
     try {
       // Step 1: Find or create customer
       let customerId = data.customer.customerId;
@@ -396,8 +375,66 @@ export function QuotesPageContent() {
     } catch (error) {
       console.error('Create quote from PO error:', error);
       toast.error('Failed to create quote from PO data');
+    } finally {
+      setProcessingEmailPO(false);
     }
   }, [refetchQuotes]);
+
+  // ----------------------------------------
+  // HANDLERS
+  // ----------------------------------------
+
+  // Create
+  const handleCreateClick = () => {
+    setIsCreateDrawerOpen(true);
+  };
+
+  const handleCreateDrawerClose = useCallback(() => {
+    setIsCreateDrawerOpen(false);
+  }, []);
+
+  const handleCreateSuccess = useCallback(() => {
+    refetchQuotes();
+  }, [refetchQuotes]);
+
+  // Upload PO
+  const handleUploadPOClick = () => {
+    setIsUploadPODialogOpen(true);
+  };
+
+  const handleUploadPODialogClose = useCallback(() => {
+    setIsUploadPODialogOpen(false);
+  }, []);
+
+  // Wrapper for UploadPODialog that calls the shared processing function
+  const handleUploadPOSuccess = useCallback(async (data: ProcessedPOData) => {
+    await processExtractedPOData(data);
+  }, [processExtractedPOData]);
+
+  // Check for extracted PO data from email (via sessionStorage)
+  useEffect(() => {
+    if (!hasMounted) {
+      return;
+    }
+
+    const extractedDataStr = sessionStorage.getItem('extractedPOData');
+    if (extractedDataStr) {
+      // Clear immediately to prevent re-processing
+      sessionStorage.removeItem('extractedPOData');
+
+      try {
+        const extractedData = JSON.parse(extractedDataStr) as ProcessedPOData;
+        setProcessingEmailPO(true);
+
+        // Process the extracted data
+        processExtractedPOData(extractedData);
+      } catch (error) {
+        console.error('Error parsing extracted PO data:', error);
+        toast.error('Failed to process extracted PO data');
+        setProcessingEmailPO(false);
+      }
+    }
+  }, [hasMounted, processExtractedPOData]);
 
   // View
   const handleView = useCallback((quote: QuoteListItem) => {
@@ -589,7 +626,7 @@ export function QuotesPageContent() {
       {/* Quotes Table */}
       <QuotesTable
         data={quotes}
-        isLoading={isQuotesLoading || isSubmittingForApproval}
+        isLoading={isQuotesLoading || isSubmittingForApproval || isProcessingEmailPO}
         onRowClick={canViewDetail ? handleRowClick : undefined}
         onView={canViewDetail ? handleView : undefined}
         onEdit={canEdit ? handleEdit : undefined}
