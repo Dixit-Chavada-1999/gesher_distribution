@@ -2,15 +2,17 @@
  * PO Upload API Route
  *
  * POST /api/po/upload - Upload PO PDF to Supabase Storage
+ * GET /api/po/upload?file=<path> - Download/view uploaded file
  *
  * Note: Uses Supabase Storage instead of local filesystem
  * to work properly in serverless environments (Vercel)
  */
 
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import {
   successResponse,
   badRequestResponse,
+  notFoundResponse,
   internalErrorResponse,
 } from '@/shared/lib/api/response';
 import { requirePermission } from '@/shared/lib/auth';
@@ -150,5 +152,62 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('POST /api/po/upload error:', error);
     return internalErrorResponse('Failed to upload file');
+  }
+}
+
+// ============================================
+// GET /api/po/upload?file=<path>
+// ============================================
+
+/**
+ * Download/view uploaded PO PDF from Supabase Storage
+ */
+export async function GET(request: NextRequest) {
+  try {
+    // Check authentication + permission
+    const guard = await requirePermission('quotes.view_module');
+    if (guard.response) {
+      return guard.response;
+    }
+
+    // Get file path from query
+    const { searchParams } = new URL(request.url);
+    const filePath = searchParams.get('file');
+
+    if (!filePath) {
+      return badRequestResponse('File path is required');
+    }
+
+    // Sanitize path to prevent directory traversal
+    const sanitizedPath = filePath.replace(/\.\./g, '').replace(/^\//, '');
+
+    // Create Supabase admin client
+    const supabase = createAdminClient();
+
+    // Download file from Supabase Storage
+    const { data, error } = await supabase.storage
+      .from(BUCKET_NAME)
+      .download(sanitizedPath);
+
+    if (error) {
+      console.error('Supabase Storage download error:', error);
+      return notFoundResponse('File');
+    }
+
+    // Convert Blob to Buffer
+    const arrayBuffer = await data.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // Return file with appropriate headers
+    return new NextResponse(buffer, {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `inline; filename="${sanitizedPath.split('/').pop()}"`,
+        'Cache-Control': 'private, max-age=3600',
+      },
+    });
+  } catch (error) {
+    console.error('GET /api/po/upload error:', error);
+    return internalErrorResponse('Failed to retrieve file');
   }
 }
