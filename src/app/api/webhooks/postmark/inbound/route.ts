@@ -76,54 +76,71 @@ export async function POST(request: NextRequest) {
 
     // Process attachments if any
     if (payload.Attachments && payload.Attachments.length > 0) {
+      console.log('[Postmark Webhook] Processing', payload.Attachments.length, 'attachments');
+
       for (const attachment of payload.Attachments) {
-        // Only process PDF attachments
-        if (attachment.ContentType === 'application/pdf') {
+        console.log('[Postmark Webhook] Attachment:', {
+          name: attachment.Name,
+          contentType: attachment.ContentType,
+          size: attachment.ContentLength,
+          hasContent: !!attachment.Content,
+          contentLength: attachment.Content?.length || 0,
+        });
+
+        const isPdf = attachment.ContentType === 'application/pdf';
+        let storagePath: string | null = null;
+        let storageUrl: string | null = null;
+
+        // Only upload to storage if we have Content (base64 data)
+        if (attachment.Content && attachment.Content.length > 0) {
           // Decode base64 content and store in Supabase Storage
           const buffer = Buffer.from(attachment.Content, 'base64');
           const filename = `${Date.now()}_${attachment.Name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-          const storagePath = `inbound/${inboundEmail.id}/${filename}`;
+          storagePath = `inbound/${inboundEmail.id}/${filename}`;
 
           // Upload to Supabase Storage
           const { error: uploadError } = await supabase.storage
             .from('po-documents')
             .upload(storagePath, buffer, {
-              contentType: 'application/pdf',
+              contentType: attachment.ContentType,
               upsert: false,
             });
 
           if (uploadError) {
             console.error('[Postmark Webhook] Failed to upload attachment:', uploadError);
-            continue;
-          }
-
-          // Get signed URL for the file
-          const { data: signedUrlData } = await supabase.storage
-            .from('po-documents')
-            .createSignedUrl(storagePath, 60 * 60 * 24 * 365); // 1 year
-
-          // Store attachment record
-          const { error: attachmentError } = await supabase
-            .from('inbound_email_attachments')
-            .insert({
-              inbound_email_id: inboundEmail.id,
-              filename: attachment.Name,
-              mime_type: attachment.ContentType,
-              size: attachment.ContentLength,
-              stored_path: storagePath,
-              storage_url: signedUrlData?.signedUrl || null,
-              is_pdf: true,
-            });
-
-          if (attachmentError) {
-            console.error('[Postmark Webhook] Failed to insert attachment:', attachmentError);
+            storagePath = null;
           } else {
-            console.log('[Postmark Webhook] Attachment stored:', attachment.Name);
+            // Get signed URL for the file
+            const { data: signedUrlData } = await supabase.storage
+              .from('po-documents')
+              .createSignedUrl(storagePath, 60 * 60 * 24 * 365); // 1 year
+            storageUrl = signedUrlData?.signedUrl || null;
           }
+        } else {
+          console.warn('[Postmark Webhook] Attachment has no Content data. Enable "Include raw email content" in Postmark settings.');
+        }
+
+        // Store attachment record (even if Content was missing)
+        const { error: attachmentError } = await supabase
+          .from('inbound_email_attachments')
+          .insert({
+            inbound_email_id: inboundEmail.id,
+            filename: attachment.Name,
+            mime_type: attachment.ContentType,
+            size: attachment.ContentLength,
+            stored_path: storagePath,
+            storage_url: storageUrl,
+            is_pdf: isPdf,
+          });
+
+        if (attachmentError) {
+          console.error('[Postmark Webhook] Failed to insert attachment:', attachmentError);
+        } else {
+          console.log('[Postmark Webhook] Attachment record created:', attachment.Name, storagePath ? '(with file)' : '(metadata only)');
         }
       }
 
-      // Update email record to reflect processed attachments
+      // Update email status
       await supabase
         .from('inbound_emails')
         .update({ status: 'attachments_processed' })
