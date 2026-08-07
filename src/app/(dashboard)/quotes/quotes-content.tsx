@@ -71,7 +71,6 @@ export function QuotesPageContent() {
   // ----------------------------------------
 
   const [hasMounted, setHasMounted] = useState(false);
-  const [isProcessingEmailPO, setProcessingEmailPO] = useState(false);
 
   useEffect(() => {
     setHasMounted(true);
@@ -375,8 +374,6 @@ export function QuotesPageContent() {
     } catch (error) {
       console.error('Create quote from PO error:', error);
       toast.error('Failed to create quote from PO data');
-    } finally {
-      setProcessingEmailPO(false);
     }
   }, [refetchQuotes]);
 
@@ -410,31 +407,6 @@ export function QuotesPageContent() {
   const handleUploadPOSuccess = useCallback(async (data: ProcessedPOData) => {
     await processExtractedPOData(data);
   }, [processExtractedPOData]);
-
-  // Check for extracted PO data from email (via sessionStorage)
-  useEffect(() => {
-    if (!hasMounted) {
-      return;
-    }
-
-    const extractedDataStr = sessionStorage.getItem('extractedPOData');
-    if (extractedDataStr) {
-      // Clear immediately to prevent re-processing
-      sessionStorage.removeItem('extractedPOData');
-
-      try {
-        const extractedData = JSON.parse(extractedDataStr) as ProcessedPOData;
-        setProcessingEmailPO(true);
-
-        // Process the extracted data
-        processExtractedPOData(extractedData);
-      } catch (error) {
-        console.error('Error parsing extracted PO data:', error);
-        toast.error('Failed to process extracted PO data');
-        setProcessingEmailPO(false);
-      }
-    }
-  }, [hasMounted, processExtractedPOData]);
 
   // View
   const handleView = useCallback((quote: QuoteListItem) => {
@@ -626,7 +598,7 @@ export function QuotesPageContent() {
       {/* Quotes Table */}
       <QuotesTable
         data={quotes}
-        isLoading={isQuotesLoading || isSubmittingForApproval || isProcessingEmailPO}
+        isLoading={isQuotesLoading || isSubmittingForApproval}
         onRowClick={canViewDetail ? handleRowClick : undefined}
         onView={canViewDetail ? handleView : undefined}
         onEdit={canEdit ? handleEdit : undefined}

@@ -38,6 +38,13 @@ import { Label } from '@/shared/components/ui/label';
 import { convertPdfToImages } from '@/features/quotes/lib/pdf-to-images';
 import type { ProcessedPOData } from '@/features/quotes/types/po-extract.types';
 import type { InboundEmailAttachment } from '../types';
+import {
+  findOrCreateCustomerFromPO,
+  findOrCreateProductFromPO,
+  createQuoteFromData,
+} from '@/features/quotes/actions';
+import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
 
 // ============================================
 // TYPES
@@ -64,6 +71,7 @@ export function ExtractPOFromEmailDialog({
   onClose,
   onSuccess,
 }: ExtractPOFromEmailDialogProps) {
+  const router = useRouter();
   const [dialogState, setDialogState] = useState<DialogState>('idle');
   const [extractedData, setExtractedData] = useState<ProcessedPOData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -197,13 +205,14 @@ export function ExtractPOFromEmailDialog({
     }
   }, [open, attachmentUrl, attachment, dialogState, startExtraction]);
 
-  // Handle create quote
+  // Handle create quote - directly creates the quote
   const handleCreateQuote = async () => {
     if (!extractedData) {
       return;
     }
 
     setDialogState('creating');
+    setError(null);
 
     try {
       // Apply edited values to extracted data
@@ -214,8 +223,7 @@ export function ExtractPOFromEmailDialog({
         baseCost: editLineItems[index]?.baseCost ?? product.baseCost ?? null,
       }));
 
-      // Create data with edits
-      const dataWithEdits: ProcessedPOData = {
+      const data: ProcessedPOData = {
         ...extractedData,
         extraction: {
           ...extractedData.extraction,
@@ -233,8 +241,151 @@ export function ExtractPOFromEmailDialog({
         products: updatedProducts,
       };
 
-      onSuccess?.(dataWithEdits);
-      handleClose();
+      // Step 1: Find or create customer
+      let customerId = data.customer.customerId;
+      let customerCreated = false;
+
+      if (!data.customer.matched || !customerId) {
+        const customerName = data.extraction.customer?.name;
+        if (!customerName) {
+          toast.error('No customer name found in PO');
+          setDialogState('reviewing');
+          return;
+        }
+
+        const customerResult = await findOrCreateCustomerFromPO(
+          customerName,
+          data.extraction.customer?.address,
+          data.extraction.customer?.city,
+          data.extraction.customer?.state,
+          data.extraction.customer?.zip
+        );
+
+        if (!customerResult.success || !customerResult.data) {
+          toast.error(customerResult.error || 'Failed to find or create customer');
+          setDialogState('reviewing');
+          return;
+        }
+
+        customerId = customerResult.data.customerId;
+        customerCreated = customerResult.data.created;
+
+        if (customerCreated) {
+          toast.info(`New customer "${customerResult.data.customerName}" created`);
+        }
+      }
+
+      // Step 2: Process ALL products
+      const quoteItems: Array<{
+        productId: string;
+        sku: string;
+        description: string | null;
+        quantity: number;
+        unitCode: string;
+        unitPrice: number;
+        discountPercent: number;
+        taxRate: number;
+      }> = [];
+
+      let productsCreated = 0;
+
+      for (const product of data.products) {
+        if (product.matched && product.productId) {
+          quoteItems.push({
+            productId: product.productId,
+            sku: product.sku,
+            description: product.description || null,
+            quantity: product.quantity,
+            unitCode: 'EA',
+            unitPrice: product.unitPrice || Math.round(product.extractedUnitPrice * 100),
+            discountPercent: 0,
+            taxRate: 0,
+          });
+        } else {
+          const extractedItem = data.extraction.lineItems.find(
+            (item) => item.description === product.description
+          );
+
+          const productResult = await findOrCreateProductFromPO(
+            product.sku || null,
+            product.description,
+            extractedItem?.tireSize || extractedItem?.vendorItemNo || null,
+            product.extractedUnitPrice,
+            product.baseCost ?? null
+          );
+
+          if (productResult.success && productResult.data) {
+            quoteItems.push({
+              productId: productResult.data.productId,
+              sku: productResult.data.sku,
+              description: product.description || null,
+              quantity: product.quantity,
+              unitCode: 'EA',
+              unitPrice: productResult.data.unitPrice,
+              discountPercent: 0,
+              taxRate: 0,
+            });
+
+            if (productResult.data.created) {
+              productsCreated++;
+            }
+          } else {
+            toast.error(`Failed to process product ${product.sku}`);
+          }
+        }
+      }
+
+      if (quoteItems.length === 0) {
+        toast.error('No products could be processed');
+        setDialogState('reviewing');
+        return;
+      }
+
+      if (productsCreated > 0) {
+        toast.info(`${productsCreated} new product(s) created`);
+      }
+
+      // Step 3: Create quote
+      const quoteData = {
+        quoteDate: data.extraction.poDate ? new Date(data.extraction.poDate) : new Date(),
+        validUntil: null,
+        customerId,
+        salesRepId: null,
+        currencyCode: 'USD',
+        status: 'draft' as const,
+        billingAddress: {
+          street: data.extraction.customer?.address || null,
+          city: data.extraction.customer?.city || null,
+          state: data.extraction.customer?.state || null,
+          postalCode: data.extraction.customer?.zip || null,
+          country: 'US',
+        },
+        shippingAddress: {
+          street: data.extraction.shipTo?.address || null,
+          city: data.extraction.shipTo?.city || null,
+          state: data.extraction.shipTo?.state || null,
+          postalCode: data.extraction.shipTo?.zip || null,
+          country: 'US',
+        },
+        items: quoteItems,
+        customerNotes: data.extraction.poNumber ? `PO Reference: ${data.extraction.poNumber}` : null,
+        internalNotes: `Created from email PO. Extraction confidence: ${data.extraction.confidence}%`,
+        termsAndConditions: null,
+        poDocumentUrl: attachmentUrl,
+      };
+
+      const result = await createQuoteFromData(quoteData);
+
+      if (result.success && result.data) {
+        toast.success('Quote created successfully');
+        onSuccess?.(data);
+        handleClose();
+        // Navigate to quotes page
+        router.push('/quotes');
+      } else {
+        toast.error(result.error || 'Failed to create quote');
+        setDialogState('reviewing');
+      }
     } catch (err) {
       console.error('Create quote error:', err);
       setError(err instanceof Error ? err.message : 'Failed to create quote');

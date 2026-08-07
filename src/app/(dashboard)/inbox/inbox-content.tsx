@@ -38,6 +38,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -113,6 +123,12 @@ export function InboxContent() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedEmail, setSelectedEmail] = useState<InboundEmail | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+  // Delete dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [emailToDelete, setEmailToDelete] = useState<InboundEmail | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const [meta, setMeta] = useState({
     total: 0,
     page: 1,
@@ -156,19 +172,31 @@ export function InboxContent() {
     setIsDrawerOpen(true);
   };
 
-  // Handle delete email
-  const handleDeleteEmail = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this email?')) {
+  // Handle delete email click - opens confirmation dialog
+  const handleDeleteClick = (email: InboundEmail) => {
+    setEmailToDelete(email);
+    setDeleteDialogOpen(true);
+  };
+
+  // Confirm delete email
+  const handleConfirmDelete = async () => {
+    if (!emailToDelete) {
       return;
     }
 
-    const result = await deleteInboundEmail(id);
+    setIsDeleting(true);
+    const result = await deleteInboundEmail(emailToDelete.id);
+
     if (result.success) {
       toast.success('Email deleted');
       fetchEmails();
     } else {
       toast.error(result.error || 'Failed to delete email');
     }
+
+    setIsDeleting(false);
+    setDeleteDialogOpen(false);
+    setEmailToDelete(null);
   };
 
   // Handle search
@@ -336,7 +364,7 @@ export function InboxContent() {
                           size="icon"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDeleteEmail(email.id);
+                            handleDeleteClick(email);
                           }}
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
@@ -385,6 +413,32 @@ export function InboxContent() {
         onClose={handleDrawerClose}
         onQuoteCreated={handleQuoteCreated}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Email</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this email
+              {emailToDelete?.subject && (
+                <>: <span className="font-medium">&quot;{emailToDelete.subject}&quot;</span></>
+              )}
+              ? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -41,7 +41,6 @@ import type {
 import { ExtractPOFromEmailDialog } from './ExtractPOFromEmailDialog';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-import { useRouter } from 'next/navigation';
 
 // ============================================
 // TYPES
@@ -161,7 +160,6 @@ export function ViewEmailDrawer({
   onClose,
   onQuoteCreated,
 }: ViewEmailDrawerProps) {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [emailDetails, setEmailDetails] = useState<InboundEmailWithAttachments | null>(null);
   const [extractDialogOpen, setExtractDialogOpen] = useState(false);
@@ -213,18 +211,13 @@ export function ViewEmailDrawer({
     }
   };
 
-  const handleExtractSuccess = async (data: unknown) => {
+  const handleExtractSuccess = () => {
     // Close the extract dialog
     setExtractDialogOpen(false);
     setSelectedAttachment(null);
     setAttachmentUrl(null);
 
-    // Navigate to quotes page with extracted data
-    // Store the data in sessionStorage for the quotes page to pick up
-    sessionStorage.setItem('extractedPOData', JSON.stringify(data));
-    router.push('/quotes?action=create-from-po');
-
-    // Notify parent
+    // Notify parent (to refresh list if needed)
     onQuoteCreated?.();
   };
 

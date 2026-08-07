@@ -7,6 +7,7 @@
 'use server';
 
 import { createClient } from '@/shared/lib/supabase/server';
+import { createAdminClient } from '@/shared/lib/supabase/admin';
 import type {
   InboundEmail,
   InboundEmailWithAttachments,
@@ -201,7 +202,17 @@ export async function deleteInboundEmail(
   }
 
   try {
-    const { error } = await supabase
+    // Use admin client to bypass RLS for delete
+    const adminClient = createAdminClient();
+
+    // First delete attachments (cascade should handle this, but let's be explicit)
+    await adminClient
+      .from('inbound_email_attachments')
+      .delete()
+      .eq('inbound_email_id', id);
+
+    // Delete the email
+    const { error } = await adminClient
       .from('inbound_emails')
       .delete()
       .eq('id', id);
