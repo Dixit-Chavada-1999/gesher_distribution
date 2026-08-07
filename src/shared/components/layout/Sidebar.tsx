@@ -19,6 +19,7 @@ import {
   X,
   LogOut,
   ChevronRight,
+  Inbox,
   // Only used by the hidden Permissions entry — uncomment with it.
   // Key,
   // Icons below are only used by the hidden Catalog section — uncomment with it.
@@ -49,6 +50,13 @@ const NAV_SECTIONS = [
         href: '/dashboard',
         icon: LayoutDashboard,
         permission: 'dashboard.view_module',
+      },
+      {
+        id: 'inbox',
+        label: 'Inbox',
+        href: '/inbox',
+        icon: Inbox,
+        permission: 'quotes.view_module', // Uses quotes permission for now
       },
     ],
   },
