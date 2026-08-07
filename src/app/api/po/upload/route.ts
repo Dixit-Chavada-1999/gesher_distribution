@@ -1,14 +1,11 @@
 /**
  * PO Upload API Route
  *
- * POST /api/po/upload - Upload PO PDF to local server storage
+ * POST /api/po/upload - Upload PO PDF to Supabase Storage
  * GET /api/po/upload?file=<path> - Download/view uploaded file
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFile, mkdir, readFile, stat } from 'fs/promises';
-import { existsSync } from 'fs';
-import path from 'path';
 import {
   successResponse,
   badRequestResponse,
@@ -16,32 +13,19 @@ import {
   internalErrorResponse,
 } from '@/shared/lib/api/response';
 import { requirePermission } from '@/shared/lib/auth';
+import { createClient } from '@/shared/lib/supabase/server';
 
 // ============================================
 // CONSTANTS
 // ============================================
 
-// Store files in 'uploads' folder at project root (outside public for security)
-const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'po-documents');
+const BUCKET_NAME = 'po-documents';
 const MAX_FILE_SIZE_MB = 10;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
-
-/**
- * Ensure upload directory exists
- */
-async function ensureUploadDir(subDir?: string): Promise<string> {
-  const targetDir = subDir ? path.join(UPLOAD_DIR, subDir) : UPLOAD_DIR;
-
-  if (!existsSync(targetDir)) {
-    await mkdir(targetDir, { recursive: true });
-  }
-
-  return targetDir;
-}
 
 /**
  * Generate unique filename
@@ -58,7 +42,7 @@ function generateFilename(originalName: string): string {
 // ============================================
 
 /**
- * Upload PO PDF to local storage
+ * Upload PO PDF to Supabase Storage
  *
  * Request: FormData with 'file' field
  * Response: { path: string, url: string }
@@ -89,28 +73,39 @@ export async function POST(request: NextRequest) {
       return badRequestResponse(`File size exceeds ${MAX_FILE_SIZE_MB}MB limit`);
     }
 
-    // Determine subdirectory (organize by quote or uploads)
+    // Initialize Supabase client
+    const supabase = await createClient();
+
+    // Determine storage path (organize by quote or uploads)
     const subDir = quoteId ? `quotes/${quoteId}` : 'uploads';
-    const uploadDir = await ensureUploadDir(subDir);
-
-    // Generate unique filename
     const filename = generateFilename(file.name);
-    const filepath = path.join(uploadDir, filename);
+    const storagePath = `${subDir}/${filename}`;
 
-    // Convert File to Buffer and write to disk
+    // Convert File to Buffer
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    await writeFile(filepath, buffer);
 
-    // Return relative path (from uploads folder)
-    const relativePath = path.join(subDir, filename).replace(/\\/g, '/');
+    // Upload to Supabase Storage
+    const { data, error } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(storagePath, buffer, {
+        contentType: 'application/pdf',
+        upsert: false,
+      });
 
-    // Generate URL for accessing the file
-    const fileUrl = `/api/po/upload?file=${encodeURIComponent(relativePath)}`;
+    if (error) {
+      console.error('Supabase Storage upload error:', error);
+      return internalErrorResponse(`Failed to upload file: ${error.message}`);
+    }
+
+    // Get public URL for the file
+    const { data: urlData } = supabase.storage
+      .from(BUCKET_NAME)
+      .getPublicUrl(data.path);
 
     return successResponse({
-      path: relativePath,
-      url: fileUrl,
+      path: data.path,
+      url: urlData.publicUrl,
       filename: filename,
     });
   } catch (error) {
@@ -124,7 +119,7 @@ export async function POST(request: NextRequest) {
 // ============================================
 
 /**
- * Download/view uploaded PO PDF
+ * Download/view uploaded PO PDF from Supabase Storage
  */
 export async function GET(request: NextRequest) {
   try {
@@ -144,28 +139,29 @@ export async function GET(request: NextRequest) {
 
     // Sanitize path to prevent directory traversal
     const sanitizedPath = filePath.replace(/\.\./g, '').replace(/^\//, '');
-    const fullPath = path.join(UPLOAD_DIR, sanitizedPath);
 
-    // Ensure file is within upload directory (security check)
-    if (!fullPath.startsWith(UPLOAD_DIR)) {
-      return badRequestResponse('Invalid file path');
-    }
+    // Initialize Supabase client
+    const supabase = await createClient();
 
-    // Check if file exists
-    try {
-      await stat(fullPath);
-    } catch {
+    // Download file from Supabase Storage
+    const { data, error } = await supabase.storage
+      .from(BUCKET_NAME)
+      .download(sanitizedPath);
+
+    if (error) {
+      console.error('Supabase Storage download error:', error);
       return notFoundResponse('File');
     }
 
-    // Read file
-    const fileBuffer = await readFile(fullPath);
+    // Convert Blob to Buffer
+    const arrayBuffer = await data.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
 
     // Return file with appropriate headers
-    return new NextResponse(fileBuffer, {
+    return new NextResponse(buffer, {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `inline; filename="${path.basename(fullPath)}"`,
+        'Content-Disposition': `inline; filename="${sanitizedPath.split('/').pop()}"`,
         'Cache-Control': 'private, max-age=3600',
       },
     });
