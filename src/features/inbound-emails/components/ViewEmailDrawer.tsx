@@ -38,8 +38,10 @@ import type {
   InboundEmailWithAttachments,
   InboundEmailAttachment,
 } from '@/features/inbound-emails/types';
+import { ExtractPOFromEmailDialog } from './ExtractPOFromEmailDialog';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
 
 // ============================================
 // TYPES
@@ -65,7 +67,14 @@ function AttachmentItem({
 }) {
   const [downloading, setDownloading] = useState(false);
 
+  // Check if file is actually stored (has stored_path)
+  const hasFile = !!attachment.stored_path;
+
   const handleDownload = async () => {
+    if (!hasFile) {
+      toast.error('File not available. Enable "Include raw email content" in Postmark settings and resend the email.');
+      return;
+    }
     setDownloading(true);
     try {
       const result = await getAttachmentUrl(attachment.id);
@@ -93,15 +102,16 @@ function AttachmentItem({
   };
 
   return (
-    <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
+    <div className={`flex items-center justify-between p-3 border rounded-lg ${hasFile ? 'bg-muted/30' : 'bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-800'}`}>
       <div className="flex items-center gap-3">
-        <div className="p-2 bg-primary/10 rounded">
-          <FileText className="h-5 w-5 text-primary" />
+        <div className={`p-2 rounded ${hasFile ? 'bg-primary/10' : 'bg-amber-100 dark:bg-amber-900/30'}`}>
+          <FileText className={`h-5 w-5 ${hasFile ? 'text-primary' : 'text-amber-600 dark:text-amber-400'}`} />
         </div>
         <div>
           <p className="font-medium text-sm">{attachment.filename}</p>
           <p className="text-xs text-muted-foreground">
             {attachment.mime_type} • {formatFileSize(attachment.size)}
+            {!hasFile && <span className="text-amber-600 dark:text-amber-400 ml-2">(File not stored)</span>}
           </p>
         </div>
       </div>
@@ -110,7 +120,8 @@ function AttachmentItem({
           variant="outline"
           size="sm"
           onClick={handleDownload}
-          disabled={downloading}
+          disabled={downloading || !hasFile}
+          title={!hasFile ? 'File not available' : 'Download file'}
         >
           {downloading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -122,6 +133,8 @@ function AttachmentItem({
           <Button
             size="sm"
             onClick={() => onExtract(attachment)}
+            disabled={!hasFile}
+            title={!hasFile ? 'File not available' : 'Extract PO from PDF'}
           >
             Extract PO
             <ArrowRight className="h-4 w-4 ml-1" />
@@ -146,11 +159,14 @@ export function ViewEmailDrawer({
   email,
   open,
   onClose,
-  onQuoteCreated: _onQuoteCreated,
+  onQuoteCreated,
 }: ViewEmailDrawerProps) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [emailDetails, setEmailDetails] = useState<InboundEmailWithAttachments | null>(null);
-  const [_extracting, setExtracting] = useState(false);
+  const [extractDialogOpen, setExtractDialogOpen] = useState(false);
+  const [selectedAttachment, setSelectedAttachment] = useState<InboundEmailAttachment | null>(null);
+  const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null);
 
   // Fetch email details when opened
   useEffect(() => {
@@ -179,28 +195,37 @@ export function ViewEmailDrawer({
   };
 
   const handleExtractPO = async (attachment: InboundEmailAttachment) => {
-    setExtracting(true);
     try {
       // Get attachment URL
       const urlResult = await getAttachmentUrl(attachment.id);
       if (!urlResult.success || !urlResult.data) {
-        toast.error('Failed to get attachment URL');
+        toast.error(urlResult.error || 'Failed to get attachment URL');
         return;
       }
 
-      // TODO: Implement PO extraction similar to UploadPODialog
-      // For now, open the PDF in a new tab
-      toast.info('PO extraction coming soon! Opening PDF...');
-      window.open(urlResult.data.url, '_blank');
-
-      // After extraction is implemented:
-      // onQuoteCreated?.();
+      // Set state and open extract dialog
+      setSelectedAttachment(attachment);
+      setAttachmentUrl(urlResult.data.url);
+      setExtractDialogOpen(true);
     } catch (error) {
       console.error('Extract PO error:', error);
       toast.error('Failed to extract PO');
-    } finally {
-      setExtracting(false);
     }
+  };
+
+  const handleExtractSuccess = async (data: unknown) => {
+    // Close the extract dialog
+    setExtractDialogOpen(false);
+    setSelectedAttachment(null);
+    setAttachmentUrl(null);
+
+    // Navigate to quotes page with extracted data
+    // Store the data in sessionStorage for the quotes page to pick up
+    sessionStorage.setItem('extractedPOData', JSON.stringify(data));
+    router.push('/quotes?action=create-from-po');
+
+    // Notify parent
+    onQuoteCreated?.();
   };
 
   if (!email) {
@@ -323,6 +348,19 @@ export function ViewEmailDrawer({
           </div>
         )}
       </SheetContent>
+
+      {/* Extract PO Dialog */}
+      <ExtractPOFromEmailDialog
+        open={extractDialogOpen}
+        attachment={selectedAttachment}
+        attachmentUrl={attachmentUrl}
+        onClose={() => {
+          setExtractDialogOpen(false);
+          setSelectedAttachment(null);
+          setAttachmentUrl(null);
+        }}
+        onSuccess={handleExtractSuccess}
+      />
     </Sheet>
   );
 }

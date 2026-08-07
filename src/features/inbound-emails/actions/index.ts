@@ -262,7 +262,7 @@ export async function getAttachmentUrl(
       return { success: true, data: { url: signedUrlData.signedUrl } };
     }
 
-    return { success: false, error: 'No file path available' };
+    return { success: false, error: 'File not stored. Enable "Include raw email content" in Postmark settings and resend the email.' };
   } catch (error) {
     console.error('getAttachmentUrl error:', error);
     return { success: false, error: 'Failed to get download URL' };
