@@ -132,9 +132,9 @@ function AttachmentItem({
             size="sm"
             onClick={() => onExtract(attachment)}
             disabled={!hasFile}
-            title={!hasFile ? 'File not available' : 'Extract PO from PDF'}
+            title={!hasFile ? 'File not available' : 'Generate a Quote from PDF'}
           >
-            Extract PO
+            Generate a Quote
             <ArrowRight className="h-4 w-4 ml-1" />
           </Button>
         )}
