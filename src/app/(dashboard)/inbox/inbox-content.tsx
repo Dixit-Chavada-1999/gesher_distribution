@@ -14,7 +14,6 @@ import {
   RefreshCw,
   Trash2,
   Eye,
-  FileText,
   Inbox as InboxIcon,
   Clock,
   CheckCircle,
@@ -57,25 +56,29 @@ type StatusConfig = { label: string; variant: 'default' | 'secondary' | 'destruc
 
 function StatusBadge({ status }: { status: string }) {
   const defaultConfig: StatusConfig = {
-    label: 'Received',
+    label: 'Pending',
     variant: 'secondary',
     icon: <Clock className="h-3 w-3" />,
   };
 
   const config: Record<string, StatusConfig> = {
-    received: defaultConfig,
+    received: {
+      label: 'Pending',
+      variant: 'secondary',
+      icon: <Clock className="h-3 w-3" />,
+    },
     attachments_processed: {
-      label: 'Processed',
-      variant: 'default',
-      icon: <CheckCircle className="h-3 w-3" />,
+      label: 'Pending',
+      variant: 'secondary',
+      icon: <Clock className="h-3 w-3" />,
     },
     extracted: {
-      label: 'Extracted',
-      variant: 'default',
-      icon: <FileText className="h-3 w-3" />,
+      label: 'Pending',
+      variant: 'secondary',
+      icon: <Clock className="h-3 w-3" />,
     },
     processed: {
-      label: 'Completed',
+      label: 'Processed',
       variant: 'default',
       icon: <CheckCircle className="h-3 w-3" />,
     },
@@ -228,9 +231,8 @@ export function InboxContent() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="received">Received</SelectItem>
-                <SelectItem value="attachments_processed">Processed</SelectItem>
-                <SelectItem value="extracted">Extracted</SelectItem>
+                <SelectItem value="received">Pending</SelectItem>
+                <SelectItem value="processed">Processed</SelectItem>
                 <SelectItem value="failed">Failed</SelectItem>
                 <SelectItem value="ignored">Ignored</SelectItem>
               </SelectContent>

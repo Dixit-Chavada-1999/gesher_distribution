@@ -1,30 +1,23 @@
 'use client';
 
 /**
- * UploadPODialog Component
+ * ExtractPOFromEmailDialog Component
  *
- * Dialog for uploading Purchase Order PDF files and extracting data using Claude AI.
- * Converts PDF to images, sends to API for extraction, and creates quote from results.
+ * Dialog for extracting PO data from email attachment PDF.
+ * Fetches PDF from storage, converts to images, and extracts data using AI.
  */
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
-  Upload,
   FileText,
-  X,
   Loader2,
-  Eye,
-  EyeOff,
   AlertCircle,
   CheckCircle2,
   AlertTriangle,
   Package,
   User,
   FileCheck,
-  Maximize2,
   Pencil,
-  ChevronDown,
-  Plus,
 } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
@@ -42,34 +35,37 @@ import { Separator } from '@/shared/components/ui/separator';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/shared/components/ui/popover';
-import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/shared/components/ui/popover';
+import { ChevronDown, Plus, X } from 'lucide-react';
 
-import { convertPdfToImages } from '../lib/pdf-to-images';
+import { convertPdfToImages } from '@/features/quotes/lib/pdf-to-images';
+import type { ProcessedPOData } from '@/features/quotes/types/po-extract.types';
+import type { InboundEmailAttachment } from '../types';
+import { updateInboundEmailStatus } from '../actions';
+import {
+  findOrCreateCustomerFromPO,
+  findOrCreateProductFromPO,
+  createQuoteFromData,
+} from '@/features/quotes/actions';
 import { getProducts, createProductFromData } from '@/features/products/actions';
-import type {
-  ProcessedPOData,
-  UploadDialogState,
-} from '../types/po-extract.types';
+import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
 
 // ============================================
 // TYPES
 // ============================================
 
-interface UploadPODialogProps {
-  open: boolean;
-  onClose: () => void;
-  onSuccess?: (data: ProcessedPOData) => void;
-}
+type DialogState = 'idle' | 'fetching' | 'extracting' | 'reviewing' | 'creating' | 'error';
 
 interface ProductOption {
   id: string;
@@ -79,26 +75,31 @@ interface ProductOption {
   baseCost: number;
 }
 
+interface ExtractPOFromEmailDialogProps {
+  open: boolean;
+  attachment: InboundEmailAttachment | null;
+  attachmentUrl: string | null;
+  onClose: () => void;
+  onSuccess?: (data: ProcessedPOData) => void;
+}
+
 // ============================================
 // COMPONENT
 // ============================================
 
-export function UploadPODialog({
+export function ExtractPOFromEmailDialog({
   open,
+  attachment,
+  attachmentUrl,
   onClose,
   onSuccess,
-}: UploadPODialogProps) {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dialogState, setDialogState] = useState<UploadDialogState>('idle');
-  const [showPreview, setShowPreview] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+}: ExtractPOFromEmailDialogProps) {
+  const router = useRouter();
+  const [dialogState, setDialogState] = useState<DialogState>('idle');
   const [extractedData, setExtractedData] = useState<ProcessedPOData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string>('');
-  const [showFullscreenPreview, setShowFullscreenPreview] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Editable fields state
   const [editPoNumber, setEditPoNumber] = useState('');
@@ -135,34 +136,14 @@ export function UploadPODialog({
 
   // Filter products based on search
   const filteredProducts = productsList.filter((p) => {
-    if (!productSearch.trim()) { return true; }
+    if (!productSearch.trim()) {
+      return true;
+    }
     const search = productSearch.toLowerCase();
     return p.sku.toLowerCase().includes(search) || p.name.toLowerCase().includes(search);
   });
 
-  // Initialize editable fields when extraction completes
-  useEffect(() => {
-    if (extractedData && dialogState === 'reviewing') {
-      setEditPoNumber(extractedData.extraction.poNumber || '');
-      setEditPoDate(extractedData.extraction.poDate || '');
-      setEditShipToName(extractedData.extraction.shipTo?.name || '');
-      setEditShipToAddress(extractedData.extraction.shipTo?.address || '');
-      setEditShipToCity(extractedData.extraction.shipTo?.city || '');
-      setEditShipToState(extractedData.extraction.shipTo?.state || '');
-      setEditShipToZip(extractedData.extraction.shipTo?.zip || '');
-      setEditLineItems(
-        extractedData.products.map((p) => ({
-          quantity: p.quantity,
-          unitPrice: p.extractedUnitPrice,
-          baseCost: p.matched ? (p.baseCost ?? null) : null,
-          selectedProductId: p.matched ? (p.productId ?? null) : null,
-          selectedProductSku: p.matched ? (p.sku ?? null) : null,
-        }))
-      );
-    }
-  }, [extractedData, dialogState]);
-
-  // Fetch products list when in reviewing state
+  // Fetch products list when dialog opens
   useEffect(() => {
     const fetchProducts = async () => {
       if (dialogState === 'reviewing' && productsList.length === 0) {
@@ -260,7 +241,7 @@ export function UploadPODialog({
         setCreatingProductForIndex(null);
         setOpenPopoverIndex(null);
 
-        // toast would be helpful here but need to import
+        toast.success(`Product "${result.data.name}" created`);
       } else {
         // Show detailed validation errors on fields
         if (result.errors) {
@@ -269,104 +250,67 @@ export function UploadPODialog({
             fieldErrors[field] = (messages as string[])[0] || 'Invalid';
           });
           setFormErrors(fieldErrors);
+          toast.error('Please fix the errors below');
+        } else {
+          toast.error(result.error || 'Failed to create product');
         }
       }
     } catch (error) {
       console.error('Create product error:', error);
+      toast.error('Failed to create product');
     } finally {
       setCreatingProduct(false);
     }
   };
 
-  // Create/revoke object URL for PDF preview
+  // Initialize editable fields when extraction completes
   useEffect(() => {
-    if (selectedFile) {
-      const url = URL.createObjectURL(selectedFile);
-      setPreviewUrl(url);
-      setShowPreview(true);
-      return () => {
-        URL.revokeObjectURL(url);
-      };
+    if (extractedData && dialogState === 'reviewing') {
+      setEditPoNumber(extractedData.extraction.poNumber || '');
+      setEditPoDate(extractedData.extraction.poDate || '');
+      setEditShipToName(extractedData.extraction.shipTo?.name || '');
+      setEditShipToAddress(extractedData.extraction.shipTo?.address || '');
+      setEditShipToCity(extractedData.extraction.shipTo?.city || '');
+      setEditShipToState(extractedData.extraction.shipTo?.state || '');
+      setEditShipToZip(extractedData.extraction.shipTo?.zip || '');
+      setEditLineItems(
+        extractedData.products.map((p) => ({
+          quantity: p.quantity,
+          unitPrice: p.extractedUnitPrice,
+          baseCost: p.matched ? (p.baseCost ?? null) : null,
+          selectedProductId: p.matched ? (p.productId ?? null) : null,
+          selectedProductSku: p.matched ? (p.sku ?? null) : null,
+        }))
+      );
     }
-    setPreviewUrl(null);
-    setShowPreview(false);
-    return undefined;
-  }, [selectedFile]);
+  }, [extractedData, dialogState]);
 
-  // Handle file selection
-  const handleFileSelect = useCallback((file: File) => {
-    if (file.type === 'application/pdf') {
-      // Validate file size (10MB max)
-      if (file.size > 10 * 1024 * 1024) {
-        setError('File size exceeds 10MB limit');
-        return;
-      }
-      setSelectedFile(file);
-      setDialogState('file-selected');
-      setError(null);
-      setExtractedData(null);
-    } else {
-      setError('Please select a PDF file');
-    }
-  }, []);
-
-  // Handle input change
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      handleFileSelect(file);
-    }
-  };
-
-  // Handle drag events
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      handleFileSelect(file);
-    }
-  };
-
-  // Handle upload click
-  const handleUploadClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  // Remove selected file
-  const handleRemoveFile = () => {
-    setSelectedFile(null);
-    setExtractedData(null);
-    setError(null);
-    setDialogState('idle');
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  // Handle extraction process
-  const handleExtract = async () => {
-    if (!selectedFile) {
+  // Start extraction when dialog opens
+  const startExtraction = useCallback(async () => {
+    if (!attachmentUrl || !attachment) {
+      setError('No attachment URL provided');
       return;
     }
 
-    setDialogState('extracting');
+    setDialogState('fetching');
     setError(null);
-    setProgress('Converting PDF to images...');
+    setProgress('Fetching PDF from storage...');
 
     try {
-      // Step 1: Convert PDF to images
-      const conversionResult = await convertPdfToImages(selectedFile);
+      // Step 1: Fetch PDF from storage URL
+      const response = await fetch(attachmentUrl);
+      if (!response.ok) {
+        throw new Error('Failed to fetch PDF from storage');
+      }
+
+      const pdfBlob = await response.blob();
+      const pdfFile = new File([pdfBlob], attachment.filename, { type: 'application/pdf' });
+
+      setDialogState('extracting');
+      setProgress('Converting PDF to images...');
+
+      // Step 2: Convert PDF to images
+      const conversionResult = await convertPdfToImages(pdfFile);
 
       if (!conversionResult.success) {
         throw new Error(conversionResult.error || 'Failed to convert PDF');
@@ -380,8 +324,8 @@ export function UploadPODialog({
         `Extracted ${conversionResult.processedPages} of ${conversionResult.pageCount} pages. Sending to AI for analysis...`
       );
 
-      // Step 2: Send images to extraction API
-      const response = await fetch('/api/po/extract', {
+      // Step 3: Send images to extraction API
+      const extractResponse = await fetch('/api/po/extract', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -391,30 +335,22 @@ export function UploadPODialog({
         }),
       });
 
-      const result = await response.json();
+      const result = await extractResponse.json();
 
-      if (!response.ok || !result.success) {
-        // Parse error and show user-friendly message
+      if (!extractResponse.ok || !result.success) {
         let errorMessage = 'Extraction failed';
 
         if (result.error) {
-          // Handle different error types
           const errorStr = typeof result.error === 'string'
             ? result.error
             : result.error.message || JSON.stringify(result.error);
 
           if (errorStr.includes('OPENAI_API_KEY not configured')) {
-            errorMessage = 'AI service not configured. Please contact administrator to set up the OpenAI API key.';
-          } else if (errorStr.includes('invalid') || errorStr.includes('authentication') || errorStr.includes('Incorrect API key')) {
-            errorMessage = 'AI service authentication failed. The API key is invalid or expired. Please contact administrator.';
+            errorMessage = 'AI service not configured. Please contact administrator.';
+          } else if (errorStr.includes('invalid') || errorStr.includes('authentication')) {
+            errorMessage = 'AI service authentication failed. Please contact administrator.';
           } else if (errorStr.includes('rate_limit')) {
-            errorMessage = 'AI service rate limit reached. Please try again in a few minutes.';
-          } else if (errorStr.includes('overloaded')) {
-            errorMessage = 'AI service is currently busy. Please try again in a moment.';
-          } else if (response.status === 401) {
-            errorMessage = 'Authentication required. Please log in again.';
-          } else if (response.status === 403) {
-            errorMessage = 'You do not have permission to perform this action.';
+            errorMessage = 'AI service rate limit reached. Please try again later.';
           } else {
             errorMessage = errorStr;
           }
@@ -423,7 +359,7 @@ export function UploadPODialog({
         throw new Error(errorMessage);
       }
 
-      // Step 3: Show extracted data for review
+      // Step 4: Show extracted data for review
       setExtractedData(result.data);
       setDialogState('reviewing');
       setProgress('');
@@ -433,44 +369,34 @@ export function UploadPODialog({
       setDialogState('error');
       setProgress('');
     }
-  };
+  }, [attachmentUrl, attachment]);
 
-  // Handle create quote
+  // Auto-start extraction when dialog opens
+  useEffect(() => {
+    if (open && attachmentUrl && attachment && dialogState === 'idle') {
+      startExtraction();
+    }
+  }, [open, attachmentUrl, attachment, dialogState, startExtraction]);
+
+  // Handle create quote - directly creates the quote
   const handleCreateQuote = async () => {
     if (!extractedData) {
       return;
     }
 
     setDialogState('creating');
+    setError(null);
 
     try {
       // Apply edited values to extracted data
-      const updatedProducts = extractedData.products.map((product, index) => {
-        const lineItem = editLineItems[index];
-        // If a product was selected from dropdown, use that product's info
-        if (lineItem?.selectedProductId) {
-          const selectedProduct = productsList.find(p => p.id === lineItem.selectedProductId);
-          return {
-            ...product,
-            productId: lineItem.selectedProductId,
-            sku: selectedProduct?.sku || lineItem.selectedProductSku || product.sku,
-            matched: true, // Mark as matched since user selected a product
-            quantity: lineItem.quantity ?? product.quantity,
-            extractedUnitPrice: lineItem.unitPrice ?? product.extractedUnitPrice,
-            baseCost: lineItem.baseCost ?? (selectedProduct ? selectedProduct.baseCost / 100 : null),
-          };
-        }
-        // Otherwise use the original product with any edits
-        return {
-          ...product,
-          quantity: lineItem?.quantity ?? product.quantity,
-          extractedUnitPrice: lineItem?.unitPrice ?? product.extractedUnitPrice,
-          baseCost: lineItem?.baseCost ?? product.baseCost ?? null,
-        };
-      });
+      const updatedProducts = extractedData.products.map((product, index) => ({
+        ...product,
+        quantity: editLineItems[index]?.quantity ?? product.quantity,
+        extractedUnitPrice: editLineItems[index]?.unitPrice ?? product.extractedUnitPrice,
+        baseCost: editLineItems[index]?.baseCost ?? product.baseCost ?? null,
+      }));
 
-      // Include the PDF file and edited data
-      const dataWithEdits: ProcessedPOData = {
+      const data: ProcessedPOData = {
         ...extractedData,
         extraction: {
           ...extractedData.extraction,
@@ -486,11 +412,200 @@ export function UploadPODialog({
           },
         },
         products: updatedProducts,
-        pdfFile: selectedFile || undefined,
       };
-      // Pass the edited data to parent component
-      onSuccess?.(dataWithEdits);
-      handleClose();
+
+      // Step 1: Find or create customer
+      let customerId = data.customer.customerId;
+      let customerCreated = false;
+
+      if (!data.customer.matched || !customerId) {
+        const customerName = data.extraction.customer?.name;
+        if (!customerName) {
+          toast.error('No customer name found in PO');
+          setDialogState('reviewing');
+          return;
+        }
+
+        const customerResult = await findOrCreateCustomerFromPO(
+          customerName,
+          data.extraction.customer?.address,
+          data.extraction.customer?.city,
+          data.extraction.customer?.state,
+          data.extraction.customer?.zip
+        );
+
+        if (!customerResult.success || !customerResult.data) {
+          toast.error(customerResult.error || 'Failed to find or create customer');
+          setDialogState('reviewing');
+          return;
+        }
+
+        customerId = customerResult.data.customerId;
+        customerCreated = customerResult.data.created;
+
+        if (customerCreated) {
+          toast.info(`New customer "${customerResult.data.customerName}" created`);
+        }
+      }
+
+      // Step 2: Process ALL products
+      const quoteItems: Array<{
+        productId: string;
+        sku: string;
+        description: string | null;
+        quantity: number;
+        unitCode: string;
+        unitPrice: number;
+        discountPercent: number;
+        taxRate: number;
+      }> = [];
+
+      let productsCreated = 0;
+
+      for (let i = 0; i < data.products.length; i++) {
+        const product = data.products[i];
+        const lineItem = editLineItems[i];
+
+        // Skip if product is undefined (shouldn't happen, but TypeScript safety)
+        if (!product) {
+          continue;
+        }
+
+        // Check if user selected a product from dropdown
+        if (lineItem?.selectedProductId) {
+          const selectedProduct = productsList.find(p => p.id === lineItem.selectedProductId);
+          quoteItems.push({
+            productId: lineItem.selectedProductId,
+            sku: selectedProduct?.sku || lineItem.selectedProductSku || product.sku,
+            description: selectedProduct?.name || product.description || null,
+            quantity: lineItem.quantity ?? product.quantity,
+            unitCode: 'EA',
+            unitPrice: Math.round((lineItem.unitPrice ?? product.extractedUnitPrice) * 100),
+            discountPercent: 0,
+            taxRate: 0,
+          });
+        } else if (product.matched && product.productId) {
+          // Use AI matched product
+          quoteItems.push({
+            productId: product.productId,
+            sku: product.sku,
+            description: product.description || null,
+            quantity: lineItem?.quantity ?? product.quantity,
+            unitCode: 'EA',
+            unitPrice: Math.round((lineItem?.unitPrice ?? product.extractedUnitPrice) * 100),
+            discountPercent: 0,
+            taxRate: 0,
+          });
+        } else {
+          // Create new product
+          const extractedItem = data.extraction.lineItems.find(
+            (item) => item.description === product.description
+          );
+
+          const productResult = await findOrCreateProductFromPO(
+            product.sku || null,
+            product.description,
+            extractedItem?.tireSize || extractedItem?.vendorItemNo || null,
+            lineItem?.unitPrice ?? product.extractedUnitPrice,
+            lineItem?.baseCost ?? null
+          );
+
+          if (productResult.success && productResult.data) {
+            quoteItems.push({
+              productId: productResult.data.productId,
+              sku: productResult.data.sku,
+              description: product.description || null,
+              quantity: lineItem?.quantity ?? product.quantity,
+              unitCode: 'EA',
+              unitPrice: productResult.data.unitPrice,
+              discountPercent: 0,
+              taxRate: 0,
+            });
+
+            if (productResult.data.created) {
+              productsCreated++;
+            }
+          } else {
+            console.error('[handleCreateQuote] Failed to create/find product:', {
+              sku: product.sku,
+              description: product.description,
+              error: productResult.error,
+            });
+            toast.error(`Failed to process product: ${productResult.error || product.sku || product.description}`);
+            setDialogState('reviewing');
+            return; // Stop processing if product creation fails
+          }
+        }
+      }
+
+      if (quoteItems.length === 0) {
+        toast.error('No products could be processed');
+        setDialogState('reviewing');
+        return;
+      }
+
+      if (productsCreated > 0) {
+        toast.info(`${productsCreated} new product(s) created`);
+      }
+
+      // Step 3: Create quote
+      const quoteData = {
+        quoteDate: data.extraction.poDate ? new Date(data.extraction.poDate) : new Date(),
+        validUntil: null,
+        customerId,
+        salesRepId: null,
+        currencyCode: 'USD',
+        status: 'draft' as const,
+        billingAddress: {
+          street: data.extraction.customer?.address || null,
+          city: data.extraction.customer?.city || null,
+          state: data.extraction.customer?.state || null,
+          postalCode: data.extraction.customer?.zip || null,
+          country: 'US',
+        },
+        shippingAddress: {
+          street: data.extraction.shipTo?.address || null,
+          city: data.extraction.shipTo?.city || null,
+          state: data.extraction.shipTo?.state || null,
+          postalCode: data.extraction.shipTo?.zip || null,
+          country: 'US',
+        },
+        items: quoteItems,
+        customerNotes: data.extraction.poNumber ? `PO Reference: ${data.extraction.poNumber}` : null,
+        internalNotes: `Created from email PO. Extraction confidence: ${data.extraction.confidence}%`,
+        termsAndConditions: null,
+        // Use stored_path instead of full signed URL (which can be 1000+ chars)
+        // The stored_path is like "inbound-emails/{id}/attachments/{filename}"
+        poDocumentUrl: attachment?.stored_path || null,
+      };
+
+      // Log quote data for debugging
+      console.log('[handleCreateQuote] Creating quote with data:', {
+        customerId,
+        itemsCount: quoteItems.length,
+        items: quoteItems.map(i => ({ productId: i.productId, sku: i.sku, qty: i.quantity, price: i.unitPrice })),
+        quoteDate: quoteData.quoteDate,
+      });
+
+      const result = await createQuoteFromData(quoteData);
+
+      if (result.success && result.data) {
+        // Update inbound email status to 'processed'
+        if (attachment?.inbound_email_id) {
+          await updateInboundEmailStatus(attachment.inbound_email_id, 'processed');
+        }
+
+        toast.success('Quote created successfully');
+        onSuccess?.(data);
+        handleClose();
+        // Navigate to quotes page
+        router.push('/quotes');
+      } else {
+        // Show detailed error in console and toast
+        console.error('[handleCreateQuote] Error:', result.error, result.errors);
+        toast.error(result.error || 'Failed to create quote');
+        setDialogState('reviewing');
+      }
     } catch (err) {
       console.error('Create quote error:', err);
       setError(err instanceof Error ? err.message : 'Failed to create quote');
@@ -500,41 +615,14 @@ export function UploadPODialog({
 
   // Handle close
   const handleClose = () => {
-    setSelectedFile(null);
-    setIsDragging(false);
-    setShowPreview(false);
-    setPreviewUrl(null);
+    setDialogState('idle');
     setExtractedData(null);
     setError(null);
-    setDialogState('idle');
     setProgress('');
     setIsEditing(false);
     setEditLineItems([]);
     setProductsList([]);
-    setOpenPopoverIndex(null);
-    setCreatingProductForIndex(null);
-    setProductSearch('');
-    setFormErrors({});
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
     onClose();
-  };
-
-  // Toggle preview
-  const togglePreview = () => {
-    setShowPreview(!showPreview);
-  };
-
-  // Format file size
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) {
-      return '0 Bytes';
-    }
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   // Format currency
@@ -545,7 +633,7 @@ export function UploadPODialog({
     }).format(amount);
   };
 
-  // Get confidence badge color
+  // Get confidence badge
   const getConfidenceBadge = (confidence: number) => {
     if (confidence >= 80) {
       return (
@@ -570,27 +658,21 @@ export function UploadPODialog({
     );
   };
 
-  // Determine dialog width based on state
-  const dialogWidth = dialogState === 'reviewing'
-    ? 'sm:max-w-[800px]'
-    : (showPreview && previewUrl && selectedFile)
-      ? 'sm:max-w-[900px]'
-      : 'sm:max-w-[500px]';
+  const dialogWidth = dialogState === 'reviewing' ? 'sm:max-w-[800px]' : 'sm:max-w-[500px]';
 
   return (
-    <>
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent
-        className={`transition-all duration-300 ${dialogWidth}`}
-      >
+      <DialogContent className={`transition-all duration-300 ${dialogWidth}`}>
         <DialogHeader>
           <DialogTitle>
-            {dialogState === 'reviewing' ? 'Review Extracted Data' : 'Upload Purchase Order'}
+            {dialogState === 'reviewing' ? 'Review Extracted Data' : 'Extract PO from Email'}
           </DialogTitle>
           <DialogDescription>
             {dialogState === 'reviewing'
               ? 'Review the extracted data and create a quote.'
-              : 'Upload a Purchase Order PDF to automatically create a quote.'}
+              : attachment
+                ? `Extracting data from: ${attachment.filename}`
+                : 'Processing attachment...'}
           </DialogDescription>
         </DialogHeader>
 
@@ -603,7 +685,7 @@ export function UploadPODialog({
         )}
 
         {/* Progress Message */}
-        {progress && dialogState === 'extracting' && (
+        {progress && (dialogState === 'fetching' || dialogState === 'extracting') && (
           <div className="flex items-center gap-2 p-3 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg">
             <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin" />
             {progress}
@@ -611,102 +693,22 @@ export function UploadPODialog({
         )}
 
         <div className="space-y-4 py-4">
-          {/* Upload section / File info (hidden in reviewing state) */}
-          {dialogState !== 'reviewing' && (
-          <div className="space-y-4">
-            {/* Hidden file input */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,application/pdf"
-              onChange={handleInputChange}
-              className="hidden"
-            />
-
-            {/* Drop zone or File info */}
-            {!selectedFile ? (
-              <div
-                onClick={handleUploadClick}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                className={`
-                  flex flex-col items-center justify-center gap-4 p-8
-                  border-2 border-dashed rounded-lg cursor-pointer
-                  transition-colors duration-200
-                  ${
-                    isDragging
-                      ? 'border-primary bg-primary/5'
-                      : 'border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/50'
-                  }
-                `}
-              >
-                <div className="flex items-center justify-center w-14 h-14 rounded-full bg-primary/10">
-                  <Upload className="w-7 h-7 text-primary" />
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-medium">Click to upload or drag and drop</p>
-                  <p className="text-xs text-muted-foreground mt-1">PDF files only (max 10MB)</p>
-                </div>
+          {/* Loading state */}
+          {(dialogState === 'fetching' || dialogState === 'extracting') && (
+            <div className="flex flex-col items-center justify-center py-12 gap-4">
+              <div className="flex items-center justify-center w-16 h-16 rounded-full bg-primary/10">
+                <FileText className="w-8 h-8 text-primary animate-pulse" />
               </div>
-            ) : (
-              /* Selected file info */
-              <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30">
-                <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-red-100">
-                  <FileText className="w-5 h-5 text-red-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{selectedFile.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatFileSize(selectedFile.size)}
-                  </p>
-                </div>
-                {dialogState !== 'extracting' && dialogState !== 'creating' && (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={togglePreview}
-                      className="h-8 w-8"
-                      title={showPreview ? 'Hide preview' : 'Show preview'}
-                    >
-                      {showPreview ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={handleRemoveFile}
-                      className="h-8 w-8"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </>
-                )}
+              <div className="text-center">
+                <p className="font-medium">Processing PDF</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {dialogState === 'fetching' ? 'Downloading file...' : 'Extracting data with AI...'}
+                </p>
               </div>
-            )}
-
-            {/* PDF Preview below file info (stacked layout) */}
-            {showPreview && previewUrl && selectedFile && (
-              <div className="border rounded-lg overflow-hidden bg-muted/20">
-                <div className="flex items-center justify-between px-3 py-2 bg-muted/50 border-b">
-                  <span className="text-xs font-medium text-muted-foreground">PDF Preview</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setShowFullscreenPreview(true)}
-                    className="h-7 w-7"
-                    title="View fullscreen"
-                  >
-                    <Maximize2 className="h-4 w-4" />
-                  </Button>
-                </div>
-                <iframe src={previewUrl} className="w-full h-[500px]" title="PDF Preview" />
-              </div>
-            )}
-          </div>
+            </div>
           )}
 
-          {/* Extracted data review - Full width when reviewing */}
+          {/* Extracted data review */}
           {dialogState === 'reviewing' && extractedData && (
             <div className="space-y-4 w-full">
               {/* Extraction Summary */}
@@ -801,11 +803,6 @@ export function UploadPODialog({
                           </Badge>
                         )}
                       </div>
-                      {extractedData.extraction.customer?.address && (
-                        <p className="text-muted-foreground mt-1">
-                          {extractedData.extraction.customer.address}
-                        </p>
-                      )}
                     </div>
                   </div>
 
@@ -1367,22 +1364,15 @@ export function UploadPODialog({
           <Button
             variant="outline"
             onClick={handleClose}
-            disabled={dialogState === 'extracting' || dialogState === 'creating'}
+            disabled={dialogState === 'fetching' || dialogState === 'extracting' || dialogState === 'creating'}
           >
             Cancel
           </Button>
 
-          {dialogState === 'file-selected' && (
-            <Button onClick={handleExtract}>
-              <Upload className="mr-2 h-4 w-4" />
-              Generate a Quote
-            </Button>
-          )}
-
-          {dialogState === 'extracting' && (
-            <Button disabled>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Generating...
+          {dialogState === 'error' && (
+            <Button onClick={startExtraction}>
+              <AlertCircle className="mr-2 h-4 w-4" />
+              Retry
             </Button>
           )}
 
@@ -1399,35 +1389,8 @@ export function UploadPODialog({
               Creating...
             </Button>
           )}
-
-          {(dialogState === 'error' || dialogState === 'idle') && selectedFile && (
-            <Button onClick={handleExtract}>
-              <Upload className="mr-2 h-4 w-4" />
-              {dialogState === 'error' ? 'Retry' : 'Generate a Quote'}
-            </Button>
-          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
-
-    {/* Fullscreen PDF Preview Modal */}
-    <Dialog open={showFullscreenPreview} onOpenChange={setShowFullscreenPreview}>
-      <DialogContent className="max-w-[95vw] h-[95vh] p-0 gap-0">
-        <DialogHeader className="px-4 py-3 border-b">
-          <DialogTitle className="text-base">
-            {selectedFile?.name || 'PDF Preview'}
-          </DialogTitle>
-        </DialogHeader>
-        {previewUrl && (
-          <iframe
-            src={previewUrl}
-            className="w-full flex-1 border-0"
-            style={{ height: 'calc(95vh - 60px)' }}
-            title="PDF Fullscreen Preview"
-          />
-        )}
-      </DialogContent>
-    </Dialog>
-    </>
   );
 }

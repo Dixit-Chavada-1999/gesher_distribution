@@ -189,6 +189,10 @@ export async function createQuoteFromData(
   // Validate with createQuoteSchema (expects Date objects from formToCreateDTO)
   const validation = createQuoteSchema.safeParse(data);
   if (!validation.success) {
+    // Log the validation errors for debugging
+    console.error('createQuoteFromData validation errors:', validation.error.flatten());
+    console.error('createQuoteFromData input data:', JSON.stringify(data, null, 2));
+
     // Map field names for better error display
     const fieldErrors: Record<string, string[]> = {};
     const flatErrors = validation.error.flatten().fieldErrors;
@@ -199,9 +203,11 @@ export async function createQuoteFromData(
       }
     });
 
+    // Create a more descriptive error message
+    const errorFields = Object.keys(fieldErrors).join(', ');
     return {
       success: false,
-      error: 'Validation failed',
+      error: `Validation failed for: ${errorFields}`,
       errors: fieldErrors,
     };
   }
@@ -1171,6 +1177,45 @@ export async function getQuoteMasterData(): Promise<ActionResult<{
       error: 'Failed to fetch master data',
     };
   }
+}
+
+// ============================================
+// PO DOCUMENT URL
+// ============================================
+
+/**
+ * Get a signed URL for a PO document stored in Supabase storage
+ * Handles both full URLs (legacy) and storage paths (new format)
+ * Storage path format: "inbound/{email_id}/{filename}" in po-documents bucket
+ */
+export async function getPODocumentSignedUrl(
+  storagePath: string
+): Promise<ActionResult<{ url: string }>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  // If it's already a full URL (legacy), return it as-is
+  if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
+    return { success: true, data: { url: storagePath } };
+  }
+
+  // Generate a signed URL from the storage path
+  // All PO documents are stored in the 'po-documents' bucket
+  // Path format: "inbound/{email_id}/{filename}"
+  const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+    .from('po-documents')
+    .createSignedUrl(storagePath, 60 * 60); // 1 hour expiry
+
+  if (signedUrlError || !signedUrlData) {
+    console.error('Failed to generate signed URL:', signedUrlError, 'path:', storagePath);
+    return { success: false, error: 'Failed to generate document URL' };
+  }
+
+  return { success: true, data: { url: signedUrlData.signedUrl } };
 }
 
 // ============================================
