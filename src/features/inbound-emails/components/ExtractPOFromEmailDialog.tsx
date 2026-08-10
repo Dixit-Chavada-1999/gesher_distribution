@@ -887,17 +887,24 @@ export function ExtractPOFromEmailDialog({
                         <Package className="w-4 h-4 text-muted-foreground" />
                         Line Items ({extractedData.products.length})
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        <span className="text-emerald-600">{extractedData.matchedCount} matched</span>
-                        {extractedData.unmatchedCount > 0 && (
-                          <>
-                            {' / '}
-                            <span className="text-amber-600">
-                              {extractedData.unmatchedCount} will create
-                            </span>
-                          </>
-                        )}
-                      </div>
+                      {(() => {
+                        // Calculate dynamic matched count based on user selections
+                        const dynamicMatchedCount = editLineItems.filter(item => !!item?.selectedProductId).length;
+                        const dynamicUnmatchedCount = extractedData.products.length - dynamicMatchedCount;
+                        return (
+                          <div className="text-xs text-muted-foreground">
+                            <span className="text-emerald-600">{dynamicMatchedCount} matched</span>
+                            {dynamicUnmatchedCount > 0 && (
+                              <>
+                                {' / '}
+                                <span className="text-amber-600">
+                                  {dynamicUnmatchedCount} will create
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     <div className="space-y-2">

@@ -68,7 +68,7 @@ import type {
 interface UploadPODialogProps {
   open: boolean;
   onClose: () => void;
-  onSuccess?: (data: ProcessedPOData) => void;
+  onSuccess?: (data: ProcessedPOData) => void | Promise<void>;
 }
 
 interface ProductOption {
@@ -454,6 +454,7 @@ export function UploadPODialog({
             ...product,
             productId: lineItem.selectedProductId,
             sku: selectedProduct?.sku || lineItem.selectedProductSku || product.sku,
+            description: selectedProduct?.name || product.description, // Use selected product's name as description
             matched: true, // Mark as matched since user selected a product
             quantity: lineItem.quantity ?? product.quantity,
             extractedUnitPrice: lineItem.unitPrice ?? product.extractedUnitPrice,
@@ -488,8 +489,8 @@ export function UploadPODialog({
         products: updatedProducts,
         pdfFile: selectedFile || undefined,
       };
-      // Pass the edited data to parent component
-      onSuccess?.(dataWithEdits);
+      // Pass the edited data to parent component and wait for completion
+      await onSuccess?.(dataWithEdits);
       handleClose();
     } catch (err) {
       console.error('Create quote error:', err);
@@ -571,7 +572,8 @@ export function UploadPODialog({
   };
 
   // Determine dialog width based on state
-  const dialogWidth = dialogState === 'reviewing'
+  const isReviewingOrCreating = dialogState === 'reviewing' || dialogState === 'creating';
+  const dialogWidth = isReviewingOrCreating
     ? 'sm:max-w-[800px]'
     : (showPreview && previewUrl && selectedFile)
       ? 'sm:max-w-[900px]'
@@ -585,10 +587,10 @@ export function UploadPODialog({
       >
         <DialogHeader>
           <DialogTitle>
-            {dialogState === 'reviewing' ? 'Review Extracted Data' : 'Upload Purchase Order'}
+            {isReviewingOrCreating ? 'Review Extracted Data' : 'Upload Purchase Order'}
           </DialogTitle>
           <DialogDescription>
-            {dialogState === 'reviewing'
+            {isReviewingOrCreating
               ? 'Review the extracted data and create a quote.'
               : 'Upload a Purchase Order PDF to automatically create a quote.'}
           </DialogDescription>
@@ -611,8 +613,8 @@ export function UploadPODialog({
         )}
 
         <div className="space-y-4 py-4">
-          {/* Upload section / File info (hidden in reviewing state) */}
-          {dialogState !== 'reviewing' && (
+          {/* Upload section / File info (hidden in reviewing/creating state) */}
+          {!isReviewingOrCreating && (
           <div className="space-y-4">
             {/* Hidden file input */}
             <input
@@ -661,7 +663,7 @@ export function UploadPODialog({
                     {formatFileSize(selectedFile.size)}
                   </p>
                 </div>
-                {dialogState !== 'extracting' && dialogState !== 'creating' && (
+                {dialogState !== 'extracting' && (
                   <>
                     <Button
                       variant="ghost"
@@ -706,8 +708,8 @@ export function UploadPODialog({
           </div>
           )}
 
-          {/* Extracted data review - Full width when reviewing */}
-          {dialogState === 'reviewing' && extractedData && (
+          {/* Extracted data review - Full width when reviewing/creating */}
+          {isReviewingOrCreating && extractedData && (
             <div className="space-y-4 w-full">
               {/* Extraction Summary */}
               <div className="flex items-center justify-between">
@@ -890,17 +892,24 @@ export function UploadPODialog({
                         <Package className="w-4 h-4 text-muted-foreground" />
                         Line Items ({extractedData.products.length})
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        <span className="text-emerald-600">{extractedData.matchedCount} matched</span>
-                        {extractedData.unmatchedCount > 0 && (
-                          <>
-                            {' / '}
-                            <span className="text-amber-600">
-                              {extractedData.unmatchedCount} will create
-                            </span>
-                          </>
-                        )}
-                      </div>
+                      {(() => {
+                        // Calculate dynamic matched count based on user selections
+                        const dynamicMatchedCount = editLineItems.filter(item => !!item?.selectedProductId).length;
+                        const dynamicUnmatchedCount = extractedData.products.length - dynamicMatchedCount;
+                        return (
+                          <div className="text-xs text-muted-foreground">
+                            <span className="text-emerald-600">{dynamicMatchedCount} matched</span>
+                            {dynamicUnmatchedCount > 0 && (
+                              <>
+                                {' / '}
+                                <span className="text-amber-600">
+                                  {dynamicUnmatchedCount} will create
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     <div className="space-y-2">

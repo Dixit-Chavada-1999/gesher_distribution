@@ -598,7 +598,7 @@ export function QuotesPageContent() {
       {/* Quotes Table */}
       <QuotesTable
         data={quotes}
-        isLoading={isQuotesLoading || isSubmittingForApproval}
+        isLoading={isQuotesLoading}
         onRowClick={canViewDetail ? handleRowClick : undefined}
         onView={canViewDetail ? handleView : undefined}
         onEdit={canEdit ? handleEdit : undefined}
@@ -634,6 +634,8 @@ export function QuotesPageContent() {
         onSubmitForApproval={canSubmitForApproval ? handleSubmitForApproval : undefined}
         onApprove={canApprove ? handleApproveClick : undefined}
         onReject={canApprove ? handleRejectClick : undefined}
+        isConverting={isConverting}
+        isSubmitting={isSubmittingForApproval}
       />
 
       {/* Create Quote Drawer */}

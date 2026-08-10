@@ -48,6 +48,10 @@ interface ViewQuoteDrawerProps {
   onSubmitForApproval?: (quote: QuoteWithItems) => void;
   onApprove?: (quote: QuoteWithItems) => void;
   onReject?: (quote: QuoteWithItems) => void;
+  isConverting?: boolean;
+  isSubmitting?: boolean;
+  isApproving?: boolean;
+  isRejecting?: boolean;
 }
 
 // ============================================
@@ -148,6 +152,10 @@ export function ViewQuoteDrawer({
   onSubmitForApproval,
   onApprove,
   onReject,
+  isConverting = false,
+  isSubmitting = false,
+  isApproving = false,
+  isRejecting = false,
 }: ViewQuoteDrawerProps) {
   const { hasPermission } = useAuthStore();
 
@@ -527,23 +535,51 @@ export function ViewQuoteDrawer({
                 Close
               </Button>
               {canApproveReject && onReject && (
-                <Button variant="destructive" onClick={handleReject}>
-                  Reject
+                <Button variant="destructive" onClick={handleReject} disabled={isRejecting}>
+                  {isRejecting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Rejecting...
+                    </>
+                  ) : (
+                    'Reject'
+                  )}
                 </Button>
               )}
               {canApproveReject && onApprove && (
-                <Button variant="default" onClick={handleApprove}>
-                  Approve
+                <Button variant="default" onClick={handleApprove} disabled={isApproving}>
+                  {isApproving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Approving...
+                    </>
+                  ) : (
+                    'Approve'
+                  )}
                 </Button>
               )}
               {canSubmitForApproval && onSubmitForApproval && (
-                <Button variant="secondary" onClick={handleSubmitForApproval}>
-                  Submit for Approval
+                <Button variant="secondary" onClick={handleSubmitForApproval} disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    'Submit for Approval'
+                  )}
                 </Button>
               )}
               {canConvert && onConvert && (
-                <Button variant="secondary" onClick={handleConvert}>
-                  Convert to Order
+                <Button variant="secondary" onClick={handleConvert} disabled={isConverting}>
+                  {isConverting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Converting...
+                    </>
+                  ) : (
+                    'Convert to Order'
+                  )}
                 </Button>
               )}
               {canEdit && onEdit && (
