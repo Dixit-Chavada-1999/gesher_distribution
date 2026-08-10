@@ -12,6 +12,19 @@ export {
   DashboardActivityList,
   DashboardQuickActions,
   DashboardSystemStatus,
+  // New chart components
+  RevenueChart,
+  UnitsBySKUChart,
+  ChannelPerformanceChart,
+  MarginChart,
+  DashboardChartsGrid,
+  // New dashboard sections
+  NeedsAttention,
+  OrderPipeline,
+  InventoryOverview,
+  ARAgingChart,
+  APSummaryCard,
+  ARAPSummary,
 } from './components';
 
 // Types
@@ -24,6 +37,19 @@ export type {
   SystemStatusItem,
   SystemHealthStatus,
   DashboardIconName,
+  // New types
+  RevenueDataPoint,
+  UnitsBySKUDataPoint,
+  ChannelPerformanceDataPoint,
+  MarginDataPoint,
+  ARAgingData,
+  APSummaryData,
+  NeedsAttentionItem,
+  AttentionPriority,
+  AttentionCategory,
+  PipelineStage,
+  InventoryByLocation,
+  InventoryBySKU,
 } from './types';
 
 // Mock Data
@@ -32,6 +58,17 @@ export {
   recentActivities,
   quickActions,
   systemStatus,
+  // New mock data
+  revenueChartData,
+  unitsBySKUData,
+  channelPerformanceData,
+  marginChartData,
+  arAgingData,
+  apSummaryData,
+  needsAttentionItems,
+  orderPipelineData,
+  inventoryByLocation,
+  inventoryBySKU,
 } from './lib/mock-data';
 
 // Utilities

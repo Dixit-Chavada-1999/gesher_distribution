@@ -15,6 +15,12 @@ import {
   FileText,
   Truck,
   BarChart3,
+  Percent,
+  AlertTriangle,
+  CreditCard,
+  Warehouse,
+  Target,
+  Clock,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -33,6 +39,12 @@ export const iconMap: Record<DashboardIconName, LucideIcon> = {
   'file-text': FileText,
   'truck': Truck,
   'bar-chart': BarChart3,
+  'percent': Percent,
+  'alert-triangle': AlertTriangle,
+  'credit-card': CreditCard,
+  'warehouse': Warehouse,
+  'target': Target,
+  'clock': Clock,
 };
 
 // ============================================

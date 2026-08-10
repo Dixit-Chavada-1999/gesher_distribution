@@ -34,15 +34,30 @@ import { ScrollArea } from '@/shared/components/ui/scroll-area';
 import { Separator } from '@/shared/components/ui/separator';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/components/ui/select';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/shared/components/ui/popover';
+import { ChevronDown, Plus, X } from 'lucide-react';
 
 import { convertPdfToImages } from '@/features/quotes/lib/pdf-to-images';
 import type { ProcessedPOData } from '@/features/quotes/types/po-extract.types';
 import type { InboundEmailAttachment } from '../types';
+import { updateInboundEmailStatus } from '../actions';
 import {
   findOrCreateCustomerFromPO,
   findOrCreateProductFromPO,
   createQuoteFromData,
 } from '@/features/quotes/actions';
+import { getProducts, createProductFromData } from '@/features/products/actions';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 
@@ -51,6 +66,14 @@ import { useRouter } from 'next/navigation';
 // ============================================
 
 type DialogState = 'idle' | 'fetching' | 'extracting' | 'reviewing' | 'creating' | 'error';
+
+interface ProductOption {
+  id: string;
+  sku: string;
+  name: string;
+  basePrice: number;
+  baseCost: number;
+}
 
 interface ExtractPOFromEmailDialogProps {
   open: boolean;
@@ -90,7 +113,155 @@ export function ExtractPOFromEmailDialog({
     quantity: number;
     unitPrice: number;
     baseCost: number | null;
+    selectedProductId: string | null;
+    selectedProductSku: string | null;
   }>>([]);
+  const [productsList, setProductsList] = useState<ProductOption[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [openPopoverIndex, setOpenPopoverIndex] = useState<number | null>(null);
+  const [creatingProductForIndex, setCreatingProductForIndex] = useState<number | null>(null);
+  const [newProductForm, setNewProductForm] = useState({
+    sku: '',
+    name: '',
+    shortDescription: '',
+    rimSize: '',
+    tireSize: '',
+    baseCost: '',
+    basePrice: '',
+    itemType: 'non_inventory' as 'inventory' | 'non_inventory' | 'service',
+  });
+  const [creatingProduct, setCreatingProduct] = useState(false);
+  const [productSearch, setProductSearch] = useState('');
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  // Filter products based on search
+  const filteredProducts = productsList.filter((p) => {
+    if (!productSearch.trim()) {
+      return true;
+    }
+    const search = productSearch.toLowerCase();
+    return p.sku.toLowerCase().includes(search) || p.name.toLowerCase().includes(search);
+  });
+
+  // Fetch products list when dialog opens
+  useEffect(() => {
+    const fetchProducts = async () => {
+      if (dialogState === 'reviewing' && productsList.length === 0) {
+        setLoadingProducts(true);
+        try {
+          const result = await getProducts({ status: 'active', limit: 500 });
+          if (result.success && result.data && result.data.data) {
+            setProductsList(
+              result.data.data.map((p) => ({
+                id: p.id,
+                sku: p.sku,
+                name: p.name,
+                basePrice: p.basePrice,
+                baseCost: p.baseCost,
+              }))
+            );
+          }
+        } catch (error) {
+          console.error('Failed to fetch products:', error);
+        } finally {
+          setLoadingProducts(false);
+        }
+      }
+    };
+    fetchProducts();
+  }, [dialogState, productsList.length]);
+
+  // Handle creating a new product from the form
+  const handleCreateNewProduct = async (lineIndex: number) => {
+    // Clear previous errors
+    setFormErrors({});
+
+    // Client-side validation
+    const errors: Record<string, string> = {};
+    if (!newProductForm.sku.trim()) {
+      errors.sku = 'SKU is required';
+    }
+    if (!newProductForm.name.trim()) {
+      errors.name = 'Name is required';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
+
+    setCreatingProduct(true);
+    try {
+      const result = await createProductFromData({
+        sku: newProductForm.sku.trim().toUpperCase(),
+        name: newProductForm.name.trim(),
+        shortDescription: newProductForm.shortDescription.trim() || null,
+        rimSize: newProductForm.rimSize.trim() || null,
+        tireSize: newProductForm.tireSize.trim() || null,
+        baseCost: newProductForm.baseCost ? Math.round(parseFloat(newProductForm.baseCost) * 100) : 0,
+        basePrice: newProductForm.basePrice ? Math.round(parseFloat(newProductForm.basePrice) * 100) : 0,
+        itemType: newProductForm.itemType,
+        status: 'active',
+      });
+
+      if (result.success && result.data) {
+        // Add to products list
+        const newProduct: ProductOption = {
+          id: result.data.id,
+          sku: result.data.sku,
+          name: result.data.name,
+          basePrice: result.data.basePrice,
+          baseCost: result.data.baseCost,
+        };
+        setProductsList(prev => [newProduct, ...prev]);
+
+        // Select the new product for this line item
+        const newItems = [...editLineItems];
+        newItems[lineIndex] = {
+          ...newItems[lineIndex],
+          quantity: newItems[lineIndex]?.quantity ?? extractedData?.products[lineIndex]?.quantity ?? 1,
+          unitPrice: result.data.basePrice / 100,
+          baseCost: result.data.baseCost / 100,
+          selectedProductId: result.data.id,
+          selectedProductSku: result.data.sku,
+        };
+        setEditLineItems(newItems);
+
+        // Reset and close
+        setNewProductForm({
+          sku: '',
+          name: '',
+          shortDescription: '',
+          rimSize: '',
+          tireSize: '',
+          baseCost: '',
+          basePrice: '',
+          itemType: 'non_inventory',
+        });
+        setCreatingProductForIndex(null);
+        setOpenPopoverIndex(null);
+
+        toast.success(`Product "${result.data.name}" created`);
+      } else {
+        // Show detailed validation errors on fields
+        if (result.errors) {
+          const fieldErrors: Record<string, string> = {};
+          Object.entries(result.errors).forEach(([field, messages]) => {
+            fieldErrors[field] = (messages as string[])[0] || 'Invalid';
+          });
+          setFormErrors(fieldErrors);
+          toast.error('Please fix the errors below');
+        } else {
+          toast.error(result.error || 'Failed to create product');
+        }
+      }
+    } catch (error) {
+      console.error('Create product error:', error);
+      toast.error('Failed to create product');
+    } finally {
+      setCreatingProduct(false);
+    }
+  };
 
   // Initialize editable fields when extraction completes
   useEffect(() => {
@@ -107,6 +278,8 @@ export function ExtractPOFromEmailDialog({
           quantity: p.quantity,
           unitPrice: p.extractedUnitPrice,
           baseCost: p.matched ? (p.baseCost ?? null) : null,
+          selectedProductId: p.matched ? (p.productId ?? null) : null,
+          selectedProductSku: p.matched ? (p.sku ?? null) : null,
         }))
       );
     }
@@ -289,19 +462,42 @@ export function ExtractPOFromEmailDialog({
 
       let productsCreated = 0;
 
-      for (const product of data.products) {
-        if (product.matched && product.productId) {
+      for (let i = 0; i < data.products.length; i++) {
+        const product = data.products[i];
+        const lineItem = editLineItems[i];
+
+        // Skip if product is undefined (shouldn't happen, but TypeScript safety)
+        if (!product) {
+          continue;
+        }
+
+        // Check if user selected a product from dropdown
+        if (lineItem?.selectedProductId) {
+          const selectedProduct = productsList.find(p => p.id === lineItem.selectedProductId);
+          quoteItems.push({
+            productId: lineItem.selectedProductId,
+            sku: selectedProduct?.sku || lineItem.selectedProductSku || product.sku,
+            description: selectedProduct?.name || product.description || null,
+            quantity: lineItem.quantity ?? product.quantity,
+            unitCode: 'EA',
+            unitPrice: Math.round((lineItem.unitPrice ?? product.extractedUnitPrice) * 100),
+            discountPercent: 0,
+            taxRate: 0,
+          });
+        } else if (product.matched && product.productId) {
+          // Use AI matched product
           quoteItems.push({
             productId: product.productId,
             sku: product.sku,
             description: product.description || null,
-            quantity: product.quantity,
+            quantity: lineItem?.quantity ?? product.quantity,
             unitCode: 'EA',
-            unitPrice: product.unitPrice || Math.round(product.extractedUnitPrice * 100),
+            unitPrice: Math.round((lineItem?.unitPrice ?? product.extractedUnitPrice) * 100),
             discountPercent: 0,
             taxRate: 0,
           });
         } else {
+          // Create new product
           const extractedItem = data.extraction.lineItems.find(
             (item) => item.description === product.description
           );
@@ -310,8 +506,8 @@ export function ExtractPOFromEmailDialog({
             product.sku || null,
             product.description,
             extractedItem?.tireSize || extractedItem?.vendorItemNo || null,
-            product.extractedUnitPrice,
-            product.baseCost ?? null
+            lineItem?.unitPrice ?? product.extractedUnitPrice,
+            lineItem?.baseCost ?? null
           );
 
           if (productResult.success && productResult.data) {
@@ -319,7 +515,7 @@ export function ExtractPOFromEmailDialog({
               productId: productResult.data.productId,
               sku: productResult.data.sku,
               description: product.description || null,
-              quantity: product.quantity,
+              quantity: lineItem?.quantity ?? product.quantity,
               unitCode: 'EA',
               unitPrice: productResult.data.unitPrice,
               discountPercent: 0,
@@ -330,7 +526,14 @@ export function ExtractPOFromEmailDialog({
               productsCreated++;
             }
           } else {
-            toast.error(`Failed to process product ${product.sku}`);
+            console.error('[handleCreateQuote] Failed to create/find product:', {
+              sku: product.sku,
+              description: product.description,
+              error: productResult.error,
+            });
+            toast.error(`Failed to process product: ${productResult.error || product.sku || product.description}`);
+            setDialogState('reviewing');
+            return; // Stop processing if product creation fails
           }
         }
       }
@@ -371,18 +574,35 @@ export function ExtractPOFromEmailDialog({
         customerNotes: data.extraction.poNumber ? `PO Reference: ${data.extraction.poNumber}` : null,
         internalNotes: `Created from email PO. Extraction confidence: ${data.extraction.confidence}%`,
         termsAndConditions: null,
-        poDocumentUrl: attachmentUrl,
+        // Use stored_path instead of full signed URL (which can be 1000+ chars)
+        // The stored_path is like "inbound-emails/{id}/attachments/{filename}"
+        poDocumentUrl: attachment?.stored_path || null,
       };
+
+      // Log quote data for debugging
+      console.log('[handleCreateQuote] Creating quote with data:', {
+        customerId,
+        itemsCount: quoteItems.length,
+        items: quoteItems.map(i => ({ productId: i.productId, sku: i.sku, qty: i.quantity, price: i.unitPrice })),
+        quoteDate: quoteData.quoteDate,
+      });
 
       const result = await createQuoteFromData(quoteData);
 
       if (result.success && result.data) {
+        // Update inbound email status to 'processed'
+        if (attachment?.inbound_email_id) {
+          await updateInboundEmailStatus(attachment.inbound_email_id, 'processed');
+        }
+
         toast.success('Quote created successfully');
         onSuccess?.(data);
         handleClose();
         // Navigate to quotes page
         router.push('/quotes');
       } else {
+        // Show detailed error in console and toast
+        console.error('[handleCreateQuote] Error:', result.error, result.errors);
         toast.error(result.error || 'Failed to create quote');
         setDialogState('reviewing');
       }
@@ -401,6 +621,7 @@ export function ExtractPOFromEmailDialog({
     setProgress('');
     setIsEditing(false);
     setEditLineItems([]);
+    setProductsList([]);
     onClose();
   };
 
@@ -680,43 +901,400 @@ export function ExtractPOFromEmailDialog({
                     </div>
 
                     <div className="space-y-2">
-                      {extractedData.products.map((product, index) => (
-                        <div
-                          key={index}
-                          className={`p-3 rounded-lg border ${
-                            product.matched ? 'bg-emerald-50/50 border-emerald-200' : 'bg-amber-50/50 border-amber-200'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium truncate">
-                                  {product.sku || 'No SKU'}
-                                </span>
-                                {product.matched ? (
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                                ) : (
-                                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
-                                )}
+                      {extractedData.products.map((product, index) => {
+                        const lineItem = editLineItems[index];
+                        const isProductSelected = !!lineItem?.selectedProductId;
+                        const selectedProduct = productsList.find(p => p.id === lineItem?.selectedProductId);
+
+                        return (
+                          <div
+                            key={index}
+                            className={`p-3 rounded-lg border transition-colors ${
+                              isProductSelected
+                                ? 'bg-emerald-50/50 border-emerald-200'
+                                : 'bg-amber-50/50 border-amber-200'
+                            }`}
+                          >
+                          <Popover
+                            open={openPopoverIndex === index}
+                            onOpenChange={(open) => {
+                              setOpenPopoverIndex(open ? index : null);
+                              if (!open) {
+                                setProductSearch('');
+                                setCreatingProductForIndex(null);
+                              }
+                            }}
+                          >
+                            <PopoverTrigger asChild>
+                              <div
+                                className={`cursor-pointer rounded transition-colors ${
+                                  isProductSelected
+                                    ? 'hover:bg-emerald-100/50'
+                                    : 'hover:bg-amber-100/50'
+                                }`}
+                              >
+                                {/* Inline Layout: Clickable Product Info | Qty/Price */}
+                                <div className="flex items-center gap-3">
+                                  {/* Left: Product Info */}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm font-medium truncate">
+                                        {isProductSelected
+                                          ? (selectedProduct?.sku || lineItem?.selectedProductSku)
+                                          : (product.sku || 'No SKU')}
+                                      </span>
+                                      {isProductSelected ? (
+                                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                                      ) : (
+                                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                                      )}
+                                      <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                                    </div>
+                                    <p className="text-xs text-muted-foreground truncate">
+                                      {isProductSelected
+                                        ? selectedProduct?.name
+                                        : product.description}
+                                    </p>
+                                    {!isProductSelected && (
+                                      <p className="text-[10px] text-amber-600 mt-0.5">
+                                        Click to map product
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  {/* Right: Qty & Price */}
+                                  <div className="text-right text-sm flex-shrink-0 w-24">
+                                    <div className="font-medium">Qty: {lineItem?.quantity ?? product.quantity}</div>
+                                    <div className="text-xs text-muted-foreground">
+                                      {formatCurrency(lineItem?.unitPrice ?? product.extractedUnitPrice)}
+                                    </div>
+                                  </div>
+                                </div>
                               </div>
-                              <p className="text-xs text-muted-foreground truncate mt-0.5">
-                                {product.description}
-                              </p>
-                            </div>
-                            {isEditing ? (
-                              <div className="flex items-center gap-2">
+                            </PopoverTrigger>
+                            <PopoverContent
+                              className="p-0"
+                              align="start"
+                              sideOffset={5}
+                              style={{ width: 'var(--radix-popover-trigger-width)' }}
+                            >
+                                  {creatingProductForIndex === index ? (
+                                    // Create New Product Form
+                                    <>
+                                      <div className="p-3 border-b bg-slate-50 dark:bg-slate-900 flex items-center justify-between">
+                                        <p className="text-sm font-medium">Create New Product</p>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-6 w-6"
+                                          onClick={() => {
+                                            setCreatingProductForIndex(null);
+                                            setFormErrors({});
+                                          }}
+                                        >
+                                          <X className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                      <div
+                                        className="p-3 space-y-2.5 max-h-[350px] overflow-y-auto overscroll-contain"
+                                        onWheel={(e) => e.stopPropagation()}
+                                      >
+                                        {/* SKU and Name */}
+                                        <div className="grid grid-cols-2 gap-2">
+                                          <div className="space-y-1">
+                                            <Label className="text-xs text-muted-foreground">SKU *</Label>
+                                            <Input
+                                              value={newProductForm.sku}
+                                              onChange={(e) => {
+                                                setNewProductForm(prev => ({ ...prev, sku: e.target.value }));
+                                                if (formErrors.sku) { setFormErrors(prev => ({ ...prev, sku: '' })); }
+                                              }}
+                                              placeholder="e.g. TIRE-38-IPT"
+                                              className={`h-8 text-sm ${formErrors.sku ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+                                              onClick={(e) => e.stopPropagation()}
+                                            />
+                                            {formErrors.sku && (
+                                              <p className="text-xs text-red-500">{formErrors.sku}</p>
+                                            )}
+                                          </div>
+                                          <div className="space-y-1">
+                                            <Label className="text-xs text-muted-foreground">Product Name *</Label>
+                                            <Input
+                                              value={newProductForm.name}
+                                              onChange={(e) => {
+                                                setNewProductForm(prev => ({ ...prev, name: e.target.value }));
+                                                if (formErrors.name) { setFormErrors(prev => ({ ...prev, name: '' })); }
+                                              }}
+                                              placeholder="Product name"
+                                              className={`h-8 text-sm ${formErrors.name ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+                                              onClick={(e) => e.stopPropagation()}
+                                            />
+                                            {formErrors.name && (
+                                              <p className="text-xs text-red-500">{formErrors.name}</p>
+                                            )}
+                                          </div>
+                                        </div>
+                                        {/* Short Description */}
+                                        <div className="space-y-1">
+                                          <Label className="text-xs text-muted-foreground">Short Description</Label>
+                                          <Input
+                                            value={newProductForm.shortDescription}
+                                            onChange={(e) => {
+                                              setNewProductForm(prev => ({ ...prev, shortDescription: e.target.value }));
+                                              if (formErrors.shortDescription) { setFormErrors(prev => ({ ...prev, shortDescription: '' })); }
+                                            }}
+                                            placeholder="Brief product summary"
+                                            className={`h-8 text-sm ${formErrors.shortDescription ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+                                            onClick={(e) => e.stopPropagation()}
+                                          />
+                                          {formErrors.shortDescription && (
+                                            <p className="text-xs text-red-500">{formErrors.shortDescription}</p>
+                                          )}
+                                        </div>
+                                        {/* Rim Size and Tire Size */}
+                                        <div className="grid grid-cols-2 gap-2">
+                                          <div className="space-y-1">
+                                            <Label className="text-xs text-muted-foreground">Rim Size</Label>
+                                            <Input
+                                              value={newProductForm.rimSize}
+                                              onChange={(e) => {
+                                                setNewProductForm(prev => ({ ...prev, rimSize: e.target.value }));
+                                                if (formErrors.rimSize) { setFormErrors(prev => ({ ...prev, rimSize: '' })); }
+                                              }}
+                                              placeholder='e.g. 38"'
+                                              className={`h-8 text-sm ${formErrors.rimSize ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+                                              onClick={(e) => e.stopPropagation()}
+                                            />
+                                            {formErrors.rimSize && (
+                                              <p className="text-xs text-red-500">{formErrors.rimSize}</p>
+                                            )}
+                                          </div>
+                                          <div className="space-y-1">
+                                            <Label className="text-xs text-muted-foreground">Tire Size</Label>
+                                            <Input
+                                              value={newProductForm.tireSize}
+                                              onChange={(e) => {
+                                                setNewProductForm(prev => ({ ...prev, tireSize: e.target.value }));
+                                                if (formErrors.tireSize) { setFormErrors(prev => ({ ...prev, tireSize: '' })); }
+                                              }}
+                                              placeholder="e.g. 14.9-38"
+                                              className={`h-8 text-sm ${formErrors.tireSize ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+                                              onClick={(e) => e.stopPropagation()}
+                                            />
+                                            {formErrors.tireSize && (
+                                              <p className="text-xs text-red-500">{formErrors.tireSize}</p>
+                                            )}
+                                          </div>
+                                        </div>
+                                        {/* Base Cost and Base Price */}
+                                        <div className="grid grid-cols-2 gap-2">
+                                          <div className="space-y-1">
+                                            <Label className="text-xs text-muted-foreground">Base Cost</Label>
+                                            <Input
+                                              type="number"
+                                              step="0.01"
+                                              min="0"
+                                              value={newProductForm.baseCost}
+                                              onChange={(e) => {
+                                                setNewProductForm(prev => ({ ...prev, baseCost: e.target.value }));
+                                                if (formErrors.baseCost) { setFormErrors(prev => ({ ...prev, baseCost: '' })); }
+                                              }}
+                                              placeholder="0.00"
+                                              className={`h-8 text-sm ${formErrors.baseCost ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+                                              onClick={(e) => e.stopPropagation()}
+                                            />
+                                            {formErrors.baseCost && (
+                                              <p className="text-xs text-red-500">{formErrors.baseCost}</p>
+                                            )}
+                                          </div>
+                                          <div className="space-y-1">
+                                            <Label className="text-xs text-muted-foreground">Base Price</Label>
+                                            <Input
+                                              type="number"
+                                              step="0.01"
+                                              min="0"
+                                              value={newProductForm.basePrice}
+                                              onChange={(e) => {
+                                                setNewProductForm(prev => ({ ...prev, basePrice: e.target.value }));
+                                                if (formErrors.basePrice) { setFormErrors(prev => ({ ...prev, basePrice: '' })); }
+                                              }}
+                                              placeholder="0.00"
+                                              className={`h-8 text-sm ${formErrors.basePrice ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+                                              onClick={(e) => e.stopPropagation()}
+                                            />
+                                            {formErrors.basePrice && (
+                                              <p className="text-xs text-red-500">{formErrors.basePrice}</p>
+                                            )}
+                                          </div>
+                                        </div>
+                                        {/* Item Type */}
+                                        <div className="space-y-1">
+                                          <Label className="text-xs text-muted-foreground">Item Type</Label>
+                                          <Select
+                                            value={newProductForm.itemType}
+                                            onValueChange={(value: 'inventory' | 'non_inventory' | 'service') => {
+                                              setNewProductForm(prev => ({ ...prev, itemType: value }));
+                                              if (formErrors.itemType) { setFormErrors(prev => ({ ...prev, itemType: '' })); }
+                                            }}
+                                          >
+                                            <SelectTrigger className={`h-8 text-sm ${formErrors.itemType ? 'border-red-500 focus:ring-red-500' : ''}`}>
+                                              <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="inventory">Inventory</SelectItem>
+                                              <SelectItem value="non_inventory">Non-Inventory</SelectItem>
+                                              <SelectItem value="service">Service</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                          {formErrors.itemType && (
+                                            <p className="text-xs text-red-500">{formErrors.itemType}</p>
+                                          )}
+                                        </div>
+                                        {/* Buttons */}
+                                        <div className="flex gap-2 pt-1">
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="flex-1"
+                                            onClick={() => setCreatingProductForIndex(null)}
+                                          >
+                                            Cancel
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            className="flex-1"
+                                            onClick={() => handleCreateNewProduct(index)}
+                                            disabled={creatingProduct}
+                                          >
+                                            {creatingProduct ? (
+                                              <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                                            ) : (
+                                              <Plus className="w-3 h-3 mr-1" />
+                                            )}
+                                            Create
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    // Product List with Search
+                                    <>
+                                      {/* Header with Search */}
+                                      <div className="p-3 border-b bg-slate-50 dark:bg-slate-900">
+                                        <Input
+                                          value={productSearch}
+                                          onChange={(e) => setProductSearch(e.target.value)}
+                                          placeholder="Search by SKU or product name..."
+                                          className="w-full h-8 text-sm bg-white dark:bg-slate-800 border-slate-300"
+                                          onClick={(e) => e.stopPropagation()}
+                                        />
+                                      </div>
+                                      {/* Product List */}
+                                      <div
+                                        className="max-h-[250px] overflow-y-auto overscroll-contain bg-white dark:bg-slate-950"
+                                        style={{ scrollbarWidth: 'thin' }}
+                                        onWheel={(e) => e.stopPropagation()}
+                                      >
+                                        {loadingProducts ? (
+                                          <div className="p-4 text-center text-sm text-muted-foreground">
+                                            Loading products...
+                                          </div>
+                                        ) : filteredProducts.length === 0 ? (
+                                          <div className="p-4 text-center text-sm text-muted-foreground">
+                                            {productSearch ? 'No products match your search' : 'No products found'}
+                                          </div>
+                                        ) : (
+                                          filteredProducts.map((p, pIndex) => (
+                                            <button
+                                              key={p.id}
+                                              type="button"
+                                              onClick={() => {
+                                                const newItems = [...editLineItems];
+                                                newItems[index] = {
+                                                  ...newItems[index],
+                                                  quantity: newItems[index]?.quantity ?? product.quantity,
+                                                  unitPrice: p.basePrice / 100,
+                                                  baseCost: p.baseCost / 100,
+                                                  selectedProductId: p.id,
+                                                  selectedProductSku: p.sku,
+                                                };
+                                                setEditLineItems(newItems);
+                                                setOpenPopoverIndex(null);
+                                                setProductSearch('');
+                                              }}
+                                              className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm transition-colors border-b border-slate-100 dark:border-slate-800 last:border-b-0 ${
+                                                lineItem?.selectedProductId === p.id
+                                                  ? 'bg-emerald-50 dark:bg-emerald-950 hover:bg-emerald-100 dark:hover:bg-emerald-900'
+                                                  : pIndex % 2 === 0
+                                                    ? 'bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-900'
+                                                    : 'bg-slate-50/50 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                              }`}
+                                            >
+                                              <div className="w-32 flex-shrink-0 font-mono text-xs font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                                                {p.sku}
+                                                {lineItem?.selectedProductId === p.id && (
+                                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                                )}
+                                              </div>
+                                              <div className="flex-1 text-left text-xs text-slate-600 dark:text-slate-400 truncate">
+                                                {p.name}
+                                              </div>
+                                            </button>
+                                          ))
+                                        )}
+                                      </div>
+                                      {/* Create New Item Button */}
+                                      <div className="p-2 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="w-full bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950 border-slate-300 dark:border-slate-600"
+                                          onClick={() => {
+                                            // Reset form - start with empty fields
+                                            setNewProductForm({
+                                              sku: '',
+                                              name: '',
+                                              shortDescription: '',
+                                              rimSize: '',
+                                              tireSize: '',
+                                              baseCost: '',
+                                              basePrice: '',
+                                              itemType: 'non_inventory',
+                                            });
+                                            setFormErrors({});
+                                            setCreatingProductForIndex(index);
+                                            setProductSearch('');
+                                          }}
+                                        >
+                                          <Plus className="w-3.5 h-3.5 mr-1.5" />
+                                          Create New Item
+                                        </Button>
+                                      </div>
+                                    </>
+                                  )}
+                                </PopoverContent>
+                          </Popover>
+
+                            {/* Edit mode - expanded fields - inside the same card */}
+                            {isEditing && (
+                              <div className={`flex items-center gap-2 mt-3 pt-3 border-t ${
+                                isProductSelected ? 'border-emerald-200' : 'border-amber-200'
+                              }`}>
                                 <div className="space-y-0.5">
                                   <Label className="text-[10px] text-muted-foreground">Qty</Label>
                                   <Input
                                     type="number"
                                     min="1"
-                                    value={editLineItems[index]?.quantity ?? product.quantity}
+                                    value={lineItem?.quantity ?? product.quantity}
                                     onChange={(e) => {
                                       const newItems = [...editLineItems];
                                       newItems[index] = {
+                                        ...newItems[index],
                                         quantity: parseInt(e.target.value) || 1,
                                         unitPrice: newItems[index]?.unitPrice ?? product.extractedUnitPrice,
                                         baseCost: newItems[index]?.baseCost ?? null,
+                                        selectedProductId: newItems[index]?.selectedProductId ?? null,
+                                        selectedProductSku: newItems[index]?.selectedProductSku ?? null,
                                       };
                                       setEditLineItems(newItems);
                                     }}
@@ -730,14 +1308,17 @@ export function ExtractPOFromEmailDialog({
                                     step="0.01"
                                     min="0"
                                     placeholder="Cost"
-                                    value={editLineItems[index]?.baseCost ?? ''}
+                                    value={lineItem?.baseCost ?? ''}
                                     onChange={(e) => {
                                       const newItems = [...editLineItems];
                                       const value = e.target.value;
                                       newItems[index] = {
+                                        ...newItems[index],
                                         quantity: newItems[index]?.quantity ?? product.quantity,
                                         unitPrice: newItems[index]?.unitPrice ?? product.extractedUnitPrice,
                                         baseCost: value === '' ? null : parseFloat(value) || 0,
+                                        selectedProductId: newItems[index]?.selectedProductId ?? null,
+                                        selectedProductSku: newItems[index]?.selectedProductSku ?? null,
                                       };
                                       setEditLineItems(newItems);
                                     }}
@@ -750,13 +1331,16 @@ export function ExtractPOFromEmailDialog({
                                     type="number"
                                     step="0.01"
                                     min="0"
-                                    value={editLineItems[index]?.unitPrice ?? product.extractedUnitPrice}
+                                    value={lineItem?.unitPrice ?? product.extractedUnitPrice}
                                     onChange={(e) => {
                                       const newItems = [...editLineItems];
                                       newItems[index] = {
+                                        ...newItems[index],
                                         quantity: newItems[index]?.quantity ?? product.quantity,
                                         unitPrice: parseFloat(e.target.value) || 0,
                                         baseCost: newItems[index]?.baseCost ?? null,
+                                        selectedProductId: newItems[index]?.selectedProductId ?? null,
+                                        selectedProductSku: newItems[index]?.selectedProductSku ?? null,
                                       };
                                       setEditLineItems(newItems);
                                     }}
@@ -764,27 +1348,10 @@ export function ExtractPOFromEmailDialog({
                                   />
                                 </div>
                               </div>
-                            ) : (
-                              <div className="text-right text-sm">
-                                <div>Qty: {editLineItems[index]?.quantity ?? product.quantity}</div>
-                                {editLineItems[index]?.baseCost !== null && editLineItems[index]?.baseCost !== undefined && (
-                                  <div className="text-muted-foreground text-xs">
-                                    Cost: {formatCurrency(editLineItems[index]?.baseCost ?? 0)}
-                                  </div>
-                                )}
-                                <div className="text-muted-foreground">
-                                  Price: {formatCurrency(editLineItems[index]?.unitPrice ?? product.extractedUnitPrice)}
-                                </div>
-                              </div>
                             )}
                           </div>
-                          {!product.matched && editLineItems[index]?.baseCost === null && (
-                            <div className="text-xs text-amber-600 mt-1">
-                              Cost not set - click Edit to add
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
