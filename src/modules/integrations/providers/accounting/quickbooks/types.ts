@@ -168,7 +168,9 @@ export interface QuickBooksItem {
   IncomeAccountRef?: { value: string; name?: string };
   ExpenseAccountRef?: { value: string; name?: string };
   AssetAccountRef?: { value: string; name?: string };
+  TrackQtyOnHand?: boolean;
   QtyOnHand?: number;
+  InvStartDate?: string;
   SyncToken?: string;
   MetaData?: {
     CreateTime?: string;

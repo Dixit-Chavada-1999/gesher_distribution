@@ -1121,14 +1121,20 @@ export class QuickBooksProvider implements IAccountingProvider {
         : 'NonInventory';
 
     // Get income account (required by QuickBooks for all item types)
+    // For inventory items, MUST use an account with AccountSubType = 'SalesOfProductIncome'
+    const isInventory = qboType === 'Inventory';
     const incomeAccount = await this.getIncomeAccount(
       tokenInfo.accessToken,
       tokenInfo.externalAccountId,
-      tokenInfo.environment
+      tokenInfo.environment,
+      isInventory
     );
 
     if (!incomeAccount) {
-      throw new Error('No income account found in QuickBooks. Please create a "Sales of Product Income" account.');
+      const errorMsg = isInventory
+        ? 'No "Sales of Product Income" account found in QuickBooks. Inventory items require an income account with Detail Type: "Sales of Product Income".'
+        : 'No income account found in QuickBooks. Please create an income account.';
+      throw new Error(errorMsg);
     }
 
     const qboItem: Partial<QuickBooksItem> = {
@@ -1144,7 +1150,7 @@ export class QuickBooksProvider implements IAccountingProvider {
       },
     };
 
-    // For inventory items, we also need expense and asset accounts
+    // For inventory items, we need expense account, asset account, and inventory tracking fields
     if (qboType === 'Inventory') {
       const expenseAccount = await this.getExpenseAccount(
         tokenInfo.accessToken,
@@ -1157,6 +1163,24 @@ export class QuickBooksProvider implements IAccountingProvider {
           name: expenseAccount.name,
         };
       }
+
+      // Get asset account for inventory tracking
+      const assetAccount = await this.getAssetAccount(
+        tokenInfo.accessToken,
+        tokenInfo.externalAccountId,
+        tokenInfo.environment
+      );
+      if (assetAccount) {
+        qboItem.AssetAccountRef = {
+          value: assetAccount.id,
+          name: assetAccount.name,
+        };
+      }
+
+      // Required fields for inventory items
+      qboItem.TrackQtyOnHand = true;
+      qboItem.QtyOnHand = 0; // Start with 0, inventory will be adjusted separately
+      qboItem.InvStartDate = new Date().toISOString().slice(0, 10); // Today's date
     }
 
     const url = `${getApiBaseUrl(tokenInfo.environment as QuickBooksEnvironment)}/v3/company/${tokenInfo.externalAccountId}/item?minorversion=${QBO_API_MINOR_VERSION}`;
@@ -1174,6 +1198,42 @@ export class QuickBooksProvider implements IAccountingProvider {
     if (!response.ok) {
       const errorBody = await response.text();
       console.error('Create item failed:', errorBody);
+
+      // Check if it's a duplicate name error (code 6240)
+      try {
+        const errorData = JSON.parse(errorBody);
+        const isDuplicateError = errorData?.Fault?.Error?.some(
+          (err: { code: string }) => err.code === '6240'
+        );
+
+        if (isDuplicateError) {
+          // Search for existing item by name
+          console.log(`Duplicate item found, searching for existing item: ${product.name}`);
+          const existingItem = await this.findItemByName(
+            tokenInfo.accessToken,
+            tokenInfo.externalAccountId,
+            tokenInfo.environment,
+            product.name
+          );
+
+          if (existingItem) {
+            console.log(`Found existing QBO item: ${existingItem.externalId}`);
+            // Log as success since we found the existing item
+            logQboApiCall({
+              operation: 'create',
+              entityType: 'Product',
+              externalId: existingItem.externalId,
+              realmId: tokenInfo.externalAccountId,
+              success: true,
+              requestData: { name: product.name, sku: product.sku },
+              responseData: { id: existingItem.externalId, name: existingItem.name, linkedExisting: true },
+            });
+            return existingItem;
+          }
+        }
+      } catch {
+        // Error parsing, continue with normal error handling
+      }
 
       // Log API failure
       logQboApiCall({
@@ -1206,15 +1266,16 @@ export class QuickBooksProvider implements IAccountingProvider {
 
   /**
    * Get an income account from QuickBooks for item creation
-   * Looks for "Sales of Product Income" or any Income account
+   * For inventory items, MUST have AccountSubType = 'SalesOfProductIncome'
    */
   private async getIncomeAccount(
     accessToken: string,
     realmId: string,
-    environment: string
+    environment: string,
+    forInventory: boolean = false
   ): Promise<{ id: string; name: string } | null> {
     // Query for income accounts
-    const query = `SELECT * FROM Account WHERE AccountType = 'Income' MAXRESULTS 10`;
+    const query = `SELECT * FROM Account WHERE AccountType = 'Income' MAXRESULTS 50`;
 
     const url = `${getApiBaseUrl(environment as QuickBooksEnvironment)}/v3/company/${realmId}/query?query=${encodeURIComponent(query)}&minorversion=${QBO_API_MINOR_VERSION}`;
 
@@ -1233,7 +1294,20 @@ export class QuickBooksProvider implements IAccountingProvider {
     const data = await response.json();
     const accounts = data.QueryResponse?.Account || [];
 
-    // Prefer "Sales of Product Income" or similar
+    // For inventory items, MUST use SalesOfProductIncome subtype
+    if (forInventory) {
+      const salesOfProductAccount = accounts.find(
+        (acc: { AccountSubType: string }) => acc.AccountSubType === 'SalesOfProductIncome'
+      );
+      if (salesOfProductAccount) {
+        return { id: salesOfProductAccount.Id, name: salesOfProductAccount.Name };
+      }
+      // If no SalesOfProductIncome account found, return null - inventory items require it
+      console.error('No SalesOfProductIncome account found in QuickBooks');
+      return null;
+    }
+
+    // For non-inventory items, prefer "Sales of Product Income" but accept any income account
     const preferredAccount = accounts.find((acc: { Name: string }) =>
       acc.Name.toLowerCase().includes('sales') && acc.Name.toLowerCase().includes('product')
     );
@@ -1281,6 +1355,90 @@ export class QuickBooksProvider implements IAccountingProvider {
 
     if (accounts.length > 0) {
       return { id: accounts[0].Id, name: accounts[0].Name };
+    }
+
+    return null;
+  }
+
+  /**
+   * Get an asset account from QuickBooks for inventory items
+   * Looks for "Inventory Asset" or similar
+   */
+  private async getAssetAccount(
+    accessToken: string,
+    realmId: string,
+    environment: string
+  ): Promise<{ id: string; name: string } | null> {
+    // Query for asset accounts (Other Current Asset is typically used for inventory)
+    const query = `SELECT * FROM Account WHERE AccountType = 'Other Current Asset' MAXRESULTS 10`;
+
+    const url = `${getApiBaseUrl(environment as QuickBooksEnvironment)}/v3/company/${realmId}/query?query=${encodeURIComponent(query)}&minorversion=${QBO_API_MINOR_VERSION}`;
+
+    const response = await fetch(url, {
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      console.error('Failed to fetch asset accounts');
+      return null;
+    }
+
+    const data = await response.json();
+    const accounts = data.QueryResponse?.Account || [];
+
+    // Prefer "Inventory Asset" account
+    const inventoryAccount = accounts.find((acc: { Name: string }) =>
+      acc.Name.toLowerCase().includes('inventory')
+    );
+
+    if (inventoryAccount) {
+      return { id: inventoryAccount.Id, name: inventoryAccount.Name };
+    }
+
+    // Otherwise use first available asset account
+    if (accounts.length > 0) {
+      return { id: accounts[0].Id, name: accounts[0].Name };
+    }
+
+    return null;
+  }
+
+  /**
+   * Find an existing item in QuickBooks by name
+   * Used when we get a duplicate name error during create
+   */
+  private async findItemByName(
+    accessToken: string,
+    realmId: string,
+    environment: string,
+    name: string
+  ): Promise<AccountingProduct | null> {
+    // Escape single quotes in name for QBO query
+    const escapedName = name.replace(/'/g, "\\'");
+    const query = `SELECT * FROM Item WHERE Name = '${escapedName}'`;
+
+    const url = `${getApiBaseUrl(environment as QuickBooksEnvironment)}/v3/company/${realmId}/query?query=${encodeURIComponent(query)}&minorversion=${QBO_API_MINOR_VERSION}`;
+
+    const response = await fetch(url, {
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      console.error('Failed to search for item by name');
+      return null;
+    }
+
+    const data = await response.json();
+    const items = data.QueryResponse?.Item || [];
+
+    if (items.length > 0) {
+      return this.mapQuickBooksProduct(items[0]);
     }
 
     return null;

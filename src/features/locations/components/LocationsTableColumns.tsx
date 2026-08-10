@@ -79,13 +79,13 @@ export function getLocationsTableColumns(options: ColumnOptions = {}): ColumnDef
           drop_ship: 'Drop Ship',
           virtual: 'Virtual',
         };
-        const typeColors: Record<string, 'default' | 'secondary' | 'outline'> = {
-          warehouse: 'default',
-          drop_ship: 'secondary',
-          virtual: 'outline',
+        const typeColors: Record<string, string> = {
+          warehouse: 'bg-blue-100 text-blue-700 hover:bg-blue-100',
+          drop_ship: 'bg-purple-100 text-purple-700 hover:bg-purple-100',
+          virtual: 'bg-gray-100 text-gray-700 hover:bg-gray-100',
         };
         return (
-          <Badge variant={typeColors[type] || 'secondary'}>
+          <Badge variant="outline" className={`border-0 ${typeColors[type] || 'bg-gray-100 text-gray-700'}`}>
             {typeLabels[type] || type}
           </Badge>
         );
@@ -135,7 +135,10 @@ export function getLocationsTableColumns(options: ColumnOptions = {}): ColumnDef
       cell: ({ row }) => {
         const isActive = row.getValue('isActive') as boolean;
         return (
-          <Badge variant={isActive ? 'default' : 'secondary'}>
+          <Badge
+            variant="outline"
+            className={`border-0 ${isActive ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100' : 'bg-gray-100 text-gray-700 hover:bg-gray-100'}`}
+          >
             {isActive ? 'Active' : 'Inactive'}
           </Badge>
         );
