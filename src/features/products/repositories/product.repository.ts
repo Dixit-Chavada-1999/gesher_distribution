@@ -34,6 +34,9 @@ interface DbProduct {
   updated_by: string | null;
   deleted_at: string | null;
 
+  // Supplier
+  supplier_id: string | null;
+
   // QuickBooks Sync
   qbo_item_id: string | null;
   qbo_realm_id: string | null;
@@ -296,6 +299,7 @@ class ProductRepositoryImpl {
         item_type: data.itemType || 'inventory',
         is_sellable: data.isSellable ?? true,
         image_url: data.imageUrl ?? null,
+        supplier_id: data.supplierId ?? null,
         created_by: userId ?? null,
         updated_by: userId ?? null,
       })
@@ -335,6 +339,7 @@ class ProductRepositoryImpl {
     if (data.itemType !== undefined) {updateData.item_type = data.itemType;}
     if (data.isSellable !== undefined) {updateData.is_sellable = data.isSellable;}
     if (data.imageUrl !== undefined) {updateData.image_url = data.imageUrl;}
+    if (data.supplierId !== undefined) {updateData.supplier_id = data.supplierId;}
 
     const { data: result, error } = await db
       .from('products')
@@ -475,6 +480,9 @@ class ProductRepositoryImpl {
       createdBy: data.created_by,
       updatedBy: data.updated_by,
       deletedAt: data.deleted_at ? new Date(data.deleted_at) : null,
+
+      // Supplier
+      supplierId: data.supplier_id ?? null,
 
       // QuickBooks Sync (handle missing columns for backwards compatibility)
       qboItemId: data.qbo_item_id ?? null,

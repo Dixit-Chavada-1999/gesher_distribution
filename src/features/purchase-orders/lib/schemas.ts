@@ -30,6 +30,24 @@ export const poItemSchema = z.object({
   unitCode: z.string().default('EA'),
   unitPrice: z.number().int().min(0, 'Price must be non-negative'),
   taxRate: z.number().min(0).max(100).default(0),
+  // Per-item supplier (optional)
+  supplierId: z.string().uuid().nullable().optional(),
+  supplierName: z.string().nullable().optional(),
+});
+
+export const updatePOItemSchema = z.object({
+  id: z.string().uuid().optional(),
+  productId: z.string().uuid('Invalid product ID'),
+  salesOrderItemId: z.string().uuid().nullable().optional(),
+  sku: z.string().min(1, 'SKU is required'),
+  description: z.string().nullable(),
+  quantityOrdered: z.number().int().positive('Quantity must be positive'),
+  unitCode: z.string().default('EA'),
+  unitPrice: z.number().int().min(0, 'Price must be non-negative'),
+  taxRate: z.number().min(0).max(100).default(0),
+  // Per-item supplier (optional)
+  supplierId: z.string().uuid().nullable().optional(),
+  supplierName: z.string().nullable().optional(),
 });
 
 // ============================================
@@ -39,7 +57,8 @@ export const poItemSchema = z.object({
 export const createPurchaseOrderSchema = z.object({
   poDate: z.coerce.date(),
   expectedDeliveryDate: z.coerce.date().nullable().optional(),
-  // Supplier is optional - defaults to Galileo/Alon per client doc
+  // Supplier - links to suppliers table for portal access
+  supplierId: z.string().uuid().nullable().optional(),
   supplierName: z.string().default(DEFAULT_SUPPLIER.name),
   supplierContact: z.string().default(DEFAULT_SUPPLIER.contact),
   salesOrderId: z.string().uuid().nullable().optional(),
@@ -62,12 +81,17 @@ export type CreatePOInput = z.infer<typeof createPurchaseOrderSchema>;
 export const updatePurchaseOrderSchema = z.object({
   poDate: z.coerce.date().optional(),
   expectedDeliveryDate: z.coerce.date().nullable().optional(),
+  supplierId: z.string().uuid().nullable().optional(),
+  supplierName: z.string().optional(),
+  supplierContact: z.string().optional(),
   warehouseId: z.string().uuid().nullable().optional(),
   currencyCode: z.string().optional(),
   vendorAddress: addressSchema.optional(),
   shipToAddress: addressSchema.optional(),
   vendorNotes: z.string().nullable().optional(),
   internalNotes: z.string().nullable().optional(),
+  // Items for updating (optional - if not provided, items won't be modified)
+  items: z.array(updatePOItemSchema).optional(),
 });
 
 export type UpdatePOInput = z.infer<typeof updatePurchaseOrderSchema>;
@@ -121,7 +145,8 @@ export function calculatePOTotals(
 export const poFormSchema = z.object({
   poDate: z.string().min(1, 'PO date is required'),
   expectedDeliveryDate: z.string().optional(),
-  // Supplier info is read-only (always Galileo/Alon)
+  // Supplier selection
+  supplierId: z.string().optional(),
   salesOrderId: z.string().optional(),
   warehouseId: z.string().optional(),
   currencyCode: z.string().default('USD'),
@@ -148,16 +173,18 @@ export type POFormInput = z.infer<typeof poFormSchema>;
 
 export function formToCreateDTO(
   form: POFormInput,
-  items: CreatePOItemDTO[]
+  items: CreatePOItemDTO[],
+  supplierInfo?: { id: string; name: string; contact: string } | null
 ): CreatePurchaseOrderDTO {
   return {
     poDate: new Date(form.poDate),
     expectedDeliveryDate: form.expectedDeliveryDate
       ? new Date(form.expectedDeliveryDate)
       : null,
-    // Supplier defaults to Galileo/Alon
-    supplierName: DEFAULT_SUPPLIER.name,
-    supplierContact: DEFAULT_SUPPLIER.contact,
+    // Supplier - use selected or default
+    supplierId: supplierInfo?.id || form.supplierId || null,
+    supplierName: supplierInfo?.name || DEFAULT_SUPPLIER.name,
+    supplierContact: supplierInfo?.contact || DEFAULT_SUPPLIER.contact,
     salesOrderId: form.salesOrderId || null,
     warehouseId: form.warehouseId || null,
     currencyCode: form.currencyCode || 'USD',

@@ -9,7 +9,7 @@
 import { revalidatePath } from 'next/cache';
 import { purchaseOrderService } from '../services/purchase-order.service';
 import { createClient } from '@/shared/lib/supabase/server';
-import type { POListParams } from '../types';
+import type { POListParams, SupplierSummary } from '../types';
 import type {
   CreatePOInput,
   UpdatePOInput,
@@ -166,4 +166,34 @@ export async function cancelPurchaseOrder(id: string) {
   }
 
   return result;
+}
+
+// ============================================
+// GET SUPPLIERS FOR DROPDOWN
+// ============================================
+
+export async function getSuppliersForDropdown(): Promise<SupplierSummary[]> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('suppliers')
+      .select('id, name, primary_contact_name')
+      .eq('status', 'active')
+      .is('deleted_at', null)
+      .order('name');
+
+    if (error) {
+      console.error('[getSuppliersForDropdown] Error:', error);
+      return [];
+    }
+
+    return (data || []).map((s) => ({
+      id: s.id,
+      name: s.name,
+      primaryContactName: s.primary_contact_name,
+    }));
+  } catch (err) {
+    console.error('[getSuppliersForDropdown] Error:', err);
+    return [];
+  }
 }

@@ -50,7 +50,7 @@ export const ORDER_STATUS_COLORS: Record<OrderStatus, string> = {
 
 // Valid status transitions
 export const ORDER_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  draft: ['pending', 'cancelled'],
+  draft: ['pending', 'confirmed', 'cancelled'], // Allow direct confirmation from draft
   pending: ['confirmed', 'cancelled'],
   confirmed: ['processing', 'cancelled'],
   processing: ['shipped', 'cancelled'],
@@ -531,5 +531,7 @@ export interface SalesOrdersTableProps {
   onView?: (order: SalesOrderListItem) => void;
   onEdit?: (order: SalesOrderListItem) => void;
   onDelete?: (order: SalesOrderListItem) => void;
+  onConfirm?: (order: SalesOrderListItem) => void;
+  onCancel?: (order: SalesOrderListItem) => void;
   toolbarContent?: React.ReactNode;
 }

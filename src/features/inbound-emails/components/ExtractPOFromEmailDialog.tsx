@@ -202,6 +202,7 @@ export function ExtractPOFromEmailDialog({
         basePrice: newProductForm.basePrice ? Math.round(parseFloat(newProductForm.basePrice) * 100) : 0,
         itemType: newProductForm.itemType,
         status: 'active',
+        isSellable: true,
       });
 
       if (result.success && result.data) {

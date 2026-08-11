@@ -54,11 +54,18 @@ export const PO_STATUS_TRANSITIONS: Record<POStatus, POStatus[]> = {
   cancelled: [],
 };
 
-// Default supplier per client doc
+// Default supplier (used as fallback when no supplier selected)
 export const DEFAULT_SUPPLIER = {
   name: 'Galileo',
   contact: 'Alon',
 };
+
+// Supplier summary for dropdown
+export interface SupplierSummary {
+  id: string;
+  name: string;
+  primaryContactName: string | null;
+}
 
 // ============================================
 // DATABASE ENTITY TYPES
@@ -73,7 +80,8 @@ export interface PurchaseOrder {
   poDate: Date;
   expectedDeliveryDate: Date | null;
 
-  // Supplier (always Galileo/Alon per client doc)
+  // Supplier
+  supplierId: string | null;
   supplierName: string;
   supplierContact: string;
 
@@ -137,6 +145,9 @@ export interface PurchaseOrderItem {
   taxRate: number;
   lineTotal: number; // cents
   sortOrder: number;
+  // Per-item supplier (optional override)
+  supplierId: string | null;
+  supplierName: string | null;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string | null;
@@ -196,6 +207,9 @@ export interface CreatePOItemDTO {
   unitCode: string;
   unitPrice: number; // cents
   taxRate: number;
+  // Per-item supplier (optional)
+  supplierId?: string | null;
+  supplierName?: string | null;
 }
 
 export interface CreatePurchaseOrderDTO {
@@ -205,8 +219,9 @@ export interface CreatePurchaseOrderDTO {
   warehouseId?: string | null;
   currencyCode?: string;
   status?: POStatus;
-  supplierName?: string; // defaults to Galileo
-  supplierContact?: string; // defaults to Alon
+  supplierId?: string | null; // Link to suppliers table
+  supplierName?: string; // Denormalized for display
+  supplierContact?: string; // Denormalized for display
   vendorAddress: AddressDTO;
   shipToAddress: AddressDTO;
   items: CreatePOItemDTO[];
@@ -214,15 +229,35 @@ export interface CreatePurchaseOrderDTO {
   internalNotes?: string | null;
 }
 
+export interface UpdatePOItemDTO {
+  id?: string; // If present, update existing item; if not, create new
+  productId: string;
+  salesOrderItemId?: string | null;
+  sku: string;
+  description: string | null;
+  quantityOrdered: number;
+  unitCode: string;
+  unitPrice: number; // cents
+  taxRate: number;
+  // Per-item supplier (optional)
+  supplierId?: string | null;
+  supplierName?: string | null;
+}
+
 export interface UpdatePurchaseOrderDTO {
   poDate?: Date;
   expectedDeliveryDate?: Date | null;
+  supplierId?: string | null;
+  supplierName?: string;
+  supplierContact?: string;
   warehouseId?: string | null;
   currencyCode?: string;
   vendorAddress?: AddressDTO;
   shipToAddress?: AddressDTO;
   vendorNotes?: string | null;
   internalNotes?: string | null;
+  // Items array for updating
+  items?: UpdatePOItemDTO[];
 }
 
 // ============================================
@@ -244,6 +279,7 @@ export interface POListParams {
 export interface POListItem {
   id: string;
   poNumber: string;
+  supplierId: string | null;
   supplierName: string;
   supplierContact: string;
   poDate: string;

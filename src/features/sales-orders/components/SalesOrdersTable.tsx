@@ -27,6 +27,8 @@ export function SalesOrdersTable({
   onView,
   onEdit,
   onDelete,
+  onConfirm,
+  onCancel,
   toolbarContent,
 }: SalesOrdersTableProps) {
   // ----------------------------------------
@@ -39,8 +41,10 @@ export function SalesOrdersTable({
         onView: onView || onRowClick,
         onEdit,
         onDelete,
+        onConfirm,
+        onCancel,
       }),
-    [onView, onEdit, onDelete, onRowClick]
+    [onView, onEdit, onDelete, onConfirm, onCancel, onRowClick]
   );
 
   // ----------------------------------------

@@ -25,6 +25,7 @@ interface DbUser {
   last_name: string;
   avatar_url: string | null;
   role_id: string | null;
+  supplier_id: string | null;
 }
 
 interface DbRole {
@@ -45,6 +46,7 @@ interface DbRole {
 async function fetchAppUserByAuthId(authUserId: string): Promise<AppUser | null> {
   try {
     // Step 1: Get user with role_id (minimal query)
+    // Note: supplier_id is optional - column may not exist before migrations
     const { data: userData, error: userError } = await db
       .from('users')
       .select('id, auth_user_id, email, first_name, last_name, avatar_url, role_id')
@@ -62,7 +64,23 @@ async function fetchAppUserByAuthId(authUserId: string): Promise<AppUser | null>
       return null;
     }
 
-    const user = userData as DbUser;
+    const user: DbUser = {
+      ...(userData as Omit<DbUser, 'supplier_id'>),
+      supplier_id: null, // Will try to fetch below
+    };
+
+    // Try to get supplier_id (column may not exist before migrations)
+    const { data: supplierData, error: supplierError } = await db
+      .from('users')
+      .select('supplier_id')
+      .eq('id', user.id)
+      .single();
+
+    // Only set supplier_id if query succeeded and column exists
+    if (!supplierError && supplierData && 'supplier_id' in supplierData) {
+      user.supplier_id = (supplierData as { supplier_id: string | null }).supplier_id;
+    }
+    // If there's an error (column doesn't exist), we just leave supplier_id as null
 
     // Step 2: Get role AND permissions in PARALLEL (if user has a role)
     let role: DbRole | null = null;
@@ -116,6 +134,7 @@ async function fetchAppUserByAuthId(authUserId: string): Promise<AppUser | null>
           }
         : null,
       permissions: permissionNames,
+      supplierId: user.supplier_id,
     };
   } catch (error) {
     // Log the error for debugging but don't crash the app

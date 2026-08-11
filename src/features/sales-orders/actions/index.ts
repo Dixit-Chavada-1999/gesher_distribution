@@ -425,6 +425,7 @@ export async function submitSalesOrder(id: string): Promise<ActionResult<SalesOr
 
 /**
  * Confirm a pending order (pending -> confirmed)
+ * Also creates a Purchase Order automatically
  */
 export async function confirmSalesOrder(id: string): Promise<ActionResult<SalesOrder>> {
   const supabase = await createClient();
@@ -443,11 +444,181 @@ export async function confirmSalesOrder(id: string): Promise<ActionResult<SalesO
   const result = await salesOrderService.confirm(id, appUser.id);
 
   if (result.success) {
+    // Auto-create Purchase Order from confirmed Sales Order
+    try {
+      await createPurchaseOrderFromSalesOrder(id, appUser.id);
+    } catch (error) {
+      console.error('Failed to auto-create PO:', error);
+      // Don't fail the confirmation if PO creation fails
+    }
+
     revalidatePath('/sales-orders');
     revalidatePath(`/sales-orders/${id}`);
+    revalidatePath('/purchase-orders');
   }
 
   return result;
+}
+
+/**
+ * Helper: Create Purchase Order from Sales Order
+ */
+async function createPurchaseOrderFromSalesOrder(
+  salesOrderId: string,
+  userId: string
+): Promise<void> {
+  // Get the sales order with items
+  const soResult = await salesOrderService.getById(salesOrderId);
+  if (!soResult.success || !soResult.data) {
+    throw new Error('Failed to get sales order');
+  }
+
+  const salesOrder = soResult.data;
+
+  // Get product supplier info for all items
+  const productIds = salesOrder.items.map(item => item.productId).filter(Boolean);
+
+  if (productIds.length === 0) {
+    return; // No products, skip PO creation
+  }
+
+  // Fetch products with their supplier_id
+  const { data: products } = await db
+    .from('products')
+    .select('id, supplier_id, sku, name')
+    .in('id', productIds);
+
+  // Create a map of productId -> supplierId
+  const productSupplierMap = new Map<string, string | null>();
+  products?.forEach(p => {
+    productSupplierMap.set(p.id, p.supplier_id);
+  });
+
+  // Group items by supplier
+  const itemsBySupplier = new Map<string | null, typeof salesOrder.items>();
+
+  for (const item of salesOrder.items) {
+    const productSupplierId = item.productId ? productSupplierMap.get(item.productId) : undefined;
+    const supplierId: string | null = productSupplierId ?? null;
+
+    if (!itemsBySupplier.has(supplierId)) {
+      itemsBySupplier.set(supplierId, []);
+    }
+    itemsBySupplier.get(supplierId)!.push(item);
+  }
+
+  // Get supplier details for suppliers we'll create POs for
+  const supplierIds = Array.from(itemsBySupplier.keys()).filter(id => id !== null) as string[];
+
+  const supplierMap = new Map<string, { name: string; primaryContactName: string | null }>();
+
+  if (supplierIds.length > 0) {
+    const { data: suppliers } = await db
+      .from('suppliers')
+      .select('id, name, primary_contact_name')
+      .in('id', supplierIds);
+
+    suppliers?.forEach(s => {
+      supplierMap.set(s.id, {
+        name: s.name,
+        primaryContactName: s.primary_contact_name
+      });
+    });
+  }
+
+  // Create PO for each supplier (including null supplier for items without assigned supplier)
+  for (const [supplierId, items] of itemsBySupplier) {
+    const supplierInfo = supplierId ? supplierMap.get(supplierId) : null;
+
+    // Generate PO number
+    const { data: poNumber, error: poNumberError } = await db.rpc('generate_po_number');
+    if (poNumberError || !poNumber) {
+      console.error('Failed to generate PO number:', poNumberError);
+      continue;
+    }
+
+    // Create PO items
+    const poItems = items.map((item, index) => ({
+      productId: item.productId || '',
+      sku: item.sku,
+      description: item.description || null,
+      quantityOrdered: item.quantity,
+      unitCode: 'EA',
+      unitPrice: item.unitPrice,
+      taxRate: 0,
+      sortOrder: index,
+    }));
+
+    // Calculate totals
+    const subtotal = poItems.reduce((sum, item) => sum + (item.unitPrice * item.quantityOrdered), 0);
+
+    // Create the PO
+    const { data: newPO, error } = await db
+      .from('purchase_orders')
+      .insert({
+        po_number: poNumber,
+        sales_order_id: salesOrderId,
+        supplier_id: supplierId,
+        supplier_name: supplierInfo?.name || 'Unassigned',
+        supplier_contact: supplierInfo?.primaryContactName || '',
+        po_date: new Date().toISOString().split('T')[0],
+        expected_delivery_date: salesOrder.requestedDeliveryDate
+          ? new Date(salesOrder.requestedDeliveryDate).toISOString().split('T')[0]
+          : null,
+        status: 'draft',
+        currency_code: salesOrder.currencyCode || 'USD',
+        warehouse_id: salesOrder.warehouseId,
+        subtotal: subtotal,
+        tax_total: 0,
+        shipping_cost: 0,
+        grand_total: subtotal,
+        vendor_address_street: '',
+        vendor_address_city: '',
+        vendor_address_state: '',
+        vendor_address_postal_code: '',
+        vendor_address_country: 'USA',
+        ship_to_address_street: salesOrder.shippingAddressStreet || '',
+        ship_to_address_city: salesOrder.shippingAddressCity || '',
+        ship_to_address_state: salesOrder.shippingAddressState || '',
+        ship_to_address_postal_code: salesOrder.shippingAddressPostalCode || '',
+        ship_to_address_country: salesOrder.shippingAddressCountry || 'USA',
+        internal_notes: `Auto-created from SO: ${salesOrder.orderNumber}`,
+        created_by: userId,
+        updated_by: userId,
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error('Failed to create PO:', error);
+      continue;
+    }
+
+    // Create PO items
+    if (newPO && poItems.length > 0) {
+      const poItemsToInsert = poItems.map(item => ({
+        purchase_order_id: newPO.id,
+        product_id: item.productId || null,
+        sku: item.sku,
+        description: item.description,
+        quantity_ordered: item.quantityOrdered,
+        quantity_received: 0,
+        unit_code: item.unitCode,
+        unit_price: item.unitPrice,
+        tax_rate: item.taxRate,
+        line_total: item.unitPrice * item.quantityOrdered,
+        sort_order: item.sortOrder,
+      }));
+
+      const { error: itemsError } = await db
+        .from('purchase_order_items')
+        .insert(poItemsToInsert);
+
+      if (itemsError) {
+        console.error('Failed to create PO items:', itemsError);
+      }
+    }
+  }
 }
 
 /**

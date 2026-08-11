@@ -27,11 +27,22 @@ export function PurchaseOrdersTableColumns(options: ColumnsOptions = {}): Column
     {
       accessorKey: 'poNumber',
       header: 'PO Number',
-      cell: ({ row }) => (
-        <span className="font-mono text-sm font-medium">
-          {row.original.poNumber}
-        </span>
-      ),
+      cell: ({ row }) => {
+        const status = row.original.status;
+        return (
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-sm font-medium">
+              {row.original.poNumber}
+            </span>
+            <Badge
+              variant="outline"
+              className={cn('text-xs font-medium', PO_STATUS_COLORS[status])}
+            >
+              {PO_STATUS_LABELS[status]}
+            </Badge>
+          </div>
+        );
+      },
     },
     {
       accessorKey: 'supplierName',
@@ -76,57 +87,44 @@ export function PurchaseOrdersTableColumns(options: ColumnsOptions = {}): Column
       ),
     },
     {
-      accessorKey: 'status',
-      header: 'Status',
-      cell: ({ row }) => {
-        const status = row.original.status;
-        return (
-          <Badge
-            variant="outline"
-            className={cn('text-xs font-medium', PO_STATUS_COLORS[status])}
-          >
-            {PO_STATUS_LABELS[status]}
-          </Badge>
-        );
-      },
-    },
-    {
       id: 'actions',
       cell: ({ row }) => {
         const po = row.original;
 
         return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <span className="sr-only">Open menu</span>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {onView && (
-                <DropdownMenuItem onClick={() => onView(po)}>
-                  <Eye className="mr-2 h-4 w-4" />
-                  View
-                </DropdownMenuItem>
-              )}
-              {onEdit && po.status === 'draft' && (
-                <DropdownMenuItem onClick={() => onEdit(po)}>
-                  <Pencil className="mr-2 h-4 w-4" />
-                  Edit
-                </DropdownMenuItem>
-              )}
-              {onDelete && po.status === 'draft' && (
-                <DropdownMenuItem
-                  onClick={() => onDelete(po)}
-                  className="text-red-600"
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div onClick={(e) => e.stopPropagation()}>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <span className="sr-only">Open menu</span>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {onView && (
+                  <DropdownMenuItem onClick={() => onView(po)}>
+                    <Eye className="mr-2 h-4 w-4" />
+                    View
+                  </DropdownMenuItem>
+                )}
+                {onEdit && po.status === 'draft' && (
+                  <DropdownMenuItem onClick={() => onEdit(po)}>
+                    <Pencil className="mr-2 h-4 w-4" />
+                    Edit
+                  </DropdownMenuItem>
+                )}
+                {onDelete && po.status === 'draft' && (
+                  <DropdownMenuItem
+                    onClick={() => onDelete(po)}
+                    className="text-red-600"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         );
       },
     },

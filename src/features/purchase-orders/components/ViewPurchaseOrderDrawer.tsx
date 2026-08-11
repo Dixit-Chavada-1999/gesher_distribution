@@ -1,5 +1,7 @@
 'use client';
 
+import { useState, useTransition } from 'react';
+import Link from 'next/link';
 import {
   Sheet,
   SheetContent,
@@ -10,9 +12,21 @@ import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Separator } from '@/shared/components/ui/separator';
 import { Skeleton } from '@/shared/components/ui/skeleton';
-import { Pencil, Building2, MapPin, Package, User } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/shared/components/ui/alert-dialog';
+import { Pencil, Building2, MapPin, Package, Send, Loader2, Calendar } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '@/shared/lib/utils';
 import { usePurchaseOrder } from '../hooks/usePurchaseOrder';
+import { sendPurchaseOrder } from '../actions';
 import { PO_STATUS_COLORS, PO_STATUS_LABELS } from '../types';
 import type { ViewPurchaseOrderDrawerProps } from '../types';
 
@@ -22,39 +36,69 @@ export function ViewPurchaseOrderDrawer({
   poId,
   onEdit,
 }: ViewPurchaseOrderDrawerProps) {
-  const { data: po, isLoading } = usePurchaseOrder(open ? poId : null);
+  const { data: po, isLoading, refetch } = usePurchaseOrder(open ? poId : null);
+  const [isPending, startTransition] = useTransition();
+  const [showSendDialog, setShowSendDialog] = useState(false);
+
+  const handleEditClick = () => {
+    if (po && onEdit) {
+      // Call onEdit which will handle closing drawer and opening edit modal
+      onEdit(po);
+    }
+  };
+
+  const handleSendToSupplier = () => {
+    if (!po) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const result = await sendPurchaseOrder(po.id);
+        if (result.success) {
+          toast.success(`PO ${po.poNumber} sent to supplier`);
+          setShowSendDialog(false);
+          refetch();
+        } else {
+          toast.error(result.error || 'Failed to send PO');
+        }
+      } catch (error) {
+        console.error('Error sending PO:', error);
+        toast.error('Failed to send PO');
+      }
+    });
+  };
 
   return (
-    <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+    <Sheet open={open} onOpenChange={onClose}>
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
         <SheetHeader className="space-y-4">
-          <div className="flex items-start justify-between">
-            <div className="space-y-1">
-              {isLoading ? (
-                <>
-                  <Skeleton className="h-6 w-32" />
-                  <Skeleton className="h-4 w-24" />
-                </>
-              ) : po ? (
-                <>
-                  <SheetTitle className="text-xl">{po.poNumber}</SheetTitle>
-                  <p className="text-sm text-muted-foreground">
-                    {new Date(po.poDate).toLocaleDateString()}
-                  </p>
-                </>
-              ) : null}
-            </div>
-            {po && (
-              <Badge
-                variant="outline"
-                className={cn(
-                  'text-xs font-medium',
-                  PO_STATUS_COLORS[po.status]
-                )}
-              >
-                {PO_STATUS_LABELS[po.status]}
-              </Badge>
-            )}
+          <div className="space-y-1">
+            {isLoading ? (
+              <>
+                <Skeleton className="h-6 w-32" />
+                <Skeleton className="h-4 w-24" />
+              </>
+            ) : po ? (
+              <>
+                <SheetTitle className="text-xl">{po.poNumber}</SheetTitle>
+                <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-1">
+                    <Calendar className="h-3.5 w-3.5" />
+                    <span>{new Date(po.poDate).toLocaleDateString()}</span>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      'text-xs font-medium',
+                      PO_STATUS_COLORS[po.status]
+                    )}
+                  >
+                    {PO_STATUS_LABELS[po.status]}
+                  </Badge>
+                </div>
+              </>
+            ) : null}
           </div>
         </SheetHeader>
 
@@ -66,25 +110,6 @@ export function ViewPurchaseOrderDrawer({
           </div>
         ) : po ? (
           <div className="mt-6 space-y-6">
-            {/* Supplier Information */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                Supplier
-              </h3>
-              <div className="flex items-start gap-2 text-sm">
-                <Building2 className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div>
-                  <p className="font-medium">{po.supplierName}</p>
-                  <div className="flex items-center gap-1 text-muted-foreground">
-                    <User className="h-3 w-3" />
-                    <span>{po.supplierContact}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
             {/* Ship To Address */}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
@@ -136,12 +161,26 @@ export function ViewPurchaseOrderDrawer({
                           ${(item.lineTotal / 100).toFixed(2)}
                         </p>
                       </div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {item.quantityOrdered} x ${(item.unitPrice / 100).toFixed(2)}
-                        {item.quantityReceived > 0 && (
-                          <span className="ml-2 text-emerald-600">
-                            ({item.quantityReceived} received)
-                          </span>
+                      <div className="mt-1 flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">
+                          {item.quantityOrdered} x ${(item.unitPrice / 100).toFixed(2)}
+                          {item.quantityReceived > 0 && (
+                            <span className="ml-2 text-emerald-600">
+                              ({item.quantityReceived} received)
+                            </span>
+                          )}
+                        </span>
+                        {/* Show per-item supplier if set, otherwise PO-level supplier */}
+                        {(item.supplierId || po.supplierId) && (
+                          <Link
+                            href={`/suppliers/${item.supplierId || po.supplierId}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-xs flex items-center gap-1 text-muted-foreground bg-background px-2 py-0.5 rounded hover:bg-muted hover:text-foreground transition-colors"
+                          >
+                            <Building2 className="h-3 w-3" />
+                            <span>Supplier:</span>
+                            <span className="font-medium">{item.supplierName || po.supplierName}</span>
+                          </Link>
                         )}
                       </div>
                     </div>
@@ -202,9 +241,21 @@ export function ViewPurchaseOrderDrawer({
             <Separator />
             <div className="flex gap-2">
               {onEdit && po.status === 'draft' && (
-                <Button onClick={() => onEdit(po)} className="flex-1">
+                <Button variant="outline" onClick={handleEditClick} className="flex-1">
                   <Pencil className="mr-2 h-4 w-4" />
                   Edit PO
+                </Button>
+              )}
+              {po.status === 'draft' && po.supplierId && (
+                <Button onClick={() => setShowSendDialog(true)} className="flex-1">
+                  <Send className="mr-2 h-4 w-4" />
+                  Send to Supplier
+                </Button>
+              )}
+              {po.status === 'draft' && !po.supplierId && (
+                <Button disabled className="flex-1" title="Select a supplier first">
+                  <Send className="mr-2 h-4 w-4" />
+                  Send to Supplier
                 </Button>
               )}
             </div>
@@ -214,6 +265,28 @@ export function ViewPurchaseOrderDrawer({
             Purchase order not found
           </div>
         )}
+
+        {/* Send Confirmation Dialog */}
+        <AlertDialog open={showSendDialog} onOpenChange={setShowSendDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Send PO to Supplier?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will send <span className="font-semibold">{po?.poNumber}</span> to{' '}
+                <span className="font-semibold">{po?.supplierName}</span>.
+                <br /><br />
+                The supplier will be able to view and respond to this PO in their portal.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleSendToSupplier} disabled={isPending}>
+                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Send PO
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SheetContent>
     </Sheet>
   );

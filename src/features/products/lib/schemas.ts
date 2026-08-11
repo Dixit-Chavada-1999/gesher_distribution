@@ -76,6 +76,7 @@ export const createProductSchema = z.object({
   itemType: productItemTypeSchema.default('inventory'),
   isSellable: z.boolean().default(true),
   imageUrl: z.string().url('Invalid image URL').optional().nullable().or(z.literal('')),
+  supplierId: z.string().uuid().optional().nullable(),
 });
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;
@@ -108,6 +109,7 @@ export const updateProductSchema = z.object({
   itemType: productItemTypeSchema.optional(),
   isSellable: z.boolean().optional(),
   imageUrl: z.string().url('Invalid image URL').optional().nullable().or(z.literal('')),
+  supplierId: z.string().uuid().optional().nullable(),
 });
 
 export type UpdateProductInput = z.infer<typeof updateProductSchema>;
@@ -156,6 +158,7 @@ export const productFormSchema = z.object({
   itemType: productItemTypeSchema,
   isSellable: z.boolean(),
   imageUrl: z.string().url('Invalid image URL').optional().or(z.literal('')),
+  supplierId: z.string().optional(), // Empty string = no supplier
 });
 
 export type ProductFormInput = z.infer<typeof productFormSchema>;
@@ -205,6 +208,7 @@ export function formToCreateDTO(values: ProductFormInput): CreateProductInput {
     itemType: values.itemType,
     isSellable: values.isSellable,
     imageUrl: values.imageUrl || null,
+    supplierId: values.supplierId || null,
   };
 }
 
@@ -226,6 +230,7 @@ export function productToFormValues(product: {
   itemType: 'inventory' | 'non_inventory' | 'service';
   isSellable: boolean;
   imageUrl: string | null;
+  supplierId?: string | null;
 }): ProductFormInput {
   return {
     sku: product.sku,
@@ -242,5 +247,6 @@ export function productToFormValues(product: {
     itemType: product.itemType,
     isSellable: product.isSellable,
     imageUrl: product.imageUrl || '',
+    supplierId: product.supplierId || '',
   };
 }

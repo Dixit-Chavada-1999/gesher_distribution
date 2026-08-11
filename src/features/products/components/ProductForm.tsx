@@ -6,8 +6,10 @@
  * Form for creating and editing products.
  */
 
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Loader2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Textarea } from '@/shared/components/ui/textarea';
@@ -30,6 +32,8 @@ import {
 } from '@/shared/components/ui/select';
 import { productFormSchema, type ProductFormInput, productToFormValues } from '../lib/schemas';
 import { DEFAULT_PRODUCT_FORM_VALUES, PRODUCT_STATUS_OPTIONS, PRODUCT_ITEM_TYPE_OPTIONS } from '../types';
+import { getSuppliersForDropdown } from '@/features/purchase-orders/actions';
+import type { SupplierSummary } from '@/features/purchase-orders/types';
 
 interface ProductFormProps {
   initialData?: {
@@ -47,6 +51,7 @@ interface ProductFormProps {
     itemType: 'inventory' | 'non_inventory' | 'service';
     isSellable: boolean;
     imageUrl: string | null;
+    supplierId?: string | null;
   };
   onSubmit: (data: ProductFormInput) => Promise<void>;
   onCancel?: () => void;
@@ -61,12 +66,31 @@ export function ProductForm({
   isLoading = false,
   submitLabel = 'Save Product',
 }: ProductFormProps) {
+  const [suppliers, setSuppliers] = useState<SupplierSummary[]>([]);
+  const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(false);
+
   const form = useForm<ProductFormInput>({
     resolver: zodResolver(productFormSchema),
     defaultValues: initialData
       ? productToFormValues(initialData)
       : DEFAULT_PRODUCT_FORM_VALUES,
   });
+
+  // Load suppliers on mount
+  useEffect(() => {
+    const loadSuppliers = async () => {
+      setIsLoadingSuppliers(true);
+      try {
+        const data = await getSuppliersForDropdown();
+        setSuppliers(data);
+      } catch (error) {
+        console.error('Failed to load suppliers:', error);
+      } finally {
+        setIsLoadingSuppliers(false);
+      }
+    };
+    loadSuppliers();
+  }, []);
 
   const handleSubmit = async (data: ProductFormInput) => {
     await onSubmit(data);
@@ -144,6 +168,51 @@ export function ProductForm({
                     rows={4}
                   />
                 </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="supplierId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Default Supplier</FormLabel>
+                <Select
+                  value={field.value || ''}
+                  onValueChange={field.onChange}
+                  disabled={isLoadingSuppliers}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      {isLoadingSuppliers ? (
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Loading...
+                        </span>
+                      ) : (
+                        <SelectValue placeholder="Select a supplier (optional)" />
+                      )}
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="">No supplier</SelectItem>
+                    {suppliers.map((supplier) => (
+                      <SelectItem key={supplier.id} value={supplier.id}>
+                        {supplier.name}
+                        {supplier.primaryContactName && (
+                          <span className="text-muted-foreground ml-2">
+                            ({supplier.primaryContactName})
+                          </span>
+                        )}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormDescription>
+                  Auto-assigns this supplier when creating POs for this product
+                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}

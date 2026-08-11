@@ -1,8 +1,9 @@
 /**
  * Dashboard Page
  *
- * Modern professional dashboard with KPIs, charts, pipeline, and activity.
- * Uses modular components from the dashboard feature module.
+ * Role-based dashboard rendering:
+ * - Operations Manager: Shows Jenny's Operations Dashboard
+ * - Other roles: Shows executive dashboard with KPIs, charts, and activity
  *
  * Permission-based rendering:
  * - dashboard.view_module: Access to dashboard page
@@ -35,6 +36,9 @@ import {
 } from '@/features/dashboard';
 import { getCurrentUser, hasPermission } from '@/shared/lib/auth';
 
+// Operations Dashboard imports
+import { OperationsDashboardContent } from './OperationsDashboardContent';
+
 // ============================================
 // METADATA
 // ============================================
@@ -45,6 +49,28 @@ export const metadata: Metadata = {
 };
 
 // ============================================
+// HELPER FUNCTIONS
+// ============================================
+
+/**
+ * Check if user has Operations Manager role
+ */
+function isOperationsManager(roleName: string | undefined): boolean {
+  if (!roleName) {
+    return false;
+  }
+  const normalized = roleName.toLowerCase().replace(/[_\s]/g, '');
+  return normalized === 'operationsmanager' || normalized === 'operations';
+}
+
+/**
+ * Check if user is a supplier portal user
+ */
+function isSupplierUser(supplierId: string | null | undefined): boolean {
+  return supplierId !== null && supplierId !== undefined;
+}
+
+// ============================================
 // PAGE COMPONENT
 // ============================================
 
@@ -52,13 +78,29 @@ export default async function DashboardPage() {
   // Get current user with permissions for server-side checks
   const user = await getCurrentUser();
 
-  // Server-side module permission check
+  // Must be logged in
+  if (!user) {
+    redirect('/login');
+  }
+
+  // Check if user is a supplier FIRST - redirect to supplier portal
+  // This must happen before permission checks since suppliers don't have dashboard permissions
+  if (isSupplierUser(user.supplierId)) {
+    redirect('/supplier-portal');
+  }
+
+  // Server-side module permission check (for non-supplier users)
   // If no permission for dashboard, redirect to no-permission page
-  if (!user || !hasPermission(user, 'dashboard.view_module')) {
+  if (!hasPermission(user, 'dashboard.view_module')) {
     redirect('/no-permission');
   }
 
-  // Permission checks for sub-sections
+  // Check if user is Operations Manager - show Operations Dashboard
+  if (isOperationsManager(user.role?.name)) {
+    return <OperationsDashboardContent />;
+  }
+
+  // Permission checks for sub-sections (for executive dashboard)
   const canViewAnalytics = hasPermission(user, 'dashboard.view_analytics');
   const canViewActivity = hasPermission(user, 'dashboard.view_activity');
   const canViewFinancials = hasPermission(user, 'dashboard.view_financials');

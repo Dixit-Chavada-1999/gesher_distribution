@@ -43,6 +43,10 @@ export interface Product {
   updatedBy: string | null;
   deletedAt: Date | null;
 
+  // Supplier (for auto-assignment on PO creation)
+  supplierId: string | null;
+  supplierName?: string | null;
+
   // QuickBooks Sync
   qboItemId: string | null;
   qboRealmId: string | null;
@@ -82,6 +86,7 @@ export interface CreateProductDTO {
   itemType?: ProductItemType;
   isSellable?: boolean;
   imageUrl?: string | null;
+  supplierId?: string | null;
 }
 
 /**
@@ -102,6 +107,7 @@ export interface UpdateProductDTO {
   itemType?: ProductItemType;
   isSellable?: boolean;
   imageUrl?: string | null;
+  supplierId?: string | null;
 }
 
 // ============================================
@@ -160,6 +166,7 @@ export interface ProductFormValues {
   itemType: ProductItemType;
   isSellable: boolean;
   imageUrl: string;
+  supplierId: string; // Empty string for no supplier
 }
 
 // ============================================
@@ -254,4 +261,5 @@ export const DEFAULT_PRODUCT_FORM_VALUES: ProductFormValues = {
   itemType: 'inventory',
   isSellable: true,
   imageUrl: '',
+  supplierId: '',
 };

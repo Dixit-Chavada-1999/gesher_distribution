@@ -28,9 +28,10 @@ import {
   Building2,
   // DollarSign,
   FileSignature,
-  // ClipboardList, // Uncomment when Purchase Orders module is enabled
-  // Truck, // Uncomment when Shipments module is enabled
+  ClipboardList, // Purchase Orders
+  Truck, // Operations dashboard
   // Receipt, // Uncomment when Invoices module is enabled
+  Factory, // Suppliers
 } from 'lucide-react';
 
 import { cn } from '@/shared/lib/utils';
@@ -87,6 +88,13 @@ const NAV_SECTIONS = [
         icon: Building2,
         permission: 'customers.view_module',
       },
+      {
+        id: 'suppliers',
+        label: 'Suppliers',
+        href: '/suppliers',
+        icon: Factory,
+        permission: 'suppliers.view_module',
+      },
   //     {
   //       id: 'pricing',
   //       label: 'Pricing',
@@ -124,20 +132,30 @@ const NAV_SECTIONS = [
       // },
     ],
   },
-  // Procurement section is temporarily hidden from the sidebar.
-  // Uncomment this block (and the ClipboardList icon import) to bring it back.
-  // {
-  //   title: 'Procurement',
-  //   items: [
-  //     {
-  //       id: 'purchase-orders',
-  //       label: 'Purchase Orders',
-  //       href: '/purchase-orders',
-  //       icon: ClipboardList,
-  //       permission: 'purchase_orders.view_module',
-  //     },
-  //   ],
-  // },
+  {
+    title: 'Operations',
+    items: [
+      {
+        id: 'operations',
+        label: 'Operations',
+        href: '/operations',
+        icon: Truck,
+        permission: 'dashboard.view_module', // Uses dashboard permission for now
+      },
+    ],
+  },
+  {
+    title: 'Procurement',
+    items: [
+      {
+        id: 'purchase-orders',
+        label: 'Purchase Orders',
+        href: '/purchase-orders',
+        icon: ClipboardList,
+        permission: 'purchase_orders.view_module',
+      },
+    ],
+  },
   // Operations section is temporarily hidden from the sidebar.
   // Uncomment this block (and the Truck icon import) to bring it back.
   // {

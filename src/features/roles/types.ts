@@ -9,7 +9,7 @@
 /**
  * Role/Permission scope types
  */
-export type RoleScope = 'user' | 'customer';
+export type RoleScope = 'user' | 'customer' | 'supplier';
 
 // ============================================
 // ENTITY TYPES
