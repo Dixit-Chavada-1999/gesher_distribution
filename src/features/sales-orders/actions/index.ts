@@ -796,13 +796,22 @@ export async function getCustomerAddresses(customerId: string): Promise<ActionRe
 }
 
 /**
- * Get product price for auto-fill
+ * Get product price for auto-fill (uses price matrix based on customer channel)
+ *
+ * @param productId - Product ID
+ * @param customerId - Customer ID (optional - if provided, uses price matrix)
+ * @param quantity - Quantity (optional - for quantity-based pricing tiers)
  */
-export async function getProductPrice(productId: string): Promise<ActionResult<{
+export async function getProductPrice(
+  productId: string,
+  customerId?: string,
+  quantity: number = 1
+): Promise<ActionResult<{
   sku: string;
   name: string;
   description: string | null;
   unitPrice: number;
+  priceSource: 'matrix' | 'base';
 }>> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -812,7 +821,8 @@ export async function getProductPrice(productId: string): Promise<ActionResult<{
   }
 
   try {
-    const { data, error } = await db
+    // Get product info
+    const { data: product, error: productError } = await db
       .from('products')
       .select('sku, name, description, base_price')
       .eq('id', productId)
@@ -820,17 +830,49 @@ export async function getProductPrice(productId: string): Promise<ActionResult<{
       .is('deleted_at', null)
       .single();
 
-    if (error) {
-      throw new Error(`Failed to fetch product: ${error.message}`);
+    if (productError) {
+      throw new Error(`Failed to fetch product: ${productError.message}`);
+    }
+
+    let unitPrice = product.base_price;
+    let priceSource: 'matrix' | 'base' = 'base';
+
+    // If customerId provided, try to get price from price matrix
+    if (customerId) {
+      // Get customer's channel
+      const { data: customer, error: customerError } = await db
+        .from('customers')
+        .select('channel')
+        .eq('id', customerId)
+        .is('deleted_at', null)
+        .single();
+
+      if (!customerError && customer?.channel) {
+        // Look up price in price matrix (RPC returns array)
+        const { data: priceData, error: priceError } = await db.rpc('get_product_price', {
+          p_product_id: productId,
+          p_channel: customer.channel,
+          p_quantity: quantity,
+        });
+
+        // priceData is an array - get first result
+        const matrixPrice = Array.isArray(priceData) ? priceData[0] : priceData;
+
+        if (!priceError && matrixPrice && matrixPrice.price > 0) {
+          unitPrice = matrixPrice.price;
+          priceSource = 'matrix';
+        }
+      }
     }
 
     return {
       success: true,
       data: {
-        sku: data.sku,
-        name: data.name,
-        description: data.description,
-        unitPrice: data.base_price,
+        sku: product.sku,
+        name: product.name,
+        description: product.description,
+        unitPrice,
+        priceSource,
       },
     };
   } catch (error) {
@@ -944,5 +986,156 @@ export async function getSalesOrderMasterData(): Promise<ActionResult<{
       success: false,
       error: 'Failed to fetch master data',
     };
+  }
+}
+
+// ============================================
+// CREDIT HOLD ACTIONS
+// ============================================
+
+/**
+ * Release credit hold on a sales order
+ * Finance only - requires sales_orders.release_hold permission
+ */
+export async function releaseSalesOrderHold(
+  orderId: string,
+  note?: string
+): Promise<ActionResult<SalesOrder>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  // Get app user
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
+  // Check permission
+  const { hasPermission } = await import('@/shared/lib/auth');
+  if (!hasPermission(appUser, 'sales_orders.release_hold')) {
+    return { success: false, error: 'Permission denied. Finance approval required.' };
+  }
+
+  try {
+    // Get current order
+    const { data: order, error: orderError } = await db
+      .from('sales_orders')
+      .select('id, credit_status, order_number')
+      .eq('id', orderId)
+      .is('deleted_at', null)
+      .single();
+
+    if (orderError || !order) {
+      return { success: false, error: 'Sales order not found' };
+    }
+
+    if (order.credit_status !== 'hold') {
+      return { success: false, error: 'Order is not on credit hold' };
+    }
+
+    // Update credit_status to 'ok'
+    const { data: updatedOrder, error: updateError } = await db
+      .from('sales_orders')
+      .update({
+        credit_status: 'ok',
+        updated_by: appUser.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', orderId)
+      .select()
+      .single();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    // Update pending approval event to approved
+    await db
+      .from('approval_events')
+      .update({
+        status: 'approved',
+        decided_by: appUser.id,
+        decided_at: new Date().toISOString(),
+        note: note || 'Credit hold released by finance',
+      })
+      .eq('subject_type', 'sales_order')
+      .eq('subject_id', orderId)
+      .eq('type', 'credit_release')
+      .eq('status', 'pending');
+
+    revalidatePath('/sales-orders');
+    revalidatePath(`/sales-orders/${orderId}`);
+
+    return {
+      success: true,
+      data: updatedOrder as SalesOrder,
+    };
+  } catch (error) {
+    console.error('releaseSalesOrderHold error:', error);
+    return {
+      success: false,
+      error: 'Failed to release credit hold',
+    };
+  }
+}
+
+/**
+ * Get sales orders on credit hold
+ */
+export async function getSalesOrdersOnHold(): Promise<ActionResult<SalesOrderListItem[]>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  try {
+    const { data, error } = await db
+      .from('sales_orders')
+      .select(`
+        id,
+        order_number,
+        customer_id,
+        customers!inner (name),
+        order_date,
+        requested_delivery_date,
+        status,
+        credit_status,
+        grand_total,
+        currency_code,
+        created_at
+      `)
+      .eq('credit_status', 'hold')
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    const orders: SalesOrderListItem[] = (data || []).map((row) => ({
+      id: row.id,
+      orderNumber: row.order_number,
+      customerId: row.customer_id,
+      customerName: (row.customers as { name: string })?.name || 'Unknown',
+      orderDate: row.order_date,
+      requestedDeliveryDate: row.requested_delivery_date,
+      status: row.status as OrderStatus,
+      creditStatus: row.credit_status as 'ok' | 'hold',
+      grandTotal: row.grand_total,
+      currencyCode: row.currency_code,
+      itemCount: 0, // Not fetched for this list
+      createdAt: new Date(row.created_at),
+    }));
+
+    return { success: true, data: orders };
+  } catch (error) {
+    console.error('getSalesOrdersOnHold error:', error);
+    return { success: false, error: 'Failed to fetch orders on hold' };
   }
 }

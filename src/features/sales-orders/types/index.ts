@@ -70,6 +70,24 @@ export function canEditOrder(status: OrderStatus): boolean {
 }
 
 // ============================================
+// ORDER CREDIT STATUS
+// ============================================
+
+export type OrderCreditStatus = 'ok' | 'hold';
+
+export const ORDER_CREDIT_STATUSES: OrderCreditStatus[] = ['ok', 'hold'];
+
+export const ORDER_CREDIT_STATUS_LABELS: Record<OrderCreditStatus, string> = {
+  ok: 'OK',
+  hold: 'On Hold',
+};
+
+export const ORDER_CREDIT_STATUS_COLORS: Record<OrderCreditStatus, string> = {
+  ok: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
+  hold: 'bg-amber-100 text-amber-800 border border-amber-200',
+};
+
+// ============================================
 // DATABASE ENTITY TYPES
 // ============================================
 
@@ -87,6 +105,7 @@ export interface SalesOrder {
   currencyCode: string;
   customerPoNumber: string | null;
   status: OrderStatus;
+  creditStatus: OrderCreditStatus;
 
   // Billing Address
   billingAddressStreet: string | null;
@@ -265,6 +284,7 @@ export interface SalesOrderListParams {
   limit?: number;
   search?: string;
   status?: OrderStatus;
+  creditStatus?: OrderCreditStatus;
   customerId?: string;
   salesRepId?: string;
   warehouseId?: string;
@@ -282,6 +302,7 @@ export interface SalesOrderListItem {
   orderDate: string;
   requestedDeliveryDate: string | null;
   status: OrderStatus;
+  creditStatus: OrderCreditStatus;
   grandTotal: number; // cents
   currencyCode: string;
   itemCount: number;
@@ -508,6 +529,8 @@ export interface OrderSummaryCardsProps {
   shipping: number;
   grandTotal: number;
   currencySymbol?: string;
+  /** Optional slot for credit warning or other content */
+  creditSlot?: React.ReactNode;
 }
 
 export interface SalesOrderFormProps {

@@ -13,8 +13,14 @@ import { Checkbox } from '@/shared/components/ui/checkbox';
 import { DataTableColumnHeader } from '@/shared/components/data-table/DataTableColumnHeader';
 import { DataTableRowActions, createCommonRowActions } from '@/shared/components/data-table/DataTableRowActions';
 
-import type { SalesOrderListItem } from '../types';
-import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS, canEditOrder } from '../types';
+import type { SalesOrderListItem, OrderCreditStatus } from '../types';
+import {
+  ORDER_STATUS_LABELS,
+  ORDER_STATUS_COLORS,
+  ORDER_CREDIT_STATUS_LABELS,
+  ORDER_CREDIT_STATUS_COLORS,
+  canEditOrder,
+} from '../types';
 import { formatDate } from '../lib/mock-data';
 
 // ============================================
@@ -143,6 +149,29 @@ export function getSalesOrdersTableColumns(
         return (
           <Badge className={ORDER_STATUS_COLORS[status]}>
             {ORDER_STATUS_LABELS[status]}
+          </Badge>
+        );
+      },
+      filterFn: (row, id, value) => {
+        return value.includes(row.getValue(id));
+      },
+    },
+
+    // Credit Status
+    {
+      accessorKey: 'creditStatus',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Credit" />
+      ),
+      cell: ({ row }) => {
+        const creditStatus = row.getValue('creditStatus') as OrderCreditStatus;
+        // Only show badge if credit status is 'hold'
+        if (creditStatus === 'ok') {
+          return null;
+        }
+        return (
+          <Badge className={ORDER_CREDIT_STATUS_COLORS[creditStatus]}>
+            {ORDER_CREDIT_STATUS_LABELS[creditStatus]}
           </Badge>
         );
       },

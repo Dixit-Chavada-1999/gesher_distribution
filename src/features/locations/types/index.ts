@@ -256,3 +256,36 @@ export const DEFAULT_LOCATION_FORM_VALUES: LocationFormValues = {
   isActive: true,
   isDefault: false,
 };
+
+// ============================================
+// DRAWER TYPES
+// ============================================
+
+/**
+ * Props for CreateLocationDrawer
+ */
+export interface CreateLocationDrawerProps {
+  open: boolean;
+  onClose: () => void;
+  onSuccess?: (location: Location) => void;
+}
+
+/**
+ * Props for EditLocationDrawer
+ */
+export interface EditLocationDrawerProps {
+  open: boolean;
+  locationId: string | null;
+  onClose: () => void;
+  onSuccess?: (location: Location) => void;
+}
+
+/**
+ * Props for ViewLocationDrawer
+ */
+export interface ViewLocationDrawerProps {
+  open: boolean;
+  locationId: string | null;
+  onClose: () => void;
+  onEdit?: (locationId: string) => void;
+}

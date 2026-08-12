@@ -1,15 +1,9 @@
 'use client';
 
 /**
- * CreateCustomerModal Component
+ * CreateLocationDrawer Component
  *
- * Modal dialog for creating a new customer.
- * Uses the Dialog component from shadcn/ui.
- *
- * Contains:
- * - Header with title and close button
- * - Scrollable content area with CustomerForm
- * - Footer with action buttons
+ * Dialog for creating a new location with auto-generated code.
  */
 
 import { useState } from 'react';
@@ -28,107 +22,93 @@ import {
 import { ScrollArea } from '@/shared/components/ui/scroll-area';
 import { Separator } from '@/shared/components/ui/separator';
 
-import { CustomerForm } from './CustomerForm';
-import type { CreateCustomerDrawerProps } from '../types';
-import type { CustomerFormInput } from '../lib/schemas';
-import { createCustomerFromData } from '../actions';
-
-// ============================================
-// TYPES
-// ============================================
-
-interface ServerErrors {
-  message?: string;
-  fieldErrors?: Record<string, string[]>;
-}
+import { LocationForm } from './LocationForm';
+import type { CreateLocationDrawerProps } from '../types';
+import type { LocationFormInput } from '../lib/schemas';
+import { createLocationWithAutoCode } from '../actions';
 
 // ============================================
 // COMPONENT
 // ============================================
 
-export function CreateCustomerDrawer({
+export function CreateLocationDrawer({
   open,
   onClose,
   onSuccess,
-}: CreateCustomerDrawerProps) {
-  // ----------------------------------------
-  // STATE
-  // ----------------------------------------
-
+}: CreateLocationDrawerProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [serverErrors, setServerErrors] = useState<ServerErrors | null>(null);
-
-  // ----------------------------------------
-  // HANDLERS
-  // ----------------------------------------
 
   const handleCancel = () => {
     if (isSubmitting) {
       return;
     }
-    setServerErrors(null);
     onClose();
   };
 
-  const handleCreate = async (formData: CustomerFormInput) => {
+  const handleCreate = async (formData: LocationFormInput) => {
     setIsSubmitting(true);
-    setServerErrors(null);
 
     try {
-      const result = await createCustomerFromData(formData);
+      // Remove locationCode from form data since it's auto-generated
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { locationCode, ...dataWithoutCode } = formData;
+
+      const result = await createLocationWithAutoCode(dataWithoutCode);
 
       if (result.success && result.data) {
-        toast.success(`Customer "${result.data.name}" created successfully`);
+        toast.success(`Location "${result.data.name}" created successfully`);
         onSuccess?.(result.data);
         onClose();
       } else {
-        // Set server errors for form display
-        setServerErrors({
-          message: result.error || 'Failed to create customer',
-          fieldErrors: result.errors,
-        });
-
-        // Also show toast for visibility
-        toast.error(result.error || 'Failed to create customer');
+        toast.error(result.error || 'Failed to create location');
       }
     } catch (error) {
-      console.error('Create customer error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
-      setServerErrors({
-        message: errorMessage,
-      });
-      toast.error(errorMessage);
+      console.error('Create location error:', error);
+      toast.error(error instanceof Error ? error.message : 'An unexpected error occurred');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // ----------------------------------------
-  // RENDER
-  // ----------------------------------------
-
   return (
     <Dialog open={open} onOpenChange={handleCancel}>
-      <DialogContent className="flex max-h-[90vh] w-full max-w-4xl flex-col p-0">
+      <DialogContent className="flex max-h-[90vh] w-full max-w-2xl flex-col p-0">
         {/* Header */}
         <DialogHeader className="flex-shrink-0 border-b px-6 py-4">
           <DialogTitle className="text-xl font-semibold">
-            Add Customer
+            Add Location
           </DialogTitle>
           <DialogDescription>
-            Fill in the details to create a new customer.
+            Create a new warehouse or shipping location.
           </DialogDescription>
         </DialogHeader>
 
         {/* Scrollable Content */}
         <ScrollArea className="flex-1 overflow-auto">
           <div className="px-6 py-4">
-            <CustomerForm
+            <LocationForm
+              initialData={{
+                locationCode: 'AUTO',  // Placeholder - will be auto-generated on server
+                name: '',
+                locationType: 'warehouse',
+                address1: null,
+                address2: null,
+                city: null,
+                state: null,
+                zip: null,
+                country: 'US',
+                contactName: null,
+                contactPhone: null,
+                contactEmail: null,
+                isActive: true,
+                isDefault: false,
+              }}
               onCancel={handleCancel}
               onSubmit={handleCreate}
               isLoading={isSubmitting}
-              mode="create"
-              serverErrors={serverErrors}
+              submitLabel="Create Location"
+              isCodeReadOnly
+              hideButtons
             />
           </div>
         </ScrollArea>
@@ -147,11 +127,11 @@ export function CreateCustomerDrawer({
             </Button>
             <Button
               type="submit"
-              form="customer-form"
+              form="location-form"
               disabled={isSubmitting}
             >
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create Customer
+              Create Location
             </Button>
           </div>
         </DialogFooter>

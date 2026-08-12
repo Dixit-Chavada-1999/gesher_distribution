@@ -22,6 +22,7 @@ import { QuoteAddressSection } from './QuoteAddressSection';
 import { QuoteItemsTable } from './QuoteItemsTable';
 import { QuoteSummaryCards } from './QuoteSummaryCards';
 import { QuoteNotesSection } from './QuoteNotesSection';
+import { CreditWarning } from '@/shared/components/ui/credit-warning';
 
 import { quoteFormSchema, type QuoteFormInput } from '../lib/schemas';
 import { getCustomerAddresses, getProductPrice } from '../actions';
@@ -192,6 +193,9 @@ function QuoteFormComponent({
 
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
 
+  // Watch customer for credit check
+  const customerId = watch('customerId');
+
   // ----------------------------------------
   // AUTO-FILL: Customer Addresses
   // ----------------------------------------
@@ -241,23 +245,25 @@ function QuoteFormComponent({
   }, [setValue]);
 
   // ----------------------------------------
-  // AUTO-FILL: Product Price
+  // AUTO-FILL: Product Price (uses price matrix based on customer channel)
   // ----------------------------------------
 
   const handleProductSelect = useCallback(async (
     itemIndex: number,
     productId: string
   ) => {
-    if (!productId) {return;}
+    if (!productId) { return; }
 
     try {
-      const result = await getProductPrice(productId);
+      const currentItems = methods.getValues('items');
+      const currentItem = currentItems[itemIndex];
+      const quantity = currentItem?.quantity ?? 1;
+
+      // Pass customerId for price matrix lookup
+      const result = await getProductPrice(productId, customerId || undefined, quantity);
 
       if (result.success && result.data) {
-        const currentItems = methods.getValues('items');
         const updatedItems = [...currentItems];
-        const currentItem = updatedItems[itemIndex];
-        const quantity = currentItem?.quantity ?? 1;
         const discountPercent = currentItem?.discountPercent ?? 0;
         const unitPrice = result.data.unitPrice / 100; // Convert cents to dollars
 
@@ -280,7 +286,7 @@ function QuoteFormComponent({
     } catch (error) {
       console.error('Failed to fetch product price:', error);
     }
-  }, [methods, setValue]);
+  }, [methods, setValue, customerId]);
 
   // ----------------------------------------
   // COMPUTED VALUES
@@ -328,6 +334,46 @@ function QuoteFormComponent({
     });
     setValue('items', itemsWithTotals, { shouldValidate: true });
   }, [setValue]);
+
+  const handleCustomerChangeWithPriceUpdate = useCallback(async (newCustomerId: string) => {
+    await handleCustomerChange(newCustomerId);
+
+    // Re-fetch prices for existing items based on new customer's channel
+    const currentItems = methods.getValues('items');
+    if (currentItems && currentItems.length > 0 && newCustomerId) {
+      const updatedItems = await Promise.all(
+        currentItems.map(async (item) => {
+          if (!item.productId) { return item; }
+
+          try {
+            const result = await getProductPrice(item.productId, newCustomerId, item.quantity || 1);
+            if (result.success && result.data) {
+              const unitPrice = result.data.unitPrice / 100;
+              const discountPercent = item.discountPercent ?? 0;
+              const quantity = item.quantity ?? 1;
+              const lineTotal = quantity * unitPrice * (1 - discountPercent / 100);
+
+              return {
+                ...item,
+                unitPrice,
+                lineTotal,
+              };
+            }
+          } catch (error) {
+            console.error('Failed to update price for product:', item.productId, error);
+          }
+          return item;
+        })
+      );
+      // Don't validate here - only validate on submit
+      setValue('items', updatedItems);
+    }
+  }, [handleCustomerChange, methods, setValue]);
+
+  // ----------------------------------------
+  // CREDIT CHECK (read-only display in Quote form)
+  // Credit is only enforced at Quote → Sales Order conversion
+  // ----------------------------------------
 
   const handleFormSubmit = useCallback(
     handleSubmit(async (data: QuoteFormInput) => {
@@ -385,7 +431,7 @@ function QuoteFormComponent({
         <QuoteInfoSection
           customers={customers}
           salesReps={salesReps}
-          onCustomerChange={handleCustomerChange}
+          onCustomerChange={handleCustomerChangeWithPriceUpdate}
         />
 
         {/* Section 2: Billing & Shipping */}
@@ -403,13 +449,22 @@ function QuoteFormComponent({
           itemsError={errors.items?.message || errors.items?.root?.message}
         />
 
-        {/* Section 4: Quote Summary */}
+        {/* Section 4: Quote Summary with Credit Check */}
         <QuoteSummaryCards
           subtotal={quoteSummary.subtotal}
           discount={quoteSummary.discount}
           tax={quoteSummary.tax}
           grandTotal={quoteSummary.grandTotal}
           currencySymbol="$"
+          creditSlot={
+            customerId ? (
+              <CreditWarning
+                customerId={customerId}
+                orderTotal={quoteSummary.grandTotal}
+                readOnly={true}
+              />
+            ) : undefined
+          }
         />
 
         {/* Section 5: Notes */}

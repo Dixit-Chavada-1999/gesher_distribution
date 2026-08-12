@@ -1046,13 +1046,22 @@ export async function findOrCreateProductFromPO(
 }
 
 /**
- * Get product price for auto-fill
+ * Get product price for auto-fill (uses price matrix based on customer channel)
+ *
+ * @param productId - Product ID
+ * @param customerId - Customer ID (optional - if provided, uses price matrix)
+ * @param quantity - Quantity (optional - for quantity-based pricing tiers)
  */
-export async function getProductPrice(productId: string): Promise<ActionResult<{
+export async function getProductPrice(
+  productId: string,
+  customerId?: string,
+  quantity: number = 1
+): Promise<ActionResult<{
   sku: string;
   name: string;
   description: string | null;
   unitPrice: number;
+  priceSource: 'matrix' | 'base';
 }>> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -1062,7 +1071,8 @@ export async function getProductPrice(productId: string): Promise<ActionResult<{
   }
 
   try {
-    const { data, error } = await db
+    // Get product info
+    const { data: product, error: productError } = await db
       .from('products')
       .select('sku, name, description, base_price')
       .eq('id', productId)
@@ -1070,17 +1080,49 @@ export async function getProductPrice(productId: string): Promise<ActionResult<{
       .is('deleted_at', null)
       .single();
 
-    if (error) {
-      throw new Error(`Failed to fetch product: ${error.message}`);
+    if (productError) {
+      throw new Error(`Failed to fetch product: ${productError.message}`);
+    }
+
+    let unitPrice = product.base_price;
+    let priceSource: 'matrix' | 'base' = 'base';
+
+    // If customerId provided, try to get price from price matrix
+    if (customerId) {
+      // Get customer's channel
+      const { data: customer, error: customerError } = await db
+        .from('customers')
+        .select('channel')
+        .eq('id', customerId)
+        .is('deleted_at', null)
+        .single();
+
+      if (!customerError && customer?.channel) {
+        // Look up price in price matrix (RPC returns array)
+        const { data: priceData, error: priceError } = await db.rpc('get_product_price', {
+          p_product_id: productId,
+          p_channel: customer.channel,
+          p_quantity: quantity,
+        });
+
+        // priceData is an array - get first result
+        const matrixPrice = Array.isArray(priceData) ? priceData[0] : priceData;
+
+        if (!priceError && matrixPrice && matrixPrice.price > 0) {
+          unitPrice = matrixPrice.price;
+          priceSource = 'matrix';
+        }
+      }
     }
 
     return {
       success: true,
       data: {
-        sku: data.sku,
-        name: data.name,
-        description: data.description,
-        unitPrice: data.base_price,
+        sku: product.sku,
+        name: product.name,
+        description: product.description,
+        unitPrice,
+        priceSource,
       },
     };
   } catch (error) {

@@ -100,7 +100,7 @@ export function useSalesOrders(
       setIsLoading(false);
       isFetchingRef.current = false;
     }
-  }, [enabled, params.status, params.page, params.limit, params.search, params.customerId, params.sortBy, params.sortOrder]);
+  }, [enabled, params.status, params.creditStatus, params.page, params.limit, params.search, params.customerId, params.sortBy, params.sortOrder]);
 
   // Fetch on mount and when params change
   useEffect(() => {

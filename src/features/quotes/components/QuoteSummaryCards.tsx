@@ -26,6 +26,8 @@ interface QuoteSummaryCardsProps {
   tax: number;
   grandTotal: number;
   currencySymbol?: string;
+  /** Optional slot for credit warning or other content */
+  creditSlot?: React.ReactNode;
 }
 
 // ============================================
@@ -82,6 +84,7 @@ function QuoteSummaryCardsComponent({
   tax,
   grandTotal,
   currencySymbol = '$',
+  creditSlot,
 }: QuoteSummaryCardsProps) {
   return (
     <div className="space-y-6">
@@ -154,34 +157,44 @@ function QuoteSummaryCardsComponent({
         </Card>
       </div>
 
-      {/* Detailed Summary */}
-      <Card className="max-w-md ml-auto">
-        <CardContent className="p-4">
-          <SummaryItem
-            label="Subtotal"
-            value={subtotal}
-            currencySymbol={currencySymbol}
-          />
-          <SummaryItem
-            label="Discount"
-            value={-discount}
-            currencySymbol={currencySymbol}
-            variant="muted"
-          />
-          <SummaryItem
-            label="Tax"
-            value={tax}
-            currencySymbol={currencySymbol}
-          />
-          <Separator className="my-2" />
-          <SummaryItem
-            label="Grand Total"
-            value={grandTotal}
-            currencySymbol={currencySymbol}
-            variant="highlight"
-          />
-        </CardContent>
-      </Card>
+      {/* Credit Slot + Detailed Summary Row */}
+      <div className="flex flex-col sm:flex-row gap-4 items-start">
+        {/* Credit Slot (left side) */}
+        {creditSlot && (
+          <div className="w-full sm:w-72 flex-shrink-0">
+            {creditSlot}
+          </div>
+        )}
+
+        {/* Detailed Summary (right side) */}
+        <Card className={creditSlot ? "w-full sm:w-80 flex-shrink-0 sm:ml-auto" : "max-w-md ml-auto"}>
+          <CardContent className="p-4">
+            <SummaryItem
+              label="Subtotal"
+              value={subtotal}
+              currencySymbol={currencySymbol}
+            />
+            <SummaryItem
+              label="Discount"
+              value={-discount}
+              currencySymbol={currencySymbol}
+              variant="muted"
+            />
+            <SummaryItem
+              label="Tax"
+              value={tax}
+              currencySymbol={currencySymbol}
+            />
+            <Separator className="my-2" />
+            <SummaryItem
+              label="Grand Total"
+              value={grandTotal}
+              currencySymbol={currencySymbol}
+              variant="highlight"
+            />
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

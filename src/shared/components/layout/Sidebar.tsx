@@ -22,12 +22,11 @@ import {
   Inbox,
   // Only used by the hidden Permissions entry — uncomment with it.
   // Key,
-  // Icons below are only used by the hidden Catalog section — uncomment with it.
   Package,
-  // MapPin,
+  MapPin,
   Building2,
   // DollarSign,
-  FileSignature,
+FileSignature,
   ClipboardList, // Purchase Orders
   Truck, // Operations dashboard
   // Receipt, // Uncomment when Invoices module is enabled
@@ -75,13 +74,13 @@ const NAV_SECTIONS = [
         icon: Package,
         permission: 'products.view_module',
       },
-  //     {
-  //       id: 'locations',
-  //       label: 'Locations',
-  //       href: '/locations',
-  //       icon: MapPin,
-  //       permission: 'locations.view_module',
-  //     },
+      {
+        id: 'locations',
+        label: 'Locations',
+        href: '/locations',
+        icon: MapPin,
+        permission: 'locations.view_module',
+      },
       {
         id: 'customers',
         label: 'Customers',
@@ -122,8 +121,6 @@ const NAV_SECTIONS = [
         icon: ShoppingCart,
         permission: 'orders.view_module',
       },
-      // Invoices module is temporarily hidden from the sidebar.
-      // Uncomment this block (and the Receipt icon import) to bring it back.
       // {
       //   id: 'invoices',
       //   label: 'Invoices',
@@ -133,7 +130,7 @@ const NAV_SECTIONS = [
       // },
     ],
   },
-  {
+{
     title: 'Operations',
     items: [
       {
@@ -162,12 +159,12 @@ const NAV_SECTIONS = [
         icon: ClipboardList,
         permission: 'purchase_orders.view_module',
       },
-    ],
+],
   },
-  // Operations section is temporarily hidden from the sidebar.
-  // Uncomment this block (and the Truck icon import) to bring it back.
+  // Shipments section is temporarily hidden from the sidebar.
+  // Uncomment this block when Shipments module is enabled.
   // {
-  //   title: 'Operations',
+  //   title: 'Shipments',
   //   items: [
   //     {
   //       id: 'shipments',

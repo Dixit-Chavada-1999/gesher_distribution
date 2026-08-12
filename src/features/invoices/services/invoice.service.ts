@@ -22,6 +22,7 @@ import type {
   InvoicePayment,
 } from '../types';
 import { INVOICE_STATUS_TRANSITIONS } from '../types';
+import { creditCheckService } from '@/features/customers/services/credit-check.service';
 
 // ============================================
 // TYPES
@@ -228,6 +229,7 @@ export const invoiceService = {
 
   /**
    * Record a payment
+   * Also updates the customer's open balance
    */
   async recordPayment(
     id: string,
@@ -269,6 +271,13 @@ export const invoiceService = {
 
       const payment = await invoiceRepository.recordPayment(id, validation.data, userId);
 
+      // Subtract payment amount from customer's open balance
+      await creditCheckService.subtractFromBalance(
+        existing.customerId,
+        validation.data.amount,
+        userId
+      );
+
       return {
         success: true,
         data: payment,
@@ -288,9 +297,46 @@ export const invoiceService = {
 
   /**
    * Send invoice (draft -> sent)
+   * Also updates the customer's open balance
    */
   async send(id: string, userId?: string): Promise<ServiceResult<Invoice>> {
-    return this.transitionStatus(id, 'sent', userId);
+    try {
+      // Get the invoice first to update customer balance
+      const existing = await invoiceRepository.findById(id);
+      if (!existing) {
+        return {
+          success: false,
+          error: 'Invoice not found',
+        };
+      }
+
+      if (existing.status !== 'draft') {
+        return {
+          success: false,
+          error: `Cannot send invoice in ${existing.status} status`,
+        };
+      }
+
+      // Transition the status
+      const result = await this.transitionStatus(id, 'sent', userId);
+
+      if (result.success && result.data) {
+        // Add invoice amount to customer's open balance
+        await creditCheckService.addToBalance(
+          existing.customerId,
+          existing.grandTotal,
+          userId
+        );
+      }
+
+      return result;
+    } catch (error) {
+      console.error('InvoiceService.send error:', error);
+      return {
+        success: false,
+        error: 'Failed to send invoice',
+      };
+    }
   },
 
   /**
@@ -302,9 +348,44 @@ export const invoiceService = {
 
   /**
    * Cancel invoice
+   * Reverses the customer's open balance if invoice was sent
    */
   async cancel(id: string, userId?: string): Promise<ServiceResult<Invoice>> {
-    return this.transitionStatus(id, 'cancelled', userId);
+    try {
+      const existing = await invoiceRepository.findById(id);
+      if (!existing) {
+        return {
+          success: false,
+          error: 'Invoice not found',
+        };
+      }
+
+      // If invoice was sent (not draft), we need to reverse the balance addition
+      const wasAddedToBalance = existing.status !== 'draft';
+
+      const result = await this.transitionStatus(id, 'cancelled', userId);
+
+      if (result.success && result.data && wasAddedToBalance) {
+        // Subtract the remaining balance from customer's open balance
+        // (grandTotal - amountPaid = what was never paid and should be removed)
+        const amountToReverse = existing.grandTotal - existing.amountPaid;
+        if (amountToReverse > 0) {
+          await creditCheckService.subtractFromBalance(
+            existing.customerId,
+            amountToReverse,
+            userId
+          );
+        }
+      }
+
+      return result;
+    } catch (error) {
+      console.error('InvoiceService.cancel error:', error);
+      return {
+        success: false,
+        error: 'Failed to cancel invoice',
+      };
+    }
   },
 
   /**

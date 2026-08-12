@@ -4,12 +4,15 @@
  * Locations Table Component
  *
  * Data table for displaying and managing locations.
+ * Uses drawers for view/edit operations.
  */
 
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { DataTable } from '@/shared/components/data-table/DataTable';
 import { getLocationsTableColumns } from './LocationsTableColumns';
+import { ViewLocationDrawer } from './ViewLocationDrawer';
+import { EditLocationDrawer } from './EditLocationDrawer';
 import type { LocationTableRow } from '../types';
 import {
   AlertDialog,
@@ -27,27 +30,37 @@ import { deleteLocation } from '../actions';
 interface LocationsTableProps {
   data: LocationTableRow[];
   isLoading?: boolean;
+  onRefresh?: () => void;
 }
 
-export function LocationsTable({ data, isLoading = false }: LocationsTableProps) {
+export function LocationsTable({ data, isLoading = false, onRefresh }: LocationsTableProps) {
   const router = useRouter();
+
+  // Drawer state
+  const [viewDrawerOpen, setViewDrawerOpen] = useState(false);
+  const [editDrawerOpen, setEditDrawerOpen] = useState(false);
+  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
+
+  // Delete dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [locationToDelete, setLocationToDelete] = useState<LocationTableRow | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const handleView = useCallback(
-    (location: LocationTableRow) => {
-      router.push(`/locations/${location.id}`);
-    },
-    [router]
-  );
+  const handleView = useCallback((location: LocationTableRow) => {
+    setSelectedLocationId(location.id);
+    setViewDrawerOpen(true);
+  }, []);
 
-  const handleEdit = useCallback(
-    (location: LocationTableRow) => {
-      router.push(`/locations/${location.id}/edit`);
-    },
-    [router]
-  );
+  const handleEdit = useCallback((location: LocationTableRow) => {
+    setSelectedLocationId(location.id);
+    setEditDrawerOpen(true);
+  }, []);
+
+  const handleEditFromView = useCallback((locationId: string) => {
+    setViewDrawerOpen(false);
+    setSelectedLocationId(locationId);
+    setEditDrawerOpen(true);
+  }, []);
 
   const handleDeleteClick = useCallback((location: LocationTableRow) => {
     setLocationToDelete(location);
@@ -55,7 +68,9 @@ export function LocationsTable({ data, isLoading = false }: LocationsTableProps)
   }, []);
 
   const handleDeleteConfirm = async () => {
-    if (!locationToDelete) {return;}
+    if (!locationToDelete) {
+      return;
+    }
 
     setIsDeleting(true);
     try {
@@ -63,6 +78,7 @@ export function LocationsTable({ data, isLoading = false }: LocationsTableProps)
 
       if (result.success) {
         toast.success('Location deleted successfully');
+        onRefresh?.();
         router.refresh();
       } else {
         toast.error(result.error || 'Failed to delete location');
@@ -75,6 +91,11 @@ export function LocationsTable({ data, isLoading = false }: LocationsTableProps)
       setLocationToDelete(null);
     }
   };
+
+  const handleDrawerSuccess = useCallback(() => {
+    onRefresh?.();
+    router.refresh();
+  }, [onRefresh, router]);
 
   const columns = getLocationsTableColumns({
     onView: handleView,
@@ -91,8 +112,26 @@ export function LocationsTable({ data, isLoading = false }: LocationsTableProps)
         loading={isLoading}
         enableGlobalFilter
         searchableColumns={['name', 'code']}
+        onRowClick={handleView}
       />
 
+      {/* View Drawer */}
+      <ViewLocationDrawer
+        open={viewDrawerOpen}
+        locationId={selectedLocationId}
+        onClose={() => setViewDrawerOpen(false)}
+        onEdit={handleEditFromView}
+      />
+
+      {/* Edit Drawer */}
+      <EditLocationDrawer
+        open={editDrawerOpen}
+        locationId={selectedLocationId}
+        onClose={() => setEditDrawerOpen(false)}
+        onSuccess={handleDrawerSuccess}
+      />
+
+      {/* Delete Confirmation */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

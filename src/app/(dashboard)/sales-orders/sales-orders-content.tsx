@@ -51,8 +51,8 @@ import {
   useSalesOrders,
 } from '@/features/sales-orders';
 import { deleteSalesOrder, confirmSalesOrder, cancelSalesOrder } from '@/features/sales-orders/actions';
-import type { SalesOrderListItem, OrderStatus, SalesOrderWithItems } from '@/features/sales-orders/types';
-import { ORDER_STATUS_LABELS } from '@/features/sales-orders/types';
+import type { SalesOrderListItem, OrderStatus, OrderCreditStatus, SalesOrderWithItems } from '@/features/sales-orders/types';
+import { ORDER_STATUS_LABELS, ORDER_CREDIT_STATUS_LABELS } from '@/features/sales-orders/types';
 
 // ============================================
 // COMPONENT
@@ -109,6 +109,7 @@ export function SalesOrdersPageContent() {
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<OrderStatus | 'all'>('all');
+  const [creditStatusFilter, setCreditStatusFilter] = useState<OrderCreditStatus | 'all'>('all');
 
   // ----------------------------------------
   // DATA HOOKS
@@ -117,14 +118,15 @@ export function SalesOrdersPageContent() {
   // Master data hook - fetches once, caches, shares across components
   const { data: masterData } = useSalesOrderMasterData();
 
-  // Sales orders list with status filter
+  // Sales orders list with status and credit status filters
   const {
     data: salesOrders,
     isLoading: isOrdersLoading,
     refetch: refetchOrders,
-  } = useSalesOrders(
-    statusFilter === 'all' ? {} : { status: statusFilter }
-  );
+  } = useSalesOrders({
+    ...(statusFilter !== 'all' && { status: statusFilter }),
+    ...(creditStatusFilter !== 'all' && { creditStatus: creditStatusFilter }),
+  });
 
 
   // ----------------------------------------
@@ -287,6 +289,10 @@ export function SalesOrdersPageContent() {
     setStatusFilter(value as OrderStatus | 'all');
   };
 
+  const handleCreditStatusFilterChange = (value: string) => {
+    setCreditStatusFilter(value as OrderCreditStatus | 'all');
+  };
+
   // ----------------------------------------
   // RENDER
   // ----------------------------------------
@@ -328,19 +334,35 @@ export function SalesOrdersPageContent() {
         onConfirm={canEdit ? handleConfirmClick : undefined}
         onCancel={canEdit ? handleCancelClick : undefined}
         toolbarContent={
-          <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
-            <SelectTrigger className="h-8 w-[150px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              {Object.entries(ORDER_STATUS_LABELS).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
+              <SelectTrigger className="h-8 w-[150px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                {Object.entries(ORDER_STATUS_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={creditStatusFilter} onValueChange={handleCreditStatusFilterChange}>
+              <SelectTrigger className="h-8 w-[130px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Credit</SelectItem>
+                {Object.entries(ORDER_CREDIT_STATUS_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         }
       />
 
