@@ -64,12 +64,14 @@ interface ProductionStatusFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   purchaseOrder: SupplierPurchaseOrder;
+  onSuccess?: () => void;
 }
 
 export function ProductionStatusForm({
   open,
   onOpenChange,
   purchaseOrder,
+  onSuccess,
 }: ProductionStatusFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -97,6 +99,7 @@ export function ProductionStatusForm({
           description: 'Production status has been updated successfully.',
         });
         onOpenChange(false);
+        onSuccess?.();
         router.refresh();
       } else {
         toast.error('Error', {

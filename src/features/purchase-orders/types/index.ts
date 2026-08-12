@@ -2,7 +2,7 @@
  * Purchase Orders Module Types
  *
  * All TypeScript interfaces for the Purchase Orders feature.
- * Per client doc: POs always go to Galileo (Alon) - single supplier
+ * Supplier info is at item level (per-item supplier assignment).
  */
 
 // ============================================
@@ -54,12 +54,6 @@ export const PO_STATUS_TRANSITIONS: Record<POStatus, POStatus[]> = {
   cancelled: [],
 };
 
-// Default supplier (used as fallback when no supplier selected)
-export const DEFAULT_SUPPLIER = {
-  name: 'Galileo',
-  contact: 'Alon',
-};
-
 // Supplier summary for dropdown
 export interface SupplierSummary {
   id: string;
@@ -73,17 +67,13 @@ export interface SupplierSummary {
 
 /**
  * Purchase Order entity from database
+ * Note: Supplier info is now at item level (purchase_order_items.supplier_id)
  */
 export interface PurchaseOrder {
   id: string;
   poNumber: string;
   poDate: Date;
   expectedDeliveryDate: Date | null;
-
-  // Supplier
-  supplierId: string | null;
-  supplierName: string;
-  supplierContact: string;
 
   // Relationships
   salesOrderId: string | null;
@@ -219,12 +209,9 @@ export interface CreatePurchaseOrderDTO {
   warehouseId?: string | null;
   currencyCode?: string;
   status?: POStatus;
-  supplierId?: string | null; // Link to suppliers table
-  supplierName?: string; // Denormalized for display
-  supplierContact?: string; // Denormalized for display
   vendorAddress: AddressDTO;
   shipToAddress: AddressDTO;
-  items: CreatePOItemDTO[];
+  items: CreatePOItemDTO[]; // Supplier info is on items
   vendorNotes?: string | null;
   internalNotes?: string | null;
 }
@@ -247,16 +234,13 @@ export interface UpdatePOItemDTO {
 export interface UpdatePurchaseOrderDTO {
   poDate?: Date;
   expectedDeliveryDate?: Date | null;
-  supplierId?: string | null;
-  supplierName?: string;
-  supplierContact?: string;
   warehouseId?: string | null;
   currencyCode?: string;
   vendorAddress?: AddressDTO;
   shipToAddress?: AddressDTO;
   vendorNotes?: string | null;
   internalNotes?: string | null;
-  // Items array for updating
+  // Items array for updating (supplier info is on items)
   items?: UpdatePOItemDTO[];
 }
 
@@ -279,9 +263,6 @@ export interface POListParams {
 export interface POListItem {
   id: string;
   poNumber: string;
-  supplierId: string | null;
-  supplierName: string;
-  supplierContact: string;
   poDate: string;
   expectedDeliveryDate: string | null;
   status: POStatus;
@@ -289,6 +270,8 @@ export interface POListItem {
   currencyCode: string;
   itemCount: number;
   createdAt: Date;
+  // Computed from items - shows unique suppliers
+  suppliers: string[];
 }
 
 export interface PaginatedResult<T> {

@@ -74,12 +74,14 @@ export function CreatePurchaseOrderDrawer({
   const [selectedSupplier, setSelectedSupplier] = useState<SupplierSummary | null>(null);
   const [items, setItems] = useState<CreatePOItemDTO[]>(defaultItems);
 
+  // Track selected supplier for auto-assigning to items
+  const [supplierIdForItems, setSupplierIdForItems] = useState<string>('');
+
   const form = useForm({
     resolver: zodResolver(poFormSchema),
     defaultValues: {
       poDate: new Date().toISOString().split('T')[0],
       expectedDeliveryDate: '',
-      supplierId: '',
       salesOrderId: defaultSalesOrderId || '',
       warehouseId: '',
       currencyCode: 'USD',
@@ -120,7 +122,7 @@ export function CreatePurchaseOrderDrawer({
   };
 
   const handleSupplierChange = (supplierId: string) => {
-    form.setValue('supplierId', supplierId);
+    setSupplierIdForItems(supplierId);
     const supplier = suppliers.find((s) => s.id === supplierId);
     setSelectedSupplier(supplier || null);
 
@@ -136,22 +138,23 @@ export function CreatePurchaseOrderDrawer({
 
     startTransition(async () => {
       try {
-        const supplierInfo = selectedSupplier
-          ? {
-              id: selectedSupplier.id,
-              name: selectedSupplier.name,
-              contact: selectedSupplier.primaryContactName || '',
-            }
-          : null;
+        // If PO-level supplier is selected and items don't have supplier, assign it
+        const itemsWithSupplier = items.map((item) => {
+          if (!item.supplierId && selectedSupplier) {
+            return {
+              ...item,
+              supplierId: selectedSupplier.id,
+              supplierName: selectedSupplier.name,
+            };
+          }
+          return item;
+        });
 
         const result = await createPurchaseOrder({
           poDate: new Date(data.poDate as string),
           expectedDeliveryDate: data.expectedDeliveryDate
             ? new Date(data.expectedDeliveryDate as string)
             : null,
-          supplierId: supplierInfo?.id || null,
-          supplierName: supplierInfo?.name || '',
-          supplierContact: supplierInfo?.contact || '',
           salesOrderId: (data.salesOrderId as string) || null,
           warehouseId: (data.warehouseId as string) || null,
           currencyCode: (data.currencyCode as string) || 'USD',
@@ -170,7 +173,7 @@ export function CreatePurchaseOrderDrawer({
             postalCode: (data.shipToAddressPostalCode as string) || null,
             country: (data.shipToAddressCountry as string) || null,
           },
-          items,
+          items: itemsWithSupplier, // Supplier info is on items
           vendorNotes: (data.vendorNotes as string) || null,
           internalNotes: (data.internalNotes as string) || null,
         });
@@ -197,6 +200,7 @@ export function CreatePurchaseOrderDrawer({
       form.reset();
       setItems([]);
       setSelectedSupplier(null);
+      setSupplierIdForItems('');
       onClose();
     }
   };
@@ -213,42 +217,35 @@ export function CreatePurchaseOrderDrawer({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 mt-6">
-            {/* Supplier Selection */}
+            {/* Supplier Selection (for auto-assigning to items) */}
             <div className="space-y-4">
-              <h3 className="text-sm font-medium">Supplier</h3>
-              <FormField
-                control={form.control}
-                name="supplierId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Select Supplier *</FormLabel>
-                    <Select
-                      value={field.value}
-                      onValueChange={handleSupplierChange}
-                      disabled={isLoadingSuppliers}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder={isLoadingSuppliers ? 'Loading...' : 'Select a supplier'} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {suppliers.map((supplier) => (
-                          <SelectItem key={supplier.id} value={supplier.id}>
-                            {supplier.name}
-                            {supplier.primaryContactName && (
-                              <span className="text-muted-foreground ml-2">
-                                ({supplier.primaryContactName})
-                              </span>
-                            )}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <h3 className="text-sm font-medium">Default Supplier</h3>
+              <div className="space-y-2">
+                <label className="text-sm text-muted-foreground">
+                  Select a supplier to auto-assign to items without a supplier
+                </label>
+                <Select
+                  value={supplierIdForItems}
+                  onValueChange={handleSupplierChange}
+                  disabled={isLoadingSuppliers}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={isLoadingSuppliers ? 'Loading...' : 'Select a supplier'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {suppliers.map((supplier) => (
+                      <SelectItem key={supplier.id} value={supplier.id}>
+                        {supplier.name}
+                        {supplier.primaryContactName && (
+                          <span className="text-muted-foreground ml-2">
+                            ({supplier.primaryContactName})
+                          </span>
+                        )}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <Separator />

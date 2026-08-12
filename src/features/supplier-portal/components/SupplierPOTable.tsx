@@ -6,7 +6,7 @@
  * Table view for supplier's purchase orders.
  */
 
-import Link from 'next/link';
+import { useState } from 'react';
 import {
   ArrowRight,
   Clock,
@@ -29,6 +29,7 @@ import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { cn, formatCurrency, formatDate } from '@/shared/lib/utils';
 import type { SupplierPurchaseOrder, POStatus, ProductionStatus } from '../types';
+import { SupplierPODrawer } from './SupplierPODrawer';
 
 // ============================================
 // HELPERS
@@ -103,12 +104,27 @@ function getConfirmationStatus(po: SupplierPurchaseOrder) {
 interface SupplierPOTableProps {
   purchaseOrders: SupplierPurchaseOrder[];
   emptyMessage?: string;
+  onRefresh?: () => void;
 }
 
 export function SupplierPOTable({
   purchaseOrders,
   emptyMessage = 'No purchase orders found.',
+  onRefresh,
 }: SupplierPOTableProps) {
+  const [selectedPO, setSelectedPO] = useState<SupplierPurchaseOrder | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const handleRowClick = (po: SupplierPurchaseOrder) => {
+    setSelectedPO(po);
+    setDrawerOpen(true);
+  };
+
+  const handleDrawerClose = () => {
+    setDrawerOpen(false);
+    setSelectedPO(null);
+  };
+
   if (purchaseOrders.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -118,41 +134,59 @@ export function SupplierPOTable({
   }
 
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>PO Number</TableHead>
-            <TableHead>Date</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Confirmation</TableHead>
-            <TableHead>Production</TableHead>
-            <TableHead className="text-right">Total</TableHead>
-            <TableHead className="w-[80px]"></TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {purchaseOrders.map((po) => (
-            <TableRow key={po.id}>
-              <TableCell className="font-medium">{po.poNumber}</TableCell>
-              <TableCell>{formatDate(po.poDate)}</TableCell>
-              <TableCell>{getStatusBadge(po.status)}</TableCell>
-              <TableCell>{getConfirmationStatus(po)}</TableCell>
-              <TableCell>{getProductionStatusBadge(po.productionStatus)}</TableCell>
-              <TableCell className="text-right font-medium">
-                {formatCurrency(po.grandTotal / 100)}
-              </TableCell>
-              <TableCell>
-                <Link href={`/supplier-portal/purchase-orders/${po.id}`}>
-                  <Button variant="ghost" size="sm">
+    <>
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>PO Number</TableHead>
+              <TableHead>Date</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Confirmation</TableHead>
+              <TableHead>Production</TableHead>
+              <TableHead className="text-right">Total</TableHead>
+              <TableHead className="w-[80px]"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {purchaseOrders.map((po) => (
+              <TableRow
+                key={po.id}
+                className="cursor-pointer"
+                onClick={() => handleRowClick(po)}
+              >
+                <TableCell className="font-medium">{po.poNumber}</TableCell>
+                <TableCell>{formatDate(po.poDate)}</TableCell>
+                <TableCell>{getStatusBadge(po.status)}</TableCell>
+                <TableCell>{getConfirmationStatus(po)}</TableCell>
+                <TableCell>{getProductionStatusBadge(po.productionStatus)}</TableCell>
+                <TableCell className="text-right font-medium">
+                  {formatCurrency(po.grandTotal / 100)}
+                </TableCell>
+                <TableCell>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRowClick(po);
+                    }}
+                  >
                     <ArrowRight className="h-4 w-4" />
                   </Button>
-                </Link>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      <SupplierPODrawer
+        open={drawerOpen}
+        onClose={handleDrawerClose}
+        purchaseOrder={selectedPO}
+        onRefresh={onRefresh}
+      />
+    </>
   );
 }

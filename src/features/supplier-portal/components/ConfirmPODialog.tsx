@@ -30,6 +30,7 @@ interface ConfirmPODialogProps {
   onOpenChange: (open: boolean) => void;
   poId: string;
   poNumber: string;
+  onSuccess?: () => void;
 }
 
 export function ConfirmPODialog({
@@ -37,6 +38,7 @@ export function ConfirmPODialog({
   onOpenChange,
   poId,
   poNumber,
+  onSuccess,
 }: ConfirmPODialogProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -56,6 +58,7 @@ export function ConfirmPODialog({
           description: `${poNumber} has been confirmed successfully.`,
         });
         onOpenChange(false);
+        onSuccess?.();
         router.refresh();
       } else {
         toast.error('Error', {

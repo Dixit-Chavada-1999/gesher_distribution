@@ -19,7 +19,6 @@ import type {
   SalesOrderSummary,
   LocationSummary,
 } from '../types';
-import { DEFAULT_SUPPLIER } from '../types';
 import { calculatePOTotals, calculateLineTotal } from '../lib/schemas';
 
 // ============================================
@@ -31,9 +30,6 @@ interface DbPurchaseOrder {
   po_number: string;
   po_date: string;
   expected_delivery_date: string | null;
-  supplier_id: string | null;
-  supplier_name: string;
-  supplier_contact: string;
   sales_order_id: string | null;
   warehouse_id: string | null;
   currency_code: string;
@@ -115,9 +111,6 @@ class PurchaseOrderRepositoryImpl {
         `
         id,
         po_number,
-        supplier_id,
-        supplier_name,
-        supplier_contact,
         po_date,
         expected_delivery_date,
         status,
@@ -130,7 +123,7 @@ class PurchaseOrderRepositoryImpl {
       .is('deleted_at', null);
 
     if (search) {
-      query = query.or(`po_number.ilike.%${search}%,supplier_name.ilike.%${search}%`);
+      query = query.ilike('po_number', `%${search}%`);
     }
 
     if (status) {
@@ -171,10 +164,10 @@ class PurchaseOrderRepositoryImpl {
     const totalPages = Math.ceil(total / limit);
 
     const poIds = (data || []).map((row) => row.id);
-    const itemCounts = await this.getItemCounts(poIds);
+    const { counts: itemCounts, suppliers: itemSuppliers } = await this.getItemCountsAndSuppliers(poIds);
 
     return {
-      data: (data || []).map((row) => this.mapToListItem(row, itemCounts)),
+      data: (data || []).map((row) => this.mapToListItem(row, itemCounts, itemSuppliers)),
       meta: {
         total,
         page,
@@ -237,26 +230,45 @@ class PurchaseOrderRepositoryImpl {
   }
 
   /**
-   * Get item counts for multiple POs
+   * Get item counts and suppliers for multiple POs
    */
-  private async getItemCounts(poIds: string[]): Promise<Record<string, number>> {
-    if (poIds.length === 0) {return {};}
+  private async getItemCountsAndSuppliers(poIds: string[]): Promise<{
+    counts: Record<string, number>;
+    suppliers: Record<string, string[]>;
+  }> {
+    if (poIds.length === 0) {
+      return { counts: {}, suppliers: {} };
+    }
 
     const { data, error } = await db
       .from('purchase_order_items')
-      .select('purchase_order_id')
+      .select('purchase_order_id, supplier_name')
       .in('purchase_order_id', poIds);
 
     if (error) {
-      throw new Error(`Failed to fetch item counts: ${error.message}`);
+      throw new Error(`Failed to fetch item data: ${error.message}`);
     }
 
     const counts: Record<string, number> = {};
+    const suppliers: Record<string, Set<string>> = {};
+
     for (const row of data || []) {
       counts[row.purchase_order_id] = (counts[row.purchase_order_id] || 0) + 1;
+      if (row.supplier_name) {
+        if (!suppliers[row.purchase_order_id]) {
+          suppliers[row.purchase_order_id] = new Set();
+        }
+        suppliers[row.purchase_order_id].add(row.supplier_name);
+      }
     }
 
-    return counts;
+    // Convert Sets to arrays
+    const suppliersArrays: Record<string, string[]> = {};
+    for (const [poId, supplierSet] of Object.entries(suppliers)) {
+      suppliersArrays[poId] = Array.from(supplierSet);
+    }
+
+    return { counts, suppliers: suppliersArrays };
   }
 
   /**
@@ -285,9 +297,6 @@ class PurchaseOrderRepositoryImpl {
         po_number: poNumber,
         po_date: data.poDate.toISOString().split('T')[0],
         expected_delivery_date: data.expectedDeliveryDate?.toISOString().split('T')[0] || null,
-        supplier_id: data.supplierId || null,
-        supplier_name: data.supplierName || DEFAULT_SUPPLIER.name,
-        supplier_contact: data.supplierContact || DEFAULT_SUPPLIER.contact,
         sales_order_id: data.salesOrderId || null,
         warehouse_id: data.warehouseId || null,
         currency_code: data.currencyCode || 'USD',
@@ -364,9 +373,6 @@ class PurchaseOrderRepositoryImpl {
     if (data.expectedDeliveryDate !== undefined) {
       updateData.expected_delivery_date = data.expectedDeliveryDate?.toISOString().split('T')[0] || null;
     }
-    if (data.supplierId !== undefined) {updateData.supplier_id = data.supplierId;}
-    if (data.supplierName !== undefined) {updateData.supplier_name = data.supplierName;}
-    if (data.supplierContact !== undefined) {updateData.supplier_contact = data.supplierContact;}
     if (data.warehouseId !== undefined) {updateData.warehouse_id = data.warehouseId;}
     if (data.currencyCode !== undefined) {updateData.currency_code = data.currencyCode;}
     if (data.vendorAddress !== undefined) {
@@ -562,9 +568,6 @@ class PurchaseOrderRepositoryImpl {
       poNumber: data.po_number,
       poDate: new Date(data.po_date),
       expectedDeliveryDate: data.expected_delivery_date ? new Date(data.expected_delivery_date) : null,
-      supplierId: data.supplier_id,
-      supplierName: data.supplier_name,
-      supplierContact: data.supplier_contact,
       salesOrderId: data.sales_order_id,
       warehouseId: data.warehouse_id,
       currencyCode: data.currency_code,
@@ -624,9 +627,6 @@ class PurchaseOrderRepositoryImpl {
     data: {
       id: string;
       po_number: string;
-      supplier_id: string | null;
-      supplier_name: string;
-      supplier_contact: string;
       po_date: string;
       expected_delivery_date: string | null;
       status: POStatus;
@@ -634,14 +634,12 @@ class PurchaseOrderRepositoryImpl {
       currency_code: string;
       created_at: string;
     },
-    itemCounts: Record<string, number>
+    itemCounts: Record<string, number>,
+    itemSuppliers: Record<string, string[]>
   ): POListItem {
     return {
       id: data.id,
       poNumber: data.po_number,
-      supplierId: data.supplier_id,
-      supplierName: data.supplier_name,
-      supplierContact: data.supplier_contact,
       poDate: data.po_date,
       expectedDeliveryDate: data.expected_delivery_date,
       status: data.status,
@@ -649,6 +647,7 @@ class PurchaseOrderRepositoryImpl {
       currencyCode: data.currency_code,
       itemCount: itemCounts[data.id] || 0,
       createdAt: new Date(data.created_at),
+      suppliers: itemSuppliers[data.id] || [],
     };
   }
 }

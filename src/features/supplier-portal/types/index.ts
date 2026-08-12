@@ -51,9 +51,7 @@ export interface SupplierPurchaseOrder {
   poNumber: string;
   poDate: string;
   expectedDeliveryDate: string | null;
-  supplierId: string | null;
-  supplierName: string | null;
-  supplierContact: string | null;
+  // Supplier info is now at item level (see SupplierPurchaseOrderItem)
   salesOrderId: string | null;
   warehouseId: string | null;
   currencyCode: string;
@@ -99,6 +97,9 @@ export interface SupplierPurchaseOrderItem {
   taxRate: number;
   lineTotal: number;
   sortOrder: number;
+  // Per-item supplier
+  supplierId: string | null;
+  supplierName: string | null;
 }
 
 // ============================================

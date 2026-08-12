@@ -45,7 +45,7 @@ export async function getSupplierById(supplierId: string): Promise<Supplier | nu
 
 /**
  * Get purchase orders for the supplier
- * RLS will automatically filter to supplier's POs
+ * Now checks item-level supplier_id instead of PO-level
  */
 export async function getSupplierPurchaseOrders(
   supplierId: string,
@@ -56,10 +56,29 @@ export async function getSupplierPurchaseOrders(
     offset?: number;
   }
 ): Promise<{ data: SupplierPurchaseOrder[]; count: number }> {
+  // First, get distinct PO IDs where items belong to this supplier
+  const { data: poItems, error: itemsError } = await db
+    .from('purchase_order_items')
+    .select('purchase_order_id')
+    .eq('supplier_id', supplierId);
+
+  if (itemsError) {
+    console.error('[getSupplierPurchaseOrders] Error fetching PO items:', itemsError);
+    return { data: [], count: 0 };
+  }
+
+  // Get unique PO IDs
+  const poIds = [...new Set((poItems || []).map(item => item.purchase_order_id))];
+
+  if (poIds.length === 0) {
+    return { data: [], count: 0 };
+  }
+
+  // Now fetch POs with those IDs, including items
   let query = db
     .from('purchase_orders')
-    .select('*', { count: 'exact' })
-    .eq('supplier_id', supplierId)
+    .select('*, items:purchase_order_items(*)', { count: 'exact' })
+    .in('id', poIds)
     .neq('status', 'draft') // Suppliers should NOT see draft POs
     .is('deleted_at', null)
     .order('created_at', { ascending: false });
@@ -99,35 +118,76 @@ export async function getSupplierPurchaseOrders(
 export async function getSupplierPurchaseOrderById(
   poId: string
 ): Promise<SupplierPurchaseOrder | null> {
-  const { data, error } = await db
+  // First fetch the PO
+  const { data: poData, error: poError } = await db
     .from('purchase_orders')
-    .select(`
-      *,
-      sales_order:sales_orders(id, so_number),
-      items:purchase_order_items(*)
-    `)
+    .select('*')
     .eq('id', poId)
     .is('deleted_at', null)
     .single();
 
-  if (error || !data) {
-    console.error('[getSupplierPurchaseOrderById] Error:', error);
+  if (poError) {
+    console.error('[getSupplierPurchaseOrderById] PO Error:', poError.message, poError.code, poError.details);
     return null;
   }
 
-  return mapPurchaseOrder(data);
+  if (!poData) {
+    console.error('[getSupplierPurchaseOrderById] PO not found:', poId);
+    return null;
+  }
+
+  // Fetch items separately
+  const { data: itemsData, error: itemsError } = await db
+    .from('purchase_order_items')
+    .select('*')
+    .eq('purchase_order_id', poId)
+    .order('sort_order', { ascending: true });
+
+  if (itemsError) {
+    console.error('[getSupplierPurchaseOrderById] Items Error:', itemsError.message);
+  }
+
+  // Fetch sales order if exists
+  let salesOrder = null;
+  if (poData.sales_order_id) {
+    const { data: soData } = await db
+      .from('sales_orders')
+      .select('id, so_number')
+      .eq('id', poData.sales_order_id)
+      .single();
+    salesOrder = soData;
+  }
+
+  return mapPurchaseOrder({
+    ...poData,
+    items: itemsData || [],
+    sales_order: salesOrder,
+  });
 }
 
 /**
  * Get pending POs that need confirmation
+ * Now checks item-level supplier_id
  */
 export async function getPendingConfirmationPOs(
   supplierId: string
 ): Promise<SupplierPurchaseOrder[]> {
+  // First, get distinct PO IDs where items belong to this supplier
+  const { data: poItems, error: itemsError } = await db
+    .from('purchase_order_items')
+    .select('purchase_order_id')
+    .eq('supplier_id', supplierId);
+
+  if (itemsError || !poItems || poItems.length === 0) {
+    return [];
+  }
+
+  const poIds = [...new Set(poItems.map(item => item.purchase_order_id))];
+
   const { data, error } = await db
     .from('purchase_orders')
-    .select('*')
-    .eq('supplier_id', supplierId)
+    .select('*, items:purchase_order_items(*)')
+    .in('id', poIds)
     .eq('status', 'sent')
     .is('supplier_confirmed_at', null)
     .is('supplier_rejected_at', null)
@@ -356,22 +416,43 @@ export async function updateShipment(
 
 /**
  * Get dashboard statistics for supplier
+ * Now checks item-level supplier_id
  */
 export async function getSupplierDashboardStats(
   supplierId: string
 ): Promise<SupplierDashboardStats> {
+  // First, get distinct PO IDs where items belong to this supplier
+  const { data: poItems } = await db
+    .from('purchase_order_items')
+    .select('purchase_order_id')
+    .eq('supplier_id', supplierId);
+
+  const poIds = [...new Set((poItems || []).map(item => item.purchase_order_id))];
+
+  if (poIds.length === 0) {
+    return {
+      totalOrders: 0,
+      pendingConfirmation: 0,
+      inProduction: 0,
+      readyToShip: 0,
+      inTransit: 0,
+      delivered: 0,
+      delayed: 0,
+    };
+  }
+
   // Get PO counts (excluding drafts - suppliers shouldn't see drafts)
   const [totalResult, pendingResult, productionResult, readyResult] = await Promise.all([
     db
       .from('purchase_orders')
       .select('id', { count: 'exact', head: true })
-      .eq('supplier_id', supplierId)
+      .in('id', poIds)
       .neq('status', 'draft')
       .is('deleted_at', null),
     db
       .from('purchase_orders')
       .select('id', { count: 'exact', head: true })
-      .eq('supplier_id', supplierId)
+      .in('id', poIds)
       .eq('status', 'sent')
       .is('supplier_confirmed_at', null)
       .is('supplier_rejected_at', null)
@@ -379,18 +460,18 @@ export async function getSupplierDashboardStats(
     db
       .from('purchase_orders')
       .select('id', { count: 'exact', head: true })
-      .eq('supplier_id', supplierId)
+      .in('id', poIds)
       .eq('production_status', 'in_production')
       .is('deleted_at', null),
     db
       .from('purchase_orders')
       .select('id', { count: 'exact', head: true })
-      .eq('supplier_id', supplierId)
+      .in('id', poIds)
       .eq('production_status', 'ready_to_ship')
       .is('deleted_at', null),
   ]);
 
-  // Get shipment counts
+  // Get shipment counts (shipments still use shipments.supplier_id for now)
   const [inTransitResult, deliveredResult] = await Promise.all([
     db
       .from('shipments')
@@ -410,7 +491,7 @@ export async function getSupplierDashboardStats(
   const { count: delayedCount } = await db
     .from('purchase_orders')
     .select('id', { count: 'exact', head: true })
-    .eq('supplier_id', supplierId)
+    .in('id', poIds)
     .lt('expected_delivery_date', new Date().toISOString().split('T')[0])
     .not('production_status', 'eq', 'shipped')
     .is('deleted_at', null);
@@ -463,9 +544,7 @@ function mapPurchaseOrder(data: Record<string, unknown>): SupplierPurchaseOrder 
     poNumber: data.po_number as string,
     poDate: data.po_date as string,
     expectedDeliveryDate: data.expected_delivery_date as string | null,
-    supplierId: data.supplier_id as string | null,
-    supplierName: data.supplier_name as string | null,
-    supplierContact: data.supplier_contact as string | null,
+    // Supplier info is now at item level
     salesOrderId: data.sales_order_id as string | null,
     warehouseId: data.warehouse_id as string | null,
     currencyCode: data.currency_code as string,
@@ -507,6 +586,8 @@ function mapPurchaseOrderItem(data: Record<string, unknown>): SupplierPurchaseOr
     taxRate: data.tax_rate as number,
     lineTotal: data.line_total as number,
     sortOrder: data.sort_order as number,
+    supplierId: data.supplier_id as string | null,
+    supplierName: data.supplier_name as string | null,
   };
 }
 

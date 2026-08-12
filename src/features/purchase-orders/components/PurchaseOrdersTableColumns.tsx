@@ -45,14 +45,24 @@ export function PurchaseOrdersTableColumns(options: ColumnsOptions = {}): Column
       },
     },
     {
-      accessorKey: 'supplierName',
-      header: 'Supplier',
-      cell: ({ row }) => (
-        <div>
-          <p className="font-medium">{row.original.supplierName}</p>
-          <p className="text-xs text-muted-foreground">{row.original.supplierContact}</p>
-        </div>
-      ),
+      accessorKey: 'suppliers',
+      header: 'Suppliers',
+      cell: ({ row }) => {
+        const suppliers = row.original.suppliers;
+        if (!suppliers || suppliers.length === 0) {
+          return <span className="text-muted-foreground">-</span>;
+        }
+        return (
+          <div>
+            <p className="font-medium">{suppliers[0]}</p>
+            {suppliers.length > 1 && (
+              <p className="text-xs text-muted-foreground">
+                +{suppliers.length - 1} more
+              </p>
+            )}
+          </div>
+        );
+      },
     },
     {
       accessorKey: 'poDate',

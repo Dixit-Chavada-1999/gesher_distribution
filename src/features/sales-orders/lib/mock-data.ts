@@ -1,8 +1,12 @@
 /**
  * Sales Order Mock Data
  *
- * Static demo data structured as REST API responses.
- * Designed to mirror real backend API response formats.
+ * SAMPLE/DUMMY data for development and testing.
+ * This file can be safely deleted in production as it only
+ * contains sample data, not real application configuration.
+ *
+ * For permanent configuration data (shipping methods, currencies, etc.),
+ * see: src/shared/lib/global-data.ts
  */
 
 import type {
@@ -10,16 +14,20 @@ import type {
   Product,
   Warehouse,
   SalesRep,
-  Currency,
-  ShippingMethod,
-  Unit,
-  TaxRate,
   SalesOrderMasterData,
   SalesOrderListItem,
   SalesOrderListResponse,
   MasterDataResponse,
   OrderItem,
 } from '../types';
+
+// Import permanent configuration from global-data
+import {
+  SHIPPING_METHODS,
+  CURRENCIES,
+  UNITS,
+  TAX_RATES,
+} from '@/shared/lib/global-data';
 
 // ============================================
 // MASTER DATA
@@ -214,31 +222,9 @@ export const MOCK_SALES_REPS: SalesRep[] = [
   { id: 'rep-004', name: 'Emily Davis', email: 'emily.davis@gesher.com' },
 ];
 
-export const MOCK_CURRENCIES: Currency[] = [
-  { id: 'cur-001', code: 'USD', name: 'US Dollar', symbol: '$' },
-  { id: 'cur-002', code: 'CAD', name: 'Canadian Dollar', symbol: 'C$' },
-  { id: 'cur-003', code: 'EUR', name: 'Euro', symbol: '\u20AC' },
-];
-
-export const MOCK_SHIPPING_METHODS: ShippingMethod[] = [
-  { id: 'ship-001', name: 'Standard Ground', estimatedDays: 5 },
-  { id: 'ship-002', name: 'Express Shipping', estimatedDays: 2 },
-  { id: 'ship-003', name: 'Freight', estimatedDays: 7 },
-  { id: 'ship-004', name: 'Customer Pickup', estimatedDays: 0 },
-];
-
-export const MOCK_UNITS: Unit[] = [
-  { id: 'unit-001', code: 'EA', name: 'Each' },
-  { id: 'unit-002', code: 'SET', name: 'Set' },
-  { id: 'unit-003', code: 'PR', name: 'Pair' },
-  { id: 'unit-004', code: 'BOX', name: 'Box' },
-];
-
-export const MOCK_TAX_RATES: TaxRate[] = [
-  { id: 'tax-001', name: 'Standard Tax', rate: 8.25 },
-  { id: 'tax-002', name: 'Reduced Tax', rate: 5.0 },
-  { id: 'tax-003', name: 'Tax Exempt', rate: 0 },
-];
+// Note: Currencies, Shipping Methods, Units, and Tax Rates
+// are now imported from @/shared/lib/global-data.ts
+// Those are permanent configuration, not mock data.
 
 // ============================================
 // AGGREGATED MASTER DATA
@@ -249,10 +235,11 @@ export const MOCK_MASTER_DATA: SalesOrderMasterData = {
   products: MOCK_PRODUCTS,
   warehouses: MOCK_WAREHOUSES,
   salesReps: MOCK_SALES_REPS,
-  currencies: MOCK_CURRENCIES,
-  shippingMethods: MOCK_SHIPPING_METHODS,
-  units: MOCK_UNITS,
-  taxRates: MOCK_TAX_RATES,
+  // Permanent configuration from global-data.ts
+  currencies: CURRENCIES,
+  shippingMethods: SHIPPING_METHODS,
+  units: UNITS,
+  taxRates: TAX_RATES,
 };
 
 // ============================================

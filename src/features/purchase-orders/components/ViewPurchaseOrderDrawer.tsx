@@ -170,16 +170,16 @@ export function ViewPurchaseOrderDrawer({
                             </span>
                           )}
                         </span>
-                        {/* Show per-item supplier if set, otherwise PO-level supplier */}
-                        {(item.supplierId || po.supplierId) && (
+                        {/* Show per-item supplier */}
+                        {item.supplierId && (
                           <Link
-                            href={`/suppliers/${item.supplierId || po.supplierId}`}
+                            href={`/suppliers/${item.supplierId}`}
                             onClick={(e) => e.stopPropagation()}
                             className="text-xs flex items-center gap-1 text-muted-foreground bg-background px-2 py-0.5 rounded hover:bg-muted hover:text-foreground transition-colors"
                           >
                             <Building2 className="h-3 w-3" />
                             <span>Supplier:</span>
-                            <span className="font-medium">{item.supplierName || po.supplierName}</span>
+                            <span className="font-medium">{item.supplierName}</span>
                           </Link>
                         )}
                       </div>
@@ -246,14 +246,14 @@ export function ViewPurchaseOrderDrawer({
                   Edit PO
                 </Button>
               )}
-              {po.status === 'draft' && po.supplierId && (
+              {po.status === 'draft' && po.items.some((item) => item.supplierId) && (
                 <Button onClick={() => setShowSendDialog(true)} className="flex-1">
                   <Send className="mr-2 h-4 w-4" />
                   Send to Supplier
                 </Button>
               )}
-              {po.status === 'draft' && !po.supplierId && (
-                <Button disabled className="flex-1" title="Select a supplier first">
+              {po.status === 'draft' && !po.items.some((item) => item.supplierId) && (
+                <Button disabled className="flex-1" title="Assign suppliers to items first">
                   <Send className="mr-2 h-4 w-4" />
                   Send to Supplier
                 </Button>
@@ -270,12 +270,14 @@ export function ViewPurchaseOrderDrawer({
         <AlertDialog open={showSendDialog} onOpenChange={setShowSendDialog}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Send PO to Supplier?</AlertDialogTitle>
+              <AlertDialogTitle>Send PO to Suppliers?</AlertDialogTitle>
               <AlertDialogDescription>
-                This will send <span className="font-semibold">{po?.poNumber}</span> to{' '}
-                <span className="font-semibold">{po?.supplierName}</span>.
+                This will send <span className="font-semibold">{po?.poNumber}</span> to suppliers:{' '}
+                <span className="font-semibold">
+                  {[...new Set(po?.items.filter((i) => i.supplierName).map((i) => i.supplierName))].join(', ') || 'N/A'}
+                </span>.
                 <br /><br />
-                The supplier will be able to view and respond to this PO in their portal.
+                Suppliers will be able to view and respond to this PO in their portal.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

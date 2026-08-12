@@ -79,7 +79,6 @@ export function EditPurchaseOrderDrawer({
     defaultValues: {
       poDate: new Date().toISOString().split('T')[0],
       expectedDeliveryDate: '',
-      supplierId: '',
       salesOrderId: '',
       warehouseId: '',
       currencyCode: 'USD',
@@ -137,7 +136,6 @@ export function EditPurchaseOrderDrawer({
             expectedDeliveryDate: result.data.expectedDeliveryDate
               ? new Date(result.data.expectedDeliveryDate).toISOString().split('T')[0]
               : '',
-            supplierId: result.data.supplierId || '',
             salesOrderId: result.data.salesOrderId || '',
             warehouseId: result.data.warehouseId || '',
             currencyCode: result.data.currencyCode || 'USD',
@@ -155,11 +153,6 @@ export function EditPurchaseOrderDrawer({
             vendorNotes: result.data.vendorNotes || '',
             internalNotes: result.data.internalNotes || '',
           });
-
-          // Set supplier if exists
-          if (result.data.supplierId) {
-            setSingleSupplierId(result.data.supplierId);
-          }
 
           // Initialize per-item supplier assignments
           const itemSupplierMap: Record<string, string> = {};
@@ -202,7 +195,6 @@ export function EditPurchaseOrderDrawer({
 
   const handleSingleSupplierChange = (supplierId: string) => {
     setSingleSupplierId(supplierId);
-    form.setValue('supplierId', supplierId);
   };
 
   const handleItemSupplierChange = (itemId: string, supplierId: string) => {
@@ -265,9 +257,6 @@ export function EditPurchaseOrderDrawer({
           expectedDeliveryDate: data.expectedDeliveryDate
             ? new Date(data.expectedDeliveryDate as string)
             : null,
-          supplierId: supplierInfo?.id || null,
-          supplierName: supplierInfo?.name || 'Unassigned',
-          supplierContact: supplierInfo?.primaryContactName || '',
           warehouseId: (data.warehouseId as string) || null,
           currencyCode: (data.currencyCode as string) || 'USD',
           vendorAddress: {
@@ -286,7 +275,7 @@ export function EditPurchaseOrderDrawer({
           },
           vendorNotes: (data.vendorNotes as string) || null,
           internalNotes: (data.internalNotes as string) || null,
-          // Include items with their supplier assignments
+          // Include items with their supplier assignments (supplier info is on items)
           items: itemsWithSuppliers,
         });
 

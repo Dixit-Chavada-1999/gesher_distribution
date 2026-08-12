@@ -2,12 +2,11 @@
  * Purchase Orders Validation Schemas
  *
  * Zod schemas for purchase order validation.
- * Per client doc: POs always go to Galileo (Alon) - single supplier
+ * Supplier info is now at item level (per-item supplier assignment)
  */
 
 import { z } from 'zod';
 import type { CreatePurchaseOrderDTO, CreatePOItemDTO, POTotals } from '../types';
-import { DEFAULT_SUPPLIER } from '../types';
 
 // ============================================
 // SHARED SCHEMAS
@@ -57,17 +56,13 @@ export const updatePOItemSchema = z.object({
 export const createPurchaseOrderSchema = z.object({
   poDate: z.coerce.date(),
   expectedDeliveryDate: z.coerce.date().nullable().optional(),
-  // Supplier - links to suppliers table for portal access
-  supplierId: z.string().uuid().nullable().optional(),
-  supplierName: z.string().default(DEFAULT_SUPPLIER.name),
-  supplierContact: z.string().default(DEFAULT_SUPPLIER.contact),
   salesOrderId: z.string().uuid().nullable().optional(),
   warehouseId: z.string().uuid().nullable().optional(),
   currencyCode: z.string().default('USD'),
   status: z.enum(['draft', 'sent', 'confirmed', 'partial', 'received', 'cancelled'] as const).default('draft'),
   vendorAddress: addressSchema,
   shipToAddress: addressSchema,
-  items: z.array(poItemSchema).min(1, 'At least one item is required'),
+  items: z.array(poItemSchema).min(1, 'At least one item is required'), // Supplier info is on items
   vendorNotes: z.string().nullable().optional(),
   internalNotes: z.string().nullable().optional(),
 });
@@ -81,9 +76,6 @@ export type CreatePOInput = z.infer<typeof createPurchaseOrderSchema>;
 export const updatePurchaseOrderSchema = z.object({
   poDate: z.coerce.date().optional(),
   expectedDeliveryDate: z.coerce.date().nullable().optional(),
-  supplierId: z.string().uuid().nullable().optional(),
-  supplierName: z.string().optional(),
-  supplierContact: z.string().optional(),
   warehouseId: z.string().uuid().nullable().optional(),
   currencyCode: z.string().optional(),
   vendorAddress: addressSchema.optional(),
@@ -91,6 +83,7 @@ export const updatePurchaseOrderSchema = z.object({
   vendorNotes: z.string().nullable().optional(),
   internalNotes: z.string().nullable().optional(),
   // Items for updating (optional - if not provided, items won't be modified)
+  // Supplier info is on items
   items: z.array(updatePOItemSchema).optional(),
 });
 
@@ -145,8 +138,6 @@ export function calculatePOTotals(
 export const poFormSchema = z.object({
   poDate: z.string().min(1, 'PO date is required'),
   expectedDeliveryDate: z.string().optional(),
-  // Supplier selection
-  supplierId: z.string().optional(),
   salesOrderId: z.string().optional(),
   warehouseId: z.string().optional(),
   currencyCode: z.string().default('USD'),
@@ -173,18 +164,13 @@ export type POFormInput = z.infer<typeof poFormSchema>;
 
 export function formToCreateDTO(
   form: POFormInput,
-  items: CreatePOItemDTO[],
-  supplierInfo?: { id: string; name: string; contact: string } | null
+  items: CreatePOItemDTO[]
 ): CreatePurchaseOrderDTO {
   return {
     poDate: new Date(form.poDate),
     expectedDeliveryDate: form.expectedDeliveryDate
       ? new Date(form.expectedDeliveryDate)
       : null,
-    // Supplier - use selected or default
-    supplierId: supplierInfo?.id || form.supplierId || null,
-    supplierName: supplierInfo?.name || DEFAULT_SUPPLIER.name,
-    supplierContact: supplierInfo?.contact || DEFAULT_SUPPLIER.contact,
     salesOrderId: form.salesOrderId || null,
     warehouseId: form.warehouseId || null,
     currencyCode: form.currencyCode || 'USD',
@@ -203,7 +189,7 @@ export function formToCreateDTO(
       postalCode: form.shipToAddressPostalCode || null,
       country: form.shipToAddressCountry || null,
     },
-    items,
+    items, // Supplier info is on items
     vendorNotes: form.vendorNotes || null,
     internalNotes: form.internalNotes || null,
   };

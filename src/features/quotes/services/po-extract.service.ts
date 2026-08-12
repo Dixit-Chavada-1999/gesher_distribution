@@ -20,24 +20,34 @@ import { db } from '@/shared/lib/supabase/database';
 
 const MODEL = 'gpt-4o';
 
-const EXTRACTION_PROMPT = `You are a Purchase Order data extractor for an agricultural tire distribution company. Analyze these PO document images and extract all relevant information.
+const EXTRACTION_PROMPT = `You are a Purchase Order data extractor for an agricultural tire distribution company (Gesher Distribution). Analyze these PO document images and extract all relevant information.
+
+CONTEXT: This is a Purchase Order sent BY A CUSTOMER to Gesher Distribution. We need to identify WHO IS PLACING THE ORDER (the customer/buyer).
 
 Extract the following data:
 1. PO Number - The purchase order number/ID
 2. PO Date - The date on the purchase order
-3. Customer/Billing Information - The company placing the order (look for "To:", "ORDERED BY:", "Bill To:", or company info at top)
-4. Ship To Address - Where the order should be delivered (look for "Ship To:" section)
+3. Customer/Buyer Information - The company PLACING/SENDING the order (this is NOT Gesher Distribution, NOT the manufacturer)
+4. Ship To Address - Where the order should be delivered
 5. Line Items - All products/items being ordered
 
+CRITICAL - IDENTIFYING THE CUSTOMER:
+- The CUSTOMER is the company PLACING the order (the buyer who sends this PO)
+- Look for: Company letterhead at top, "From:", "Buyer:", "Ordered By:", "Bill To:" sections
+- The customer is typically shown in the HEADER or TOP of the PO document
+- DO NOT use "To:" or "Vendor:" sections - those show who RECEIVES the PO (Gesher Distribution)
+- DO NOT extract manufacturer names from product descriptions (like "Galileo", "BKT", etc.) - those are tire manufacturers, NOT customers
+- Common customers: Lindsay Irrigation Solutions, irrigation companies, agricultural equipment dealers
+
 For CUSTOMER (Billing), extract address with SEPARATE fields:
-- name: Company name
-- address: Street address only (e.g., "3141 Walnut St, Ste 203b")
+- name: Company name of the BUYER (who is placing this order)
+- address: Street address only (e.g., "214 East 2nd Street")
 - city: City name
 - state: State abbreviation (e.g., "CO", "NE")
 - zip: ZIP/Postal code
 
 For SHIP TO, extract address with SEPARATE fields:
-- name: Recipient name or company
+- name: Recipient name or company (where goods should be delivered)
 - address: Street address only
 - city: City name
 - state: State abbreviation
@@ -64,6 +74,7 @@ IMPORTANT:
 - Confidence score should reflect how clearly you could read the document (0-100)
 - The tire size is CRITICAL for matching products - extract it carefully from descriptions
 - PARSE ADDRESSES INTO SEPARATE FIELDS - do not put entire address in one field
+- NEVER use manufacturer names (Galileo, BKT, Titan, etc.) as customer names - those appear in product descriptions only
 
 Return ONLY valid JSON in this exact format with no additional text:
 {
@@ -71,11 +82,11 @@ Return ONLY valid JSON in this exact format with no additional text:
   "poNumber": "PO-12345",
   "poDate": "2024-08-06",
   "customer": {
-    "name": "GESHER DISTRIBUTION, INC",
-    "address": "3141 Walnut St, Ste 203b",
-    "city": "Denver",
-    "state": "CO",
-    "zip": "80238"
+    "name": "Lindsay Irrigation Solutions, LLC",
+    "address": "214 East 2nd Street",
+    "city": "Lindsay",
+    "state": "NE",
+    "zip": "68644"
   },
   "shipTo": {
     "name": "Lindsay Irrigation Solutions, LLC",

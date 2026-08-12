@@ -7,6 +7,7 @@
  * Shows KPIs, pending actions, and recent activity.
  */
 
+import { useState } from 'react';
 import {
   ClipboardList,
   Clock,
@@ -24,6 +25,7 @@ import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
 import { cn, formatCurrency, formatDate } from '@/shared/lib/utils';
 import type { SupplierDashboardStats, SupplierPurchaseOrder } from '../types';
+import { SupplierPODrawer } from './SupplierPODrawer';
 
 // ============================================
 // STAT CARD
@@ -86,9 +88,10 @@ function StatCard({ title, value, icon: Icon, variant = 'default', href }: StatC
 
 interface PendingActionItemProps {
   po: SupplierPurchaseOrder;
+  onReview: (po: SupplierPurchaseOrder) => void;
 }
 
-function PendingActionItem({ po }: PendingActionItemProps) {
+function PendingActionItem({ po, onReview }: PendingActionItemProps) {
   return (
     <div className="flex items-center justify-between rounded-lg border bg-card p-4">
       <div className="space-y-1">
@@ -104,12 +107,10 @@ function PendingActionItem({ po }: PendingActionItemProps) {
           <span>Total: {formatCurrency(po.grandTotal / 100)}</span>
         </div>
       </div>
-      <Link href={`/supplier-portal/purchase-orders/${po.id}`}>
-        <Button size="sm">
-          Review
-          <ArrowRight className="ml-2 h-4 w-4" />
-        </Button>
-      </Link>
+      <Button size="sm" onClick={() => onReview(po)}>
+        Review
+        <ArrowRight className="ml-2 h-4 w-4" />
+      </Button>
     </div>
   );
 }
@@ -122,13 +123,28 @@ interface SupplierDashboardProps {
   stats: SupplierDashboardStats;
   pendingPOs: SupplierPurchaseOrder[];
   supplierName: string;
+  onRefresh?: () => void;
 }
 
 export function SupplierDashboard({
   stats,
   pendingPOs,
   supplierName,
+  onRefresh,
 }: SupplierDashboardProps) {
+  const [selectedPO, setSelectedPO] = useState<SupplierPurchaseOrder | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const handleReviewPO = (po: SupplierPurchaseOrder) => {
+    setSelectedPO(po);
+    setDrawerOpen(true);
+  };
+
+  const handleDrawerClose = () => {
+    setDrawerOpen(false);
+    setSelectedPO(null);
+  };
+
   return (
     <div className="space-y-6">
       {/* Welcome Header */}
@@ -204,7 +220,7 @@ export function SupplierDashboard({
           </CardHeader>
           <CardContent className="space-y-3">
             {pendingPOs.slice(0, 5).map((po) => (
-              <PendingActionItem key={po.id} po={po} />
+              <PendingActionItem key={po.id} po={po} onReview={handleReviewPO} />
             ))}
             {pendingPOs.length > 5 && (
               <Link
@@ -217,6 +233,14 @@ export function SupplierDashboard({
           </CardContent>
         </Card>
       )}
+
+      {/* PO Detail Drawer */}
+      <SupplierPODrawer
+        open={drawerOpen}
+        onClose={handleDrawerClose}
+        purchaseOrder={selectedPO}
+        onRefresh={onRefresh}
+      />
 
       {/* Quick Actions */}
       <Card>

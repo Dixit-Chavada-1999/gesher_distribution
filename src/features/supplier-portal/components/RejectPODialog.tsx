@@ -29,6 +29,7 @@ interface RejectPODialogProps {
   onOpenChange: (open: boolean) => void;
   poId: string;
   poNumber: string;
+  onSuccess?: () => void;
 }
 
 export function RejectPODialog({
@@ -36,6 +37,7 @@ export function RejectPODialog({
   onOpenChange,
   poId,
   poNumber,
+  onSuccess,
 }: RejectPODialogProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -60,6 +62,7 @@ export function RejectPODialog({
           description: `${poNumber} has been rejected.`,
         });
         onOpenChange(false);
+        onSuccess?.();
         router.refresh();
       } else {
         toast.error('Error', {
