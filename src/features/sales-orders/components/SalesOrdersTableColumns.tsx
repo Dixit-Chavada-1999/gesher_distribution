@@ -7,6 +7,7 @@
  */
 
 import { ColumnDef } from '@tanstack/react-table';
+import { CheckCircle, XCircle } from 'lucide-react';
 import { Badge } from '@/shared/components/ui/badge';
 import { Checkbox } from '@/shared/components/ui/checkbox';
 import { DataTableColumnHeader } from '@/shared/components/data-table/DataTableColumnHeader';
@@ -30,6 +31,8 @@ interface ColumnOptions {
   onView?: (order: SalesOrderListItem) => void;
   onEdit?: (order: SalesOrderListItem) => void;
   onDelete?: (order: SalesOrderListItem) => void;
+  onConfirm?: (order: SalesOrderListItem) => void;
+  onCancel?: (order: SalesOrderListItem) => void;
 }
 
 // ============================================
@@ -214,16 +217,47 @@ export function getSalesOrdersTableColumns(
     {
       id: 'actions',
       cell: ({ row }) => {
-        const isEditable = canEditOrder(row.original.status);
+        const status = row.original.status;
+        const isEditable = canEditOrder(status);
+        const canConfirm = ['draft', 'pending'].includes(status);
+        const canCancel = !['delivered', 'cancelled'].includes(status);
+
         const { actions, separatorAfter } = createCommonRowActions({
           onView: options.onView ? () => options.onView?.(row.original) : undefined,
           // Only show edit button for editable statuses (draft, pending)
           onEdit: options.onEdit && isEditable ? () => options.onEdit?.(row.original) : undefined,
           onDelete: options.onDelete ? () => options.onDelete?.(row.original) : undefined,
         });
+
+        // Add status change actions
+        const statusActions = [];
+
+        if (options.onConfirm && canConfirm) {
+          statusActions.push({
+            label: 'Confirm Order',
+            icon: <CheckCircle className="h-4 w-4" />,
+            onClick: () => options.onConfirm?.(row.original),
+          });
+        }
+
+        if (options.onCancel && canCancel) {
+          statusActions.push({
+            label: 'Cancel Order',
+            icon: <XCircle className="h-4 w-4" />,
+            onClick: () => options.onCancel?.(row.original),
+            destructive: true,
+          });
+        }
+
+        // Combine actions: common actions first, then separator, then status actions
+        const allActions = [...actions, ...statusActions];
+        const newSeparatorAfter = statusActions.length > 0
+          ? [...separatorAfter, actions.length - 1] // Add separator before status actions
+          : separatorAfter;
+
         return (
           <div onClick={(e) => e.stopPropagation()}>
-            <DataTableRowActions actions={actions} separatorAfter={separatorAfter} />
+            <DataTableRowActions actions={allActions} separatorAfter={newSeparatorAfter} />
           </div>
         );
       },

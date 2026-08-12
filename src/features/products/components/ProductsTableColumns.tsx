@@ -63,6 +63,31 @@ export function getProductsTableColumns(options: ColumnOptions = {}): ColumnDef<
       ),
     },
     {
+      accessorKey: 'itemType',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
+      cell: ({ row }) => {
+        const itemType = row.getValue('itemType') as string;
+        const typeLabels: Record<string, string> = {
+          inventory: 'Inventory',
+          non_inventory: 'Non-Inventory',
+          service: 'Service',
+        };
+        const typeColors: Record<string, 'default' | 'secondary' | 'outline'> = {
+          inventory: 'outline',
+          non_inventory: 'secondary',
+          service: 'secondary',
+        };
+        return (
+          <Badge variant={typeColors[itemType] || 'outline'}>
+            {typeLabels[itemType] || itemType}
+          </Badge>
+        );
+      },
+      filterFn: (row, id, value) => {
+        return value.includes(row.getValue(id));
+      },
+    },
+    {
       accessorKey: 'category',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Category" />,
       cell: ({ row }) => {
@@ -100,11 +125,16 @@ export function getProductsTableColumns(options: ColumnOptions = {}): ColumnDef<
       header: ({ column }) => <DataTableColumnHeader column={column} title="Margin" />,
       cell: ({ row }) => {
         const marginPercent = row.getValue('marginPercent') as number;
+        const colorClass = marginPercent >= 20
+          ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100'
+          : marginPercent >= 10
+            ? 'bg-amber-100 text-amber-700 hover:bg-amber-100'
+            : 'bg-red-100 text-red-700 hover:bg-red-100';
         return (
           <div className="text-right">
             <Badge
-              variant={marginPercent >= 20 ? 'default' : marginPercent >= 10 ? 'secondary' : 'destructive'}
-              className="font-mono"
+              variant="outline"
+              className={`font-mono border-0 ${colorClass}`}
             >
               {marginPercent.toFixed(1)}%
             </Badge>
@@ -117,13 +147,13 @@ export function getProductsTableColumns(options: ColumnOptions = {}): ColumnDef<
       header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
       cell: ({ row }) => {
         const status = row.getValue('status') as string;
-        const statusColors: Record<string, 'default' | 'secondary' | 'destructive'> = {
-          active: 'default',
-          inactive: 'secondary',
-          discontinued: 'destructive',
+        const statusColors: Record<string, string> = {
+          active: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100',
+          inactive: 'bg-gray-100 text-gray-700 hover:bg-gray-100',
+          discontinued: 'bg-red-100 text-red-700 hover:bg-red-100',
         };
         return (
-          <Badge variant={statusColors[status] || 'secondary'}>
+          <Badge variant="outline" className={`border-0 ${statusColors[status] || 'bg-gray-100 text-gray-700'}`}>
             {status.charAt(0).toUpperCase() + status.slice(1)}
           </Badge>
         );
@@ -138,7 +168,10 @@ export function getProductsTableColumns(options: ColumnOptions = {}): ColumnDef<
       cell: ({ row }) => {
         const isSellable = row.getValue('isSellable') as boolean;
         return (
-          <Badge variant={isSellable ? 'default' : 'outline'}>
+          <Badge
+            variant="outline"
+            className={`border-0 ${isSellable ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100' : 'bg-gray-100 text-gray-700 hover:bg-gray-100'}`}
+          >
             {isSellable ? 'Yes' : 'No'}
           </Badge>
         );

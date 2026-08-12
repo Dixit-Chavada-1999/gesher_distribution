@@ -6,8 +6,10 @@
  * Form for creating and editing products.
  */
 
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Loader2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Textarea } from '@/shared/components/ui/textarea';
@@ -29,7 +31,9 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 import { productFormSchema, type ProductFormInput, productToFormValues } from '../lib/schemas';
-import { DEFAULT_PRODUCT_FORM_VALUES, PRODUCT_STATUS_OPTIONS } from '../types';
+import { DEFAULT_PRODUCT_FORM_VALUES, PRODUCT_STATUS_OPTIONS, PRODUCT_ITEM_TYPE_OPTIONS } from '../types';
+import { getSuppliersForDropdown } from '@/features/purchase-orders/actions';
+import type { SupplierSummary } from '@/features/purchase-orders/types';
 
 interface ProductFormProps {
   initialData?: {
@@ -44,8 +48,10 @@ interface ProductFormProps {
     baseCost: number;
     basePrice: number;
     status: 'active' | 'inactive' | 'discontinued';
+    itemType: 'inventory' | 'non_inventory' | 'service';
     isSellable: boolean;
     imageUrl: string | null;
+    supplierId?: string | null;
   };
   onSubmit: (data: ProductFormInput) => Promise<void>;
   onCancel?: () => void;
@@ -60,12 +66,31 @@ export function ProductForm({
   isLoading = false,
   submitLabel = 'Save Product',
 }: ProductFormProps) {
+  const [suppliers, setSuppliers] = useState<SupplierSummary[]>([]);
+  const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(false);
+
   const form = useForm<ProductFormInput>({
     resolver: zodResolver(productFormSchema),
     defaultValues: initialData
       ? productToFormValues(initialData)
       : DEFAULT_PRODUCT_FORM_VALUES,
   });
+
+  // Load suppliers on mount
+  useEffect(() => {
+    const loadSuppliers = async () => {
+      setIsLoadingSuppliers(true);
+      try {
+        const data = await getSuppliersForDropdown();
+        setSuppliers(data);
+      } catch (error) {
+        console.error('Failed to load suppliers:', error);
+      } finally {
+        setIsLoadingSuppliers(false);
+      }
+    };
+    loadSuppliers();
+  }, []);
 
   const handleSubmit = async (data: ProductFormInput) => {
     await onSubmit(data);
@@ -143,6 +168,51 @@ export function ProductForm({
                     rows={4}
                   />
                 </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="supplierId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Default Supplier</FormLabel>
+                <Select
+                  value={field.value || ''}
+                  onValueChange={field.onChange}
+                  disabled={isLoadingSuppliers}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      {isLoadingSuppliers ? (
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Loading...
+                        </span>
+                      ) : (
+                        <SelectValue placeholder="Select a supplier (optional)" />
+                      )}
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="">No supplier</SelectItem>
+                    {suppliers.map((supplier) => (
+                      <SelectItem key={supplier.id} value={supplier.id}>
+                        {supplier.name}
+                        {supplier.primaryContactName && (
+                          <span className="text-muted-foreground ml-2">
+                            ({supplier.primaryContactName})
+                          </span>
+                        )}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormDescription>
+                  Auto-assigns this supplier when creating POs for this product
+                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -321,22 +391,50 @@ export function ProductForm({
 
             <FormField
               control={form.control}
-              name="isSellable"
+              name="itemType"
               render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-base">Sellable</FormLabel>
-                    <FormDescription>
-                      Allow this product to be added to orders
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
+                <FormItem>
+                  <FormLabel>Item Type</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select item type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {PRODUCT_ITEM_TYPE_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    QuickBooks item type for syncing
+                  </FormDescription>
+                  <FormMessage />
                 </FormItem>
               )}
             />
           </div>
+
+          <FormField
+            control={form.control}
+            name="isSellable"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-base">Sellable</FormLabel>
+                  <FormDescription>
+                    Allow this product to be added to orders
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch checked={field.value} onCheckedChange={field.onChange} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
         </div>
 
         {/* Form Actions */}

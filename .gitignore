@@ -69,3 +69,7 @@ logs
 .Spotlight-V100
 .Trashes
 ehthumbs.db
+
+# Uploads (local file storage - ignore files but keep folder structure)
+/uploads/*
+!/uploads/README.md

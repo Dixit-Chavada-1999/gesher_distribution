@@ -7,8 +7,8 @@
  * Fetches full order data with items when opened.
  */
 
-import { useEffect, useState } from 'react';
-import { Loader2, MapPin, Package, FileText, Calendar, User, Building2, Truck, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { useEffect, useState, useTransition } from 'react';
+import { Loader2, MapPin, Package, FileText, Calendar, User, Building2, Truck, AlertTriangle, ShieldCheck, CheckCircle, XCircle } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { useAuthStore } from '@/shared/stores';
@@ -30,8 +30,20 @@ import {
   TableHeader,
   TableRow,
 } from '@/shared/components/ui/table';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/shared/components/ui/alert-dialog';
+import { Textarea } from '@/shared/components/ui/textarea';
+import { Label } from '@/shared/components/ui/label';
 
-import { getSalesOrder, releaseSalesOrderHold } from '../actions';
+import { getSalesOrder, releaseSalesOrderHold, confirmSalesOrder, cancelSalesOrder } from '../actions';
 import type { SalesOrderWithItems } from '../types';
 import {
   ORDER_STATUS_LABELS,
@@ -173,7 +185,11 @@ export function ViewSalesOrderDrawer({
   const [order, setOrder] = useState<SalesOrderWithItems | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isReleasingHold, setIsReleasingHold] = useState(false);
+const [isReleasingHold, setIsReleasingHold] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
 
   // ----------------------------------------
   // EFFECTS
@@ -222,7 +238,7 @@ export function ViewSalesOrderDrawer({
     }
   };
 
-  const handleReleaseHold = async () => {
+const handleReleaseHold = async () => {
     if (!order) return;
 
     setIsReleasingHold(true);
@@ -242,8 +258,57 @@ export function ViewSalesOrderDrawer({
     }
   };
 
+  const handleConfirm = () => {
+    if (!order) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const result = await confirmSalesOrder(order.id);
+        if (result.success) {
+          toast.success(`Order ${order.orderNumber} confirmed`);
+          setShowConfirmDialog(false);
+          fetchOrder(); // Refresh order data
+        } else {
+          toast.error(result.error || 'Failed to confirm order');
+        }
+      } catch (error) {
+        console.error('Error confirming order:', error);
+        toast.error('Failed to confirm order');
+      }
+    });
+  };
+
+  const handleCancel = () => {
+    if (!order) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const result = await cancelSalesOrder(order.id, cancelReason || undefined);
+        if (result.success) {
+          toast.success(`Order ${order.orderNumber} cancelled`);
+          setShowCancelDialog(false);
+          setCancelReason('');
+          fetchOrder(); // Refresh order data
+        } else {
+          toast.error(result.error || 'Failed to cancel order');
+        }
+      } catch (error) {
+        console.error('Error cancelling order:', error);
+        toast.error('Failed to cancel order');
+      }
+    });
+  };
+
   // Can only edit draft or pending orders (and must have permission)
   const canEdit = order && ['draft', 'pending'].includes(order.status) && canEditPermission;
+  // Can confirm draft or pending orders
+  const canConfirm = order && ['draft', 'pending'].includes(order.status) && canEditPermission;
+  // Can cancel any order except delivered/cancelled
+  const canCancel = order && !['delivered', 'cancelled'].includes(order.status) && canEditPermission;
 
   // Check if order is on credit hold
   const isOnHold = order?.creditStatus === 'hold';
@@ -518,18 +583,94 @@ export function ViewSalesOrderDrawer({
         {/* Footer */}
         {order && (
           <div className="flex-shrink-0 border-t bg-muted/30 px-6 py-4">
-            <div className="flex items-center justify-end gap-3">
-              <Button variant="outline" onClick={onClose}>
-                Close
-              </Button>
-              {canEdit && onEdit && (
-                <Button onClick={handleEdit}>
-                  Edit Order
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex gap-2">
+                {canCancel && (
+                  <Button
+                    variant="outline"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => setShowCancelDialog(true)}
+                    disabled={isPending}
+                  >
+                    <XCircle className="mr-2 h-4 w-4" />
+                    Cancel Order
+                  </Button>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={onClose}>
+                  Close
                 </Button>
-              )}
+                {canEdit && onEdit && (
+                  <Button variant="outline" onClick={handleEdit}>
+                    Edit Order
+                  </Button>
+                )}
+                {canConfirm && (
+                  <Button onClick={() => setShowConfirmDialog(true)} disabled={isPending}>
+                    <CheckCircle className="mr-2 h-4 w-4" />
+                    Confirm Order
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         )}
+
+        {/* Confirm Order Dialog */}
+        <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirm Order?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will confirm order <span className="font-semibold">{order?.orderNumber}</span>.
+                <br /><br />
+                Once confirmed, the order will be ready for processing and you can create a Purchase Order.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirm} disabled={isPending}>
+                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Confirm Order
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Cancel Order Dialog */}
+        <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Cancel Order?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will cancel order <span className="font-semibold">{order?.orderNumber}</span>.
+                This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-4">
+              <Label htmlFor="cancelReason">Cancellation Reason (optional)</Label>
+              <Textarea
+                id="cancelReason"
+                placeholder="Enter reason for cancellation..."
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                className="mt-2"
+              />
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isPending}>Back</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleCancel}
+                disabled={isPending}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Cancel Order
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SheetContent>
     </Sheet>
   );

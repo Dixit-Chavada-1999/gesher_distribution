@@ -2,7 +2,7 @@
  * Purchase Orders Module Types
  *
  * All TypeScript interfaces for the Purchase Orders feature.
- * Per client doc: POs always go to Galileo (Alon) - single supplier
+ * Supplier info is at item level (per-item supplier assignment).
  */
 
 // ============================================
@@ -54,11 +54,12 @@ export const PO_STATUS_TRANSITIONS: Record<POStatus, POStatus[]> = {
   cancelled: [],
 };
 
-// Default supplier per client doc
-export const DEFAULT_SUPPLIER = {
-  name: 'Galileo',
-  contact: 'Alon',
-};
+// Supplier summary for dropdown
+export interface SupplierSummary {
+  id: string;
+  name: string;
+  primaryContactName: string | null;
+}
 
 // ============================================
 // DATABASE ENTITY TYPES
@@ -66,16 +67,13 @@ export const DEFAULT_SUPPLIER = {
 
 /**
  * Purchase Order entity from database
+ * Note: Supplier info is now at item level (purchase_order_items.supplier_id)
  */
 export interface PurchaseOrder {
   id: string;
   poNumber: string;
   poDate: Date;
   expectedDeliveryDate: Date | null;
-
-  // Supplier (always Galileo/Alon per client doc)
-  supplierName: string;
-  supplierContact: string;
 
   // Relationships
   salesOrderId: string | null;
@@ -137,6 +135,9 @@ export interface PurchaseOrderItem {
   taxRate: number;
   lineTotal: number; // cents
   sortOrder: number;
+  // Per-item supplier (optional override)
+  supplierId: string | null;
+  supplierName: string | null;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string | null;
@@ -196,6 +197,9 @@ export interface CreatePOItemDTO {
   unitCode: string;
   unitPrice: number; // cents
   taxRate: number;
+  // Per-item supplier (optional)
+  supplierId?: string | null;
+  supplierName?: string | null;
 }
 
 export interface CreatePurchaseOrderDTO {
@@ -205,13 +209,26 @@ export interface CreatePurchaseOrderDTO {
   warehouseId?: string | null;
   currencyCode?: string;
   status?: POStatus;
-  supplierName?: string; // defaults to Galileo
-  supplierContact?: string; // defaults to Alon
   vendorAddress: AddressDTO;
   shipToAddress: AddressDTO;
-  items: CreatePOItemDTO[];
+  items: CreatePOItemDTO[]; // Supplier info is on items
   vendorNotes?: string | null;
   internalNotes?: string | null;
+}
+
+export interface UpdatePOItemDTO {
+  id?: string; // If present, update existing item; if not, create new
+  productId: string;
+  salesOrderItemId?: string | null;
+  sku: string;
+  description: string | null;
+  quantityOrdered: number;
+  unitCode: string;
+  unitPrice: number; // cents
+  taxRate: number;
+  // Per-item supplier (optional)
+  supplierId?: string | null;
+  supplierName?: string | null;
 }
 
 export interface UpdatePurchaseOrderDTO {
@@ -223,6 +240,8 @@ export interface UpdatePurchaseOrderDTO {
   shipToAddress?: AddressDTO;
   vendorNotes?: string | null;
   internalNotes?: string | null;
+  // Items array for updating (supplier info is on items)
+  items?: UpdatePOItemDTO[];
 }
 
 // ============================================
@@ -244,8 +263,6 @@ export interface POListParams {
 export interface POListItem {
   id: string;
   poNumber: string;
-  supplierName: string;
-  supplierContact: string;
   poDate: string;
   expectedDeliveryDate: string | null;
   status: POStatus;
@@ -253,6 +270,8 @@ export interface POListItem {
   currencyCode: string;
   itemCount: number;
   createdAt: Date;
+  // Computed from items - shows unique suppliers
+  suppliers: string[];
 }
 
 export interface PaginatedResult<T> {

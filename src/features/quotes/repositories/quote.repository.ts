@@ -53,6 +53,7 @@ interface DbQuote {
   customer_notes: string | null;
   internal_notes: string | null;
   terms_and_conditions: string | null;
+  po_document_url: string | null;
   converted_to_sales_order_id: string | null;
   converted_at: string | null;
   converted_by: string | null;
@@ -416,6 +417,7 @@ class QuoteRepositoryImpl {
         customer_notes: data.customerNotes || null,
         internal_notes: data.internalNotes || null,
         terms_and_conditions: data.termsAndConditions || null,
+        po_document_url: data.poDocumentUrl || null,
         created_by: userId || null,
         updated_by: userId || null,
       })
@@ -820,6 +822,7 @@ class QuoteRepositoryImpl {
       customerNotes: data.customer_notes,
       internalNotes: data.internal_notes,
       termsAndConditions: data.terms_and_conditions,
+      poDocumentUrl: data.po_document_url,
       convertedToSalesOrderId: data.converted_to_sales_order_id,
       convertedAt: data.converted_at ? new Date(data.converted_at) : null,
       convertedBy: data.converted_by,

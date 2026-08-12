@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ExternalLink, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -22,9 +22,10 @@ import {
 import { ScrollArea } from '@/shared/components/ui/scroll-area';
 import { Separator } from '@/shared/components/ui/separator';
 import { Skeleton } from '@/shared/components/ui/skeleton';
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 
 import { QuoteForm } from './QuoteForm';
-import { getQuote, updateQuoteFromData, updateQuoteItems, getQuoteMasterData } from '../actions';
+import { getQuote, updateQuoteFromData, updateQuoteItems, getQuoteMasterData, getPODocumentSignedUrl } from '../actions';
 import { quoteToFormValues, formToCreateDTO, type QuoteFormInput } from '../lib/schemas';
 import type { QuoteWithItems } from '../types';
 
@@ -71,6 +72,22 @@ export function EditQuoteDrawer({ open, onClose, quoteId, onSuccess }: EditQuote
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverErrors, setServerErrors] = useState<Record<string, string[]> | undefined>(undefined);
+  const [poDocumentUrl, setPoDocumentUrl] = useState<string | null>(null);
+
+  // Fetch signed URL for PO document when quote has one
+  useEffect(() => {
+    const fetchPoDocumentUrl = async () => {
+      if (quote?.poDocumentUrl) {
+        const result = await getPODocumentSignedUrl(quote.poDocumentUrl);
+        if (result.success && result.data) {
+          setPoDocumentUrl(result.data.url);
+        }
+      } else {
+        setPoDocumentUrl(null);
+      }
+    };
+    fetchPoDocumentUrl();
+  }, [quote?.poDocumentUrl]);
 
   // Fetch quote and master data when drawer opens
   useEffect(() => {
@@ -234,17 +251,56 @@ export function EditQuoteDrawer({ open, onClose, quoteId, onSuccess }: EditQuote
                 </div>
               </div>
             ) : quote && masterData ? (
-              <QuoteForm
-                mode="edit"
-                initialData={getInitialData()}
-                customers={masterData.customers}
-                products={masterData.products}
-                salesReps={masterData.salesReps}
-                onSubmit={handleSubmit}
-                onCancel={handleClose}
-                isSubmitting={isSubmitting}
-                serverErrors={serverErrors}
-              />
+              <>
+                <QuoteForm
+                  mode="edit"
+                  initialData={getInitialData()}
+                  customers={masterData.customers}
+                  products={masterData.products}
+                  salesReps={masterData.salesReps}
+                  onSubmit={handleSubmit}
+                  onCancel={handleClose}
+                  isSubmitting={isSubmitting}
+                  serverErrors={serverErrors}
+                />
+
+                {/* PO Document Viewer */}
+                {quote.poDocumentUrl && poDocumentUrl && (
+                  <Card className="mt-6">
+                    <CardHeader className="pb-3 pt-4 px-4">
+                      <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        PO Document
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-4 pb-4 pt-0">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm text-muted-foreground">
+                            Purchase Order document attached to this quote
+                          </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            type="button"
+                            onClick={() => window.open(poDocumentUrl, '_blank')}
+                          >
+                            <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                            Open in New Tab
+                          </Button>
+                        </div>
+                        <div className="rounded-lg border overflow-hidden bg-muted/20">
+                          <iframe
+                            src={poDocumentUrl}
+                            className="w-full h-[400px]"
+                            title="PO Document"
+                          />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
             ) : (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <p className="text-muted-foreground mb-4">

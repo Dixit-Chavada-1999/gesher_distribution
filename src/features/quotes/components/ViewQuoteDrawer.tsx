@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Loader2, MapPin, FileText, Calendar, User, Building2, ArrowRight } from 'lucide-react';
+import { Loader2, MapPin, FileText, Calendar, User, Building2, ArrowRight, ExternalLink } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { useAuthStore } from '@/shared/stores';
@@ -31,7 +31,7 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 
-import { getQuote } from '../actions';
+import { getQuote, getPODocumentSignedUrl } from '../actions';
 import type { QuoteWithItems } from '../types';
 import { QUOTE_STATUS_LABELS, QUOTE_STATUS_COLORS } from '../types';
 
@@ -48,6 +48,10 @@ interface ViewQuoteDrawerProps {
   onSubmitForApproval?: (quote: QuoteWithItems) => void;
   onApprove?: (quote: QuoteWithItems) => void;
   onReject?: (quote: QuoteWithItems) => void;
+  isConverting?: boolean;
+  isSubmitting?: boolean;
+  isApproving?: boolean;
+  isRejecting?: boolean;
 }
 
 // ============================================
@@ -148,6 +152,10 @@ export function ViewQuoteDrawer({
   onSubmitForApproval,
   onApprove,
   onReject,
+  isConverting = false,
+  isSubmitting = false,
+  isApproving = false,
+  isRejecting = false,
 }: ViewQuoteDrawerProps) {
   const { hasPermission } = useAuthStore();
 
@@ -177,10 +185,26 @@ export function ViewQuoteDrawer({
   const [quote, setQuote] = useState<QuoteWithItems | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [poDocumentUrl, setPoDocumentUrl] = useState<string | null>(null);
 
   // ----------------------------------------
   // EFFECTS
   // ----------------------------------------
+
+  // Fetch signed URL for PO document when quote has one
+  useEffect(() => {
+    const fetchPoDocumentUrl = async () => {
+      if (quote?.poDocumentUrl) {
+        const result = await getPODocumentSignedUrl(quote.poDocumentUrl);
+        if (result.success && result.data) {
+          setPoDocumentUrl(result.data.url);
+        }
+      } else {
+        setPoDocumentUrl(null);
+      }
+    };
+    fetchPoDocumentUrl();
+  }, [quote?.poDocumentUrl]);
 
   useEffect(() => {
     if (open && quoteId) {
@@ -266,7 +290,7 @@ export function ViewQuoteDrawer({
     <Sheet open={open} onOpenChange={onClose}>
       <SheetContent
         side="right"
-        className="flex w-full flex-col p-0 sm:max-w-[600px] md:max-w-[700px]"
+        className="flex w-full flex-col p-0 sm:max-w-[700px] md:max-w-[850px] lg:max-w-[950px]"
       >
         {/* Header */}
         <SheetHeader className="flex-shrink-0 border-b px-6 py-4">
@@ -455,6 +479,34 @@ export function ViewQuoteDrawer({
                   </Section>
                 )}
 
+                {/* PO Document */}
+                {quote.poDocumentUrl && poDocumentUrl && (
+                  <Section title="PO Document">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-muted-foreground">
+                          Purchase Order document attached to this quote
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(poDocumentUrl, '_blank')}
+                        >
+                          <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                          Open in New Tab
+                        </Button>
+                      </div>
+                      <div className="rounded-lg border overflow-hidden bg-muted/20">
+                        <iframe
+                          src={poDocumentUrl}
+                          className="w-full h-[500px]"
+                          title="PO Document"
+                        />
+                      </div>
+                    </div>
+                  </Section>
+                )}
+
                 {/* Conversion Info */}
                 {quote.status === 'converted' && quote.salesOrder && (
                   <Section title="Conversion" className="border-teal-500/50">
@@ -483,23 +535,51 @@ export function ViewQuoteDrawer({
                 Close
               </Button>
               {canApproveReject && onReject && (
-                <Button variant="destructive" onClick={handleReject}>
-                  Reject
+                <Button variant="destructive" onClick={handleReject} disabled={isRejecting}>
+                  {isRejecting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Rejecting...
+                    </>
+                  ) : (
+                    'Reject'
+                  )}
                 </Button>
               )}
               {canApproveReject && onApprove && (
-                <Button variant="default" onClick={handleApprove}>
-                  Approve
+                <Button variant="default" onClick={handleApprove} disabled={isApproving}>
+                  {isApproving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Approving...
+                    </>
+                  ) : (
+                    'Approve'
+                  )}
                 </Button>
               )}
               {canSubmitForApproval && onSubmitForApproval && (
-                <Button variant="secondary" onClick={handleSubmitForApproval}>
-                  Submit for Approval
+                <Button variant="secondary" onClick={handleSubmitForApproval} disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    'Submit for Approval'
+                  )}
                 </Button>
               )}
               {canConvert && onConvert && (
-                <Button variant="secondary" onClick={handleConvert}>
-                  Convert to Order
+                <Button variant="secondary" onClick={handleConvert} disabled={isConverting}>
+                  {isConverting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Converting...
+                    </>
+                  ) : (
+                    'Convert to Order'
+                  )}
                 </Button>
               )}
               {canEdit && onEdit && (

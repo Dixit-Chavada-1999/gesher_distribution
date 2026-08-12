@@ -95,6 +95,7 @@ function toTableRow(product: Product): ProductTableRow {
     sku: product.sku,
     name: product.name,
     category: product.category,
+    itemType: product.itemType,
     baseCost: product.baseCost,
     basePrice: product.basePrice,
     formattedBaseCost: formatPrice(product.baseCost),
@@ -233,8 +234,8 @@ export const productService = {
         };
       }
 
-      // Validate business rules
-      if (data.basePrice < data.baseCost) {
+      // Validate business rules (only if baseCost is provided)
+      if (data.baseCost !== null && data.basePrice < data.baseCost) {
         return {
           success: false,
           error: 'Price cannot be less than cost',

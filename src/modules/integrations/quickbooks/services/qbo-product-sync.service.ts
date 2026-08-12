@@ -40,8 +40,8 @@ function mapProductToQboFormat(product: Product): AccountingProduct {
     sku: product.sku,
     description: product.description || undefined,
     unitPrice: product.basePrice, // Already in cents, will be converted in provider
-    // Tires are physical products, not services
-    type: 'non_inventory', // Using non_inventory as we don't track inventory in QBO
+    // Use product's item type - maps directly to QBO types: inventory, non_inventory, service
+    type: product.itemType || 'non_inventory',
     active: product.status === 'active',
     metadata: {
       gesherProductId: product.id,

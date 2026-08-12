@@ -108,6 +108,7 @@ export const createQuoteSchema = z.object({
   customerNotes: z.string().nullable().optional(),
   internalNotes: z.string().nullable().optional(),
   termsAndConditions: z.string().nullable().optional(),
+  poDocumentUrl: z.string().nullable().optional(),
 });
 
 export const updateQuoteSchema = z.object({

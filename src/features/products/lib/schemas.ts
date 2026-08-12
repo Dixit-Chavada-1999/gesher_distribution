@@ -14,6 +14,11 @@ import { z } from 'zod';
 export const productStatusSchema = z.enum(['active', 'inactive', 'discontinued']);
 
 /**
+ * Product item type enum
+ */
+export const productItemTypeSchema = z.enum(['inventory', 'non_inventory', 'service']);
+
+/**
  * SKU format validation (uppercase alphanumeric with hyphens)
  */
 export const skuSchema = z
@@ -65,11 +70,13 @@ export const createProductSchema = z.object({
     .max(10000, 'Weight too large')
     .optional()
     .nullable(),
-  baseCost: priceInCentsSchema,
+  baseCost: priceInCentsSchema.default(0),
   basePrice: priceInCentsSchema,
   status: productStatusSchema.default('active'),
+  itemType: productItemTypeSchema.default('inventory'),
   isSellable: z.boolean().default(true),
   imageUrl: z.string().url('Invalid image URL').optional().nullable().or(z.literal('')),
+  supplierId: z.string().uuid().optional().nullable(),
 });
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;
@@ -99,8 +106,10 @@ export const updateProductSchema = z.object({
   baseCost: priceInCentsSchema.optional(),
   basePrice: priceInCentsSchema.optional(),
   status: productStatusSchema.optional(),
+  itemType: productItemTypeSchema.optional(),
   isSellable: z.boolean().optional(),
   imageUrl: z.string().url('Invalid image URL').optional().nullable().or(z.literal('')),
+  supplierId: z.string().uuid().optional().nullable(),
 });
 
 export type UpdateProductInput = z.infer<typeof updateProductSchema>;
@@ -146,8 +155,10 @@ export const productFormSchema = z.object({
       'Price must be a valid positive number'
     ),
   status: productStatusSchema,
+  itemType: productItemTypeSchema,
   isSellable: z.boolean(),
   imageUrl: z.string().url('Invalid image URL').optional().or(z.literal('')),
+  supplierId: z.string().optional(), // Empty string = no supplier
 });
 
 export type ProductFormInput = z.infer<typeof productFormSchema>;
@@ -194,8 +205,10 @@ export function formToCreateDTO(values: ProductFormInput): CreateProductInput {
     baseCost: Math.round(parseFloat(values.baseCost.replace(/[^0-9.]/g, '')) * 100),
     basePrice: Math.round(parseFloat(values.basePrice.replace(/[^0-9.]/g, '')) * 100),
     status: values.status,
+    itemType: values.itemType,
     isSellable: values.isSellable,
     imageUrl: values.imageUrl || null,
+    supplierId: values.supplierId || null,
   };
 }
 
@@ -214,8 +227,10 @@ export function productToFormValues(product: {
   baseCost: number;
   basePrice: number;
   status: 'active' | 'inactive' | 'discontinued';
+  itemType: 'inventory' | 'non_inventory' | 'service';
   isSellable: boolean;
   imageUrl: string | null;
+  supplierId?: string | null;
 }): ProductFormInput {
   return {
     sku: product.sku,
@@ -229,7 +244,9 @@ export function productToFormValues(product: {
     baseCost: (product.baseCost / 100).toFixed(2),
     basePrice: (product.basePrice / 100).toFixed(2),
     status: product.status,
+    itemType: product.itemType,
     isSellable: product.isSellable,
     imageUrl: product.imageUrl || '',
+    supplierId: product.supplierId || '',
   };
 }

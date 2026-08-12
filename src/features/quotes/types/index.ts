@@ -96,6 +96,9 @@ export interface Quote {
   internalNotes: string | null;
   termsAndConditions: string | null;
 
+  // PO Document
+  poDocumentUrl: string | null;
+
   // Chain Link
   convertedToSalesOrderId: string | null;
   convertedAt: Date | null;
@@ -210,6 +213,7 @@ export interface CreateQuoteDTO {
   customerNotes?: string | null;
   internalNotes?: string | null;
   termsAndConditions?: string | null;
+  poDocumentUrl?: string | null;
 }
 
 export interface UpdateQuoteDTO {

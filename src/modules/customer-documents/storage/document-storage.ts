@@ -1,18 +1,19 @@
 /**
  * Document Storage Service
  *
- * Handles file uploads, downloads, and signed URLs for customer documents.
- * Uses Supabase Storage.
+ * Handles file uploads, downloads for customer documents.
+ * Uses local server storage (uploads folder).
  */
 
-import { db } from '@/shared/lib/supabase/database';
+import { writeFile, mkdir, readFile, stat, unlink, readdir } from 'fs/promises';
+import { existsSync } from 'fs';
+import path from 'path';
 
 // ============================================
 // CONSTANTS
 // ============================================
 
-const BUCKET_NAME = 'customer-documents';
-const SIGNED_URL_EXPIRY = 60 * 60; // 1 hour in seconds
+const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'customer-documents');
 
 // ============================================
 // TYPES
@@ -31,6 +32,15 @@ export interface StorageError {
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
+
+/**
+ * Ensure upload directory exists
+ */
+async function ensureDir(dirPath: string): Promise<void> {
+  if (!existsSync(dirPath)) {
+    await mkdir(dirPath, { recursive: true });
+  }
+}
 
 /**
  * Generate storage path for a document
@@ -65,22 +75,26 @@ export async function uploadFile(
   file: File,
   storagePath: string
 ): Promise<UploadResult> {
-  const { data, error } = await db.storage
-    .from(BUCKET_NAME)
-    .upload(storagePath, file, {
-      cacheControl: '3600',
-      upsert: false,
-    });
+  try {
+    const fullPath = path.join(UPLOAD_DIR, storagePath);
+    const dirPath = path.dirname(fullPath);
 
-  if (error) {
+    // Ensure directory exists
+    await ensureDir(dirPath);
+
+    // Convert File to Buffer and write
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    await writeFile(fullPath, buffer);
+
+    return {
+      path: storagePath,
+      fullPath: `customer-documents/${storagePath}`,
+    };
+  } catch (error) {
     console.error('Storage upload error:', error);
-    throw new Error(`Failed to upload file: ${error.message}`);
+    throw new Error(`Failed to upload file: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
-
-  return {
-    path: data.path,
-    fullPath: `${BUCKET_NAME}/${data.path}`,
-  };
 }
 
 /**
@@ -89,100 +103,84 @@ export async function uploadFile(
 export async function uploadFileBuffer(
   buffer: Buffer,
   storagePath: string,
-  mimeType: string
+  _mimeType: string
 ): Promise<UploadResult> {
-  const { data, error } = await db.storage
-    .from(BUCKET_NAME)
-    .upload(storagePath, buffer, {
-      contentType: mimeType,
-      cacheControl: '3600',
-      upsert: false,
-    });
+  try {
+    const fullPath = path.join(UPLOAD_DIR, storagePath);
+    const dirPath = path.dirname(fullPath);
 
-  if (error) {
+    // Ensure directory exists
+    await ensureDir(dirPath);
+
+    // Write buffer to file
+    await writeFile(fullPath, buffer);
+
+    return {
+      path: storagePath,
+      fullPath: `customer-documents/${storagePath}`,
+    };
+  } catch (error) {
     console.error('Storage upload error:', error);
-    throw new Error(`Failed to upload file: ${error.message}`);
+    throw new Error(`Failed to upload file: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
-
-  return {
-    path: data.path,
-    fullPath: `${BUCKET_NAME}/${data.path}`,
-  };
 }
 
 /**
- * Get a signed URL for downloading/viewing a file
+ * Get URL for downloading/viewing a file
+ * Returns API endpoint URL for serving the file
  */
 export async function getSignedUrl(
   storagePath: string,
-  expiresIn: number = SIGNED_URL_EXPIRY
+  _expiresIn?: number
 ): Promise<string> {
-  const { data, error } = await db.storage
-    .from(BUCKET_NAME)
-    .createSignedUrl(storagePath, expiresIn);
-
-  if (error) {
-    console.error('Signed URL error:', error);
-    throw new Error(`Failed to create signed URL: ${error.message}`);
-  }
-
-  return data.signedUrl;
+  // Return API endpoint URL
+  return `/api/documents/file?path=${encodeURIComponent(storagePath)}`;
 }
 
 /**
- * Get signed URLs for multiple files
+ * Get URLs for multiple files
  */
 export async function getSignedUrls(
   storagePaths: string[],
-  expiresIn: number = SIGNED_URL_EXPIRY
+  _expiresIn?: number
 ): Promise<Record<string, string>> {
-  const { data, error } = await db.storage
-    .from(BUCKET_NAME)
-    .createSignedUrls(storagePaths, expiresIn);
-
-  if (error) {
-    console.error('Signed URLs error:', error);
-    throw new Error(`Failed to create signed URLs: ${error.message}`);
-  }
-
   const urlMap: Record<string, string> = {};
-  data.forEach((item) => {
-    if (item.signedUrl && item.path) {
-      urlMap[item.path] = item.signedUrl;
-    }
-  });
+
+  for (const storagePath of storagePaths) {
+    urlMap[storagePath] = `/api/documents/file?path=${encodeURIComponent(storagePath)}`;
+  }
 
   return urlMap;
 }
 
 /**
- * Download a file
+ * Download a file - returns file buffer
  */
-export async function downloadFile(storagePath: string): Promise<Blob> {
-  const { data, error } = await db.storage
-    .from(BUCKET_NAME)
-    .download(storagePath);
+export async function downloadFile(storagePath: string): Promise<Buffer> {
+  try {
+    const fullPath = path.join(UPLOAD_DIR, storagePath);
 
-  if (error) {
+    // Check if file exists
+    await stat(fullPath);
+
+    // Read and return file
+    return await readFile(fullPath);
+  } catch (error) {
     console.error('Download error:', error);
-    throw new Error(`Failed to download file: ${error.message}`);
+    throw new Error(`Failed to download file: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
-
-  return data;
 }
 
 /**
  * Delete a file from storage
- * Note: Generally we don't hard delete - use for cleanup only
  */
 export async function deleteFile(storagePath: string): Promise<void> {
-  const { error } = await db.storage
-    .from(BUCKET_NAME)
-    .remove([storagePath]);
-
-  if (error) {
+  try {
+    const fullPath = path.join(UPLOAD_DIR, storagePath);
+    await unlink(fullPath);
+  } catch (error) {
     console.error('Delete error:', error);
-    throw new Error(`Failed to delete file: ${error.message}`);
+    throw new Error(`Failed to delete file: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
@@ -190,15 +188,18 @@ export async function deleteFile(storagePath: string): Promise<void> {
  * Delete multiple files from storage
  */
 export async function deleteFiles(storagePaths: string[]): Promise<void> {
-  if (storagePaths.length === 0) {return;}
+  if (storagePaths.length === 0) {
+    return;
+  }
 
-  const { error } = await db.storage
-    .from(BUCKET_NAME)
-    .remove(storagePaths);
-
-  if (error) {
-    console.error('Delete files error:', error);
-    throw new Error(`Failed to delete files: ${error.message}`);
+  for (const storagePath of storagePaths) {
+    try {
+      const fullPath = path.join(UPLOAD_DIR, storagePath);
+      await unlink(fullPath);
+    } catch (error) {
+      console.error(`Delete error for ${storagePath}:`, error);
+      // Continue deleting other files even if one fails
+    }
   }
 }
 
@@ -206,35 +207,53 @@ export async function deleteFiles(storagePaths: string[]): Promise<void> {
  * List files in a customer's folder
  */
 export async function listCustomerFiles(customerId: string): Promise<string[]> {
-  const { data, error } = await db.storage
-    .from(BUCKET_NAME)
-    .list(customerId, {
-      limit: 100,
-      sortBy: { column: 'created_at', order: 'desc' },
-    });
+  try {
+    const customerDir = path.join(UPLOAD_DIR, customerId);
 
-  if (error) {
+    if (!existsSync(customerDir)) {
+      return [];
+    }
+
+    const files: string[] = [];
+
+    // Recursively list files
+    async function listDir(dir: string, prefix: string): Promise<void> {
+      const entries = await readdir(dir, { withFileTypes: true });
+
+      for (const entry of entries) {
+        const entryPath = prefix ? `${prefix}/${entry.name}` : entry.name;
+
+        if (entry.isDirectory()) {
+          await listDir(path.join(dir, entry.name), entryPath);
+        } else {
+          files.push(`${customerId}/${entryPath}`);
+        }
+      }
+    }
+
+    await listDir(customerDir, '');
+    return files;
+  } catch (error) {
     console.error('List files error:', error);
-    throw new Error(`Failed to list files: ${error.message}`);
+    throw new Error(`Failed to list files: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
-
-  return data.map((file) => `${customerId}/${file.name}`);
 }
 
 /**
- * Check if bucket exists and is accessible
+ * Check if storage directory exists and is accessible
  */
 export async function checkBucketAccess(): Promise<boolean> {
   try {
-    const { error } = await db.storage.getBucket(BUCKET_NAME);
-    return !error;
+    await ensureDir(UPLOAD_DIR);
+    return true;
   } catch {
     return false;
   }
 }
 
 // ============================================
-// EXPORT BUCKET NAME
+// EXPORT CONSTANTS
 // ============================================
 
-export { BUCKET_NAME, SIGNED_URL_EXPIRY };
+export const BUCKET_NAME = 'customer-documents';
+export const SIGNED_URL_EXPIRY = 60 * 60; // 1 hour (kept for compatibility)

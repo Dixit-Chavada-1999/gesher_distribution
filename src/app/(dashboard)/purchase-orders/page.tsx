@@ -33,6 +33,8 @@ import {
 import {
   PurchaseOrdersTable,
   ViewPurchaseOrderDrawer,
+  CreatePurchaseOrderDrawer,
+  EditPurchaseOrderDrawer,
   usePurchaseOrders,
 } from '@/features/purchase-orders';
 import { deletePurchaseOrder } from '@/features/purchase-orders/actions';
@@ -46,6 +48,8 @@ export default function PurchaseOrdersPage() {
 
   // Drawer states
   const [isViewDrawerOpen, setIsViewDrawerOpen] = useState(false);
+  const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
+  const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
   const [selectedPOId, setSelectedPOId] = useState<string | null>(null);
 
   // Delete confirmation
@@ -73,7 +77,15 @@ export default function PurchaseOrdersPage() {
   // ----------------------------------------
 
   const handleCreateClick = () => {
-    toast.info('Create purchase order functionality coming soon');
+    setIsCreateDrawerOpen(true);
+  };
+
+  const handleCreateDrawerClose = () => {
+    setIsCreateDrawerOpen(false);
+  };
+
+  const handleCreateSuccess = () => {
+    refetchPOs();
   };
 
   const handleView = useCallback((po: POListItem) => {
@@ -86,9 +98,21 @@ export default function PurchaseOrdersPage() {
     setSelectedPOId(null);
   }, []);
 
-  const handleEdit = useCallback((_po: POListItem | PurchaseOrderWithItems) => {
-    toast.info('Edit purchase order functionality coming soon');
+  const handleEdit = useCallback((po: POListItem | PurchaseOrderWithItems) => {
+    setSelectedPOId(po.id);
+    setIsViewDrawerOpen(false);
+    setIsEditDrawerOpen(true);
   }, []);
+
+  const handleEditDrawerClose = useCallback(() => {
+    setIsEditDrawerOpen(false);
+    setSelectedPOId(null);
+    refetchPOs();
+  }, [refetchPOs]);
+
+  const handleEditSuccess = useCallback(() => {
+    refetchPOs();
+  }, [refetchPOs]);
 
   const handleDeleteClick = useCallback((po: POListItem) => {
     setPOToDelete(po);
@@ -194,6 +218,21 @@ export default function PurchaseOrdersPage() {
         open={isViewDrawerOpen}
         onClose={handleViewDrawerClose}
         onEdit={handleEdit}
+      />
+
+      {/* Create Purchase Order Drawer */}
+      <CreatePurchaseOrderDrawer
+        open={isCreateDrawerOpen}
+        onClose={handleCreateDrawerClose}
+        onSuccess={handleCreateSuccess}
+      />
+
+      {/* Edit Purchase Order Modal */}
+      <EditPurchaseOrderDrawer
+        poId={selectedPOId || ''}
+        open={isEditDrawerOpen}
+        onClose={handleEditDrawerClose}
+        onSuccess={handleEditSuccess}
       />
 
       {/* Delete Confirmation Dialog */}

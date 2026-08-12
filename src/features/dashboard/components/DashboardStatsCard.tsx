@@ -41,6 +41,11 @@ export function DashboardStatsCard({ stat }: DashboardStatsCardProps) {
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">{stat.value}</div>
+        {stat.subtitle && (
+          <div className="text-xs text-muted-foreground mt-0.5">
+            {stat.subtitle}
+          </div>
+        )}
         <div className="mt-1 flex items-center gap-1 text-xs">
           {isUp ? (
             <ArrowUpRight className="h-3 w-3 text-emerald-500" />
@@ -51,6 +56,12 @@ export function DashboardStatsCard({ stat }: DashboardStatsCardProps) {
             {stat.change}
           </span>
           <span className="text-muted-foreground">from last month</span>
+          {stat.target && (
+            <>
+              <span className="text-muted-foreground mx-1">|</span>
+              <span className="text-muted-foreground">Target: {stat.target}</span>
+            </>
+          )}
         </div>
       </CardContent>
     </Card>

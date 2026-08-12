@@ -19,7 +19,6 @@ import type {
   SalesOrderSummary,
   LocationSummary,
 } from '../types';
-import { DEFAULT_SUPPLIER } from '../types';
 import { calculatePOTotals, calculateLineTotal } from '../lib/schemas';
 
 // ============================================
@@ -31,8 +30,6 @@ interface DbPurchaseOrder {
   po_number: string;
   po_date: string;
   expected_delivery_date: string | null;
-  supplier_name: string;
-  supplier_contact: string;
   sales_order_id: string | null;
   warehouse_id: string | null;
   currency_code: string;
@@ -77,6 +74,8 @@ interface DbPOItem {
   tax_rate: number;
   line_total: number;
   sort_order: number;
+  supplier_id: string | null;
+  supplier_name: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -112,8 +111,6 @@ class PurchaseOrderRepositoryImpl {
         `
         id,
         po_number,
-        supplier_name,
-        supplier_contact,
         po_date,
         expected_delivery_date,
         status,
@@ -126,7 +123,7 @@ class PurchaseOrderRepositoryImpl {
       .is('deleted_at', null);
 
     if (search) {
-      query = query.or(`po_number.ilike.%${search}%,supplier_name.ilike.%${search}%`);
+      query = query.ilike('po_number', `%${search}%`);
     }
 
     if (status) {
@@ -167,10 +164,10 @@ class PurchaseOrderRepositoryImpl {
     const totalPages = Math.ceil(total / limit);
 
     const poIds = (data || []).map((row) => row.id);
-    const itemCounts = await this.getItemCounts(poIds);
+    const { counts: itemCounts, suppliers: itemSuppliers } = await this.getItemCountsAndSuppliers(poIds);
 
     return {
-      data: (data || []).map((row) => this.mapToListItem(row, itemCounts)),
+      data: (data || []).map((row) => this.mapToListItem(row, itemCounts, itemSuppliers)),
       meta: {
         total,
         page,
@@ -233,26 +230,45 @@ class PurchaseOrderRepositoryImpl {
   }
 
   /**
-   * Get item counts for multiple POs
+   * Get item counts and suppliers for multiple POs
    */
-  private async getItemCounts(poIds: string[]): Promise<Record<string, number>> {
-    if (poIds.length === 0) {return {};}
+  private async getItemCountsAndSuppliers(poIds: string[]): Promise<{
+    counts: Record<string, number>;
+    suppliers: Record<string, string[]>;
+  }> {
+    if (poIds.length === 0) {
+      return { counts: {}, suppliers: {} };
+    }
 
     const { data, error } = await db
       .from('purchase_order_items')
-      .select('purchase_order_id')
+      .select('purchase_order_id, supplier_name')
       .in('purchase_order_id', poIds);
 
     if (error) {
-      throw new Error(`Failed to fetch item counts: ${error.message}`);
+      throw new Error(`Failed to fetch item data: ${error.message}`);
     }
 
     const counts: Record<string, number> = {};
+    const suppliers: Record<string, Set<string>> = {};
+
     for (const row of data || []) {
       counts[row.purchase_order_id] = (counts[row.purchase_order_id] || 0) + 1;
+      if (row.supplier_name) {
+        if (!suppliers[row.purchase_order_id]) {
+          suppliers[row.purchase_order_id] = new Set();
+        }
+        suppliers[row.purchase_order_id]!.add(row.supplier_name);
+      }
     }
 
-    return counts;
+    // Convert Sets to arrays
+    const suppliersArrays: Record<string, string[]> = {};
+    for (const [poId, supplierSet] of Object.entries(suppliers)) {
+      suppliersArrays[poId] = Array.from(supplierSet);
+    }
+
+    return { counts, suppliers: suppliersArrays };
   }
 
   /**
@@ -281,8 +297,6 @@ class PurchaseOrderRepositoryImpl {
         po_number: poNumber,
         po_date: data.poDate.toISOString().split('T')[0],
         expected_delivery_date: data.expectedDeliveryDate?.toISOString().split('T')[0] || null,
-        supplier_name: data.supplierName || DEFAULT_SUPPLIER.name,
-        supplier_contact: data.supplierContact || DEFAULT_SUPPLIER.contact,
         sales_order_id: data.salesOrderId || null,
         warehouse_id: data.warehouseId || null,
         currency_code: data.currencyCode || 'USD',
@@ -326,6 +340,8 @@ class PurchaseOrderRepositoryImpl {
       tax_rate: item.taxRate,
       line_total: calculateLineTotal(item.quantityOrdered, item.unitPrice),
       sort_order: index,
+      supplier_id: item.supplierId || null,
+      supplier_name: item.supplierName || null,
       created_by: userId || null,
       updated_by: userId || null,
     }));
@@ -376,6 +392,15 @@ class PurchaseOrderRepositoryImpl {
     if (data.vendorNotes !== undefined) {updateData.vendor_notes = data.vendorNotes;}
     if (data.internalNotes !== undefined) {updateData.internal_notes = data.internalNotes;}
 
+    // If items are provided, recalculate totals
+    if (data.items && data.items.length > 0) {
+      const totals = calculatePOTotals(data.items, 0);
+      updateData.subtotal = totals.subtotal;
+      updateData.tax_total = totals.taxTotal;
+      updateData.shipping_cost = totals.shippingCost;
+      updateData.grand_total = totals.grandTotal;
+    }
+
     const { data: result, error } = await db
       .from('purchase_orders')
       .update(updateData)
@@ -387,7 +412,63 @@ class PurchaseOrderRepositoryImpl {
       throw new Error(`Failed to update purchase order: ${error.message}`);
     }
 
+    // Update items if provided
+    if (data.items && data.items.length > 0) {
+      await this.updateItems(id, data.items, userId);
+    }
+
     return this.mapToPurchaseOrder(result as DbPurchaseOrder);
+  }
+
+  /**
+   * Update items for a PO (delete and re-insert)
+   */
+  private async updateItems(
+    poId: string,
+    items: UpdatePurchaseOrderDTO['items'],
+    userId?: string
+  ): Promise<void> {
+    if (!items || items.length === 0) {
+      return;
+    }
+
+    // Delete existing items
+    const { error: deleteError } = await db
+      .from('purchase_order_items')
+      .delete()
+      .eq('purchase_order_id', poId);
+
+    if (deleteError) {
+      throw new Error(`Failed to delete existing PO items: ${deleteError.message}`);
+    }
+
+    // Insert new items
+    const itemsToInsert = items.map((item, index) => ({
+      purchase_order_id: poId,
+      product_id: item.productId,
+      sales_order_item_id: item.salesOrderItemId || null,
+      sku: item.sku,
+      description: item.description,
+      quantity_ordered: item.quantityOrdered,
+      quantity_received: 0,
+      unit_code: item.unitCode,
+      unit_price: item.unitPrice,
+      tax_rate: item.taxRate,
+      line_total: calculateLineTotal(item.quantityOrdered, item.unitPrice),
+      sort_order: index,
+      supplier_id: item.supplierId || null,
+      supplier_name: item.supplierName || null,
+      created_by: userId || null,
+      updated_by: userId || null,
+    }));
+
+    const { error: insertError } = await db
+      .from('purchase_order_items')
+      .insert(itemsToInsert);
+
+    if (insertError) {
+      throw new Error(`Failed to insert updated PO items: ${insertError.message}`);
+    }
   }
 
   /**
@@ -487,8 +568,6 @@ class PurchaseOrderRepositoryImpl {
       poNumber: data.po_number,
       poDate: new Date(data.po_date),
       expectedDeliveryDate: data.expected_delivery_date ? new Date(data.expected_delivery_date) : null,
-      supplierName: data.supplier_name,
-      supplierContact: data.supplier_contact,
       salesOrderId: data.sales_order_id,
       warehouseId: data.warehouse_id,
       currencyCode: data.currency_code,
@@ -535,6 +614,8 @@ class PurchaseOrderRepositoryImpl {
       taxRate: Number(data.tax_rate),
       lineTotal: data.line_total,
       sortOrder: data.sort_order,
+      supplierId: data.supplier_id,
+      supplierName: data.supplier_name,
       createdAt: new Date(data.created_at),
       updatedAt: new Date(data.updated_at),
       createdBy: data.created_by,
@@ -546,8 +627,6 @@ class PurchaseOrderRepositoryImpl {
     data: {
       id: string;
       po_number: string;
-      supplier_name: string;
-      supplier_contact: string;
       po_date: string;
       expected_delivery_date: string | null;
       status: POStatus;
@@ -555,13 +634,12 @@ class PurchaseOrderRepositoryImpl {
       currency_code: string;
       created_at: string;
     },
-    itemCounts: Record<string, number>
+    itemCounts: Record<string, number>,
+    itemSuppliers: Record<string, string[]>
   ): POListItem {
     return {
       id: data.id,
       poNumber: data.po_number,
-      supplierName: data.supplier_name,
-      supplierContact: data.supplier_contact,
       poDate: data.po_date,
       expectedDeliveryDate: data.expected_delivery_date,
       status: data.status,
@@ -569,6 +647,7 @@ class PurchaseOrderRepositoryImpl {
       currencyCode: data.currency_code,
       itemCount: itemCounts[data.id] || 0,
       createdAt: new Date(data.created_at),
+      suppliers: itemSuppliers[data.id] || [],
     };
   }
 }

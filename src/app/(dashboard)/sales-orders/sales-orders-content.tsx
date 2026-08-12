@@ -38,6 +38,10 @@ import {
   AlertDialogTitle,
 } from '@/shared/components/ui/alert-dialog';
 
+import { Loader2 } from 'lucide-react';
+import { Textarea } from '@/shared/components/ui/textarea';
+import { Label } from '@/shared/components/ui/label';
+
 import {
   SalesOrdersTable,
   CreateSalesOrderDrawer,
@@ -46,7 +50,7 @@ import {
   useSalesOrderMasterData,
   useSalesOrders,
 } from '@/features/sales-orders';
-import { deleteSalesOrder } from '@/features/sales-orders/actions';
+import { deleteSalesOrder, confirmSalesOrder, cancelSalesOrder } from '@/features/sales-orders/actions';
 import type { SalesOrderListItem, OrderStatus, OrderCreditStatus, SalesOrderWithItems } from '@/features/sales-orders/types';
 import { ORDER_STATUS_LABELS, ORDER_CREDIT_STATUS_LABELS } from '@/features/sales-orders/types';
 
@@ -91,6 +95,17 @@ export function SalesOrdersPageContent() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState<SalesOrderListItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Confirm order
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [orderToConfirm, setOrderToConfirm] = useState<SalesOrderListItem | null>(null);
+  const [isConfirming, setIsConfirming] = useState(false);
+
+  // Cancel order
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [orderToCancel, setOrderToCancel] = useState<SalesOrderListItem | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<OrderStatus | 'all'>('all');
@@ -191,6 +206,76 @@ export function SalesOrdersPageContent() {
     setOrderToDelete(null);
   };
 
+  // Confirm Order
+  const handleConfirmClick = useCallback((order: SalesOrderListItem) => {
+    setOrderToConfirm(order);
+    setConfirmDialogOpen(true);
+  }, []);
+
+  const handleConfirmOrder = async () => {
+    if (!orderToConfirm) {
+      return;
+    }
+
+    setIsConfirming(true);
+    try {
+      const result = await confirmSalesOrder(orderToConfirm.id);
+      if (result.success) {
+        toast.success(`Order ${orderToConfirm.orderNumber} confirmed`);
+        refetchOrders();
+      } else {
+        toast.error(result.error || 'Failed to confirm order');
+      }
+    } catch {
+      toast.error('Failed to confirm order');
+    } finally {
+      setIsConfirming(false);
+      setConfirmDialogOpen(false);
+      setOrderToConfirm(null);
+    }
+  };
+
+  const handleConfirmCancel = () => {
+    setConfirmDialogOpen(false);
+    setOrderToConfirm(null);
+  };
+
+  // Cancel Order
+  const handleCancelClick = useCallback((order: SalesOrderListItem) => {
+    setOrderToCancel(order);
+    setCancelDialogOpen(true);
+  }, []);
+
+  const handleCancelOrder = async () => {
+    if (!orderToCancel) {
+      return;
+    }
+
+    setIsCancelling(true);
+    try {
+      const result = await cancelSalesOrder(orderToCancel.id, cancelReason || undefined);
+      if (result.success) {
+        toast.success(`Order ${orderToCancel.orderNumber} cancelled`);
+        refetchOrders();
+      } else {
+        toast.error(result.error || 'Failed to cancel order');
+      }
+    } catch {
+      toast.error('Failed to cancel order');
+    } finally {
+      setIsCancelling(false);
+      setCancelDialogOpen(false);
+      setOrderToCancel(null);
+      setCancelReason('');
+    }
+  };
+
+  const handleCancelDialogClose = () => {
+    setCancelDialogOpen(false);
+    setOrderToCancel(null);
+    setCancelReason('');
+  };
+
   // Row click (opens view drawer)
   const handleRowClick = useCallback((order: SalesOrderListItem) => {
     handleView(order);
@@ -246,6 +331,8 @@ export function SalesOrdersPageContent() {
         onView={canViewDetail ? handleView : undefined}
         onEdit={canEdit ? handleEdit : undefined}
         onDelete={canDelete ? handleDeleteClick : undefined}
+        onConfirm={canEdit ? handleConfirmClick : undefined}
+        onCancel={canEdit ? handleCancelClick : undefined}
         toolbarContent={
           <div className="flex items-center gap-2">
             <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
@@ -324,6 +411,67 @@ export function SalesOrdersPageContent() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {isDeleting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirm Order Dialog */}
+      <AlertDialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Order?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will confirm order{' '}
+              <span className="font-semibold">{orderToConfirm?.orderNumber}</span>.
+              <br /><br />
+              Once confirmed, the order will be ready for processing and you can create a Purchase Order.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleConfirmCancel} disabled={isConfirming}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmOrder} disabled={isConfirming}>
+              {isConfirming && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Confirm Order
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Cancel Order Dialog */}
+      <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Order?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will cancel order{' '}
+              <span className="font-semibold">{orderToCancel?.orderNumber}</span>.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4">
+            <Label htmlFor="cancelReason">Cancellation Reason (optional)</Label>
+            <Textarea
+              id="cancelReason"
+              placeholder="Enter reason for cancellation..."
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              className="mt-2"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelDialogClose} disabled={isCancelling}>
+              Back
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancelOrder}
+              disabled={isCancelling}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isCancelling && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Cancel Order
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

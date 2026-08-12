@@ -17,6 +17,13 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { SalesOrderMasterData, Customer, Product, Warehouse, SalesRep } from '../types';
 import { getSalesOrderMasterData } from '../actions';
 import { MOCK_MASTER_DATA } from '../lib/mock-data';
+// Permanent configuration data (won't break if mock-data.ts is deleted)
+import {
+  SHIPPING_METHODS,
+  CURRENCIES,
+  UNITS,
+  TAX_RATES,
+} from '@/shared/lib/global-data';
 
 interface UseSalesOrderMasterDataResult {
   data: SalesOrderMasterData;
@@ -111,11 +118,12 @@ export function useSalesOrderMasterData(): UseSalesOrderMasterDataResult {
             name: u.name,
             email: u.email,
           })),
-          // Static data (could be fetched from API in the future)
-          currencies: MOCK_MASTER_DATA.currencies,
-          shippingMethods: MOCK_MASTER_DATA.shippingMethods,
-          units: MOCK_MASTER_DATA.units,
-          taxRates: MOCK_MASTER_DATA.taxRates,
+          // Permanent configuration from global-data.ts
+          // (Could be fetched from database in the future)
+          currencies: CURRENCIES,
+          shippingMethods: SHIPPING_METHODS,
+          units: UNITS,
+          taxRates: TAX_RATES,
         };
 
         cachedMasterData = masterData;

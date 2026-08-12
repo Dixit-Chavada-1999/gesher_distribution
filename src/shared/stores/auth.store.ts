@@ -32,6 +32,7 @@ export interface AppUser {
     isSystemRole: boolean;
   } | null;
   permissions: string[];
+  supplierId: string | null; // For supplier portal users
 }
 
 /**
@@ -206,7 +207,7 @@ export const useAuthStore = create<AuthStore>()(
     }),
     {
       name: 'auth-storage',
-      version: 2, // Increment when schema changes - clears old cached data
+      version: 3, // Increment when schema changes - clears old cached data
       storage: createJSONStorage(() => sessionStorage),
       partialize: (state) => ({
         // Only persist essential data
@@ -215,7 +216,7 @@ export const useAuthStore = create<AuthStore>()(
       }),
       migrate: (persistedState, version) => {
         // If version is old, return fresh state (clears old data)
-        if (version < 2) {
+        if (version < 3) {
           return { appUser: null, isAuthenticated: false };
         }
         return persistedState as { appUser: AppUser | null; isAuthenticated: boolean };
@@ -271,4 +272,18 @@ export const selectIsAdmin = (state: AuthStore): boolean => {
 export const selectIsSuperAdmin = (state: AuthStore): boolean => {
   const roleName = state.appUser?.role?.name?.toLowerCase().replace(/[_\s]/g, '');
   return state.appUser?.role?.isSystemRole === true || roleName === 'superadmin';
+};
+
+/**
+ * Select if user is a supplier portal user
+ */
+export const selectIsSupplier = (state: AuthStore): boolean => {
+  return state.appUser?.supplierId !== null && state.appUser?.supplierId !== undefined;
+};
+
+/**
+ * Select user's supplier ID
+ */
+export const selectSupplierId = (state: AuthStore): string | null => {
+  return state.appUser?.supplierId ?? null;
 };

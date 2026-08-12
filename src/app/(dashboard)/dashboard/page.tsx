@@ -1,15 +1,16 @@
 /**
  * Dashboard Page
  *
- * Modern professional dashboard with stats, charts, and activity.
- * Uses modular components from the dashboard feature module.
+ * Role-based dashboard rendering:
+ * - Operations Manager: Shows Jenny's Operations Dashboard
+ * - Other roles: Shows executive dashboard with KPIs, charts, and activity
  *
  * Permission-based rendering:
  * - dashboard.view_module: Access to dashboard page
- * - dashboard.view_analytics: Stats Grid (KPIs)
+ * - dashboard.view_analytics: Stats Grid (KPIs) and Charts
  * - dashboard.view_activity: Recent Activity list
- * - dashboard.view_sales: Sales-related stats (future)
- * - dashboard.export: Export functionality (future)
+ * - dashboard.view_financials: AR/AP summary (requires finance role)
+ * - dashboard.view_inventory: Inventory overview
  */
 
 import { Metadata } from 'next';
@@ -19,10 +20,24 @@ import {
   DashboardHeader,
   DashboardStatsGrid,
   DashboardActivityList,
+  DashboardChartsGrid,
+  InventoryOverview,
+  ARAPSummary,
+  // Mock data
   dashboardStats,
   recentActivities,
+  revenueChartData,
+  unitsBySKUData,
+  channelPerformanceData,
+  marginChartData,
+  inventoryByLocation,
+  arAgingData,
+  apSummaryData,
 } from '@/features/dashboard';
 import { getCurrentUser, hasPermission } from '@/shared/lib/auth';
+
+// Operations Dashboard imports
+import { OperationsDashboardContent } from './OperationsDashboardContent';
 
 // ============================================
 // METADATA
@@ -34,6 +49,28 @@ export const metadata: Metadata = {
 };
 
 // ============================================
+// HELPER FUNCTIONS
+// ============================================
+
+/**
+ * Check if user has Operations Manager role
+ */
+function isOperationsManager(roleName: string | undefined): boolean {
+  if (!roleName) {
+    return false;
+  }
+  const normalized = roleName.toLowerCase().replace(/[_\s]/g, '');
+  return normalized === 'operationsmanager' || normalized === 'operations';
+}
+
+/**
+ * Check if user is a supplier portal user
+ */
+function isSupplierUser(supplierId: string | null | undefined): boolean {
+  return supplierId !== null && supplierId !== undefined;
+}
+
+// ============================================
 // PAGE COMPONENT
 // ============================================
 
@@ -41,24 +78,62 @@ export default async function DashboardPage() {
   // Get current user with permissions for server-side checks
   const user = await getCurrentUser();
 
-  // Server-side module permission check
+  // Must be logged in
+  if (!user) {
+    redirect('/login');
+  }
+
+  // Check if user is a supplier FIRST - redirect to supplier portal
+  // This must happen before permission checks since suppliers don't have dashboard permissions
+  if (isSupplierUser(user.supplierId)) {
+    redirect('/supplier-portal');
+  }
+
+  // Server-side module permission check (for non-supplier users)
   // If no permission for dashboard, redirect to no-permission page
-  if (!user || !hasPermission(user, 'dashboard.view_module')) {
+  if (!hasPermission(user, 'dashboard.view_module')) {
     redirect('/no-permission');
   }
 
-  // Permission checks for sub-sections
+  // Check if user is Operations Manager - show Operations Dashboard
+  if (isOperationsManager(user.role?.name)) {
+    return <OperationsDashboardContent />;
+  }
+
+  // Permission checks for sub-sections (for executive dashboard)
   const canViewAnalytics = hasPermission(user, 'dashboard.view_analytics');
   const canViewActivity = hasPermission(user, 'dashboard.view_activity');
+  const canViewFinancials = hasPermission(user, 'dashboard.view_financials');
+  const canViewInventory = hasPermission(user, 'dashboard.view_inventory');
 
   return (
     <div className="space-y-6">
       {/* Welcome Header */}
       <DashboardHeader />
 
-      {/* Stats Grid - requires dashboard.view_analytics */}
+      {/* KPI Stats Grid - requires dashboard.view_analytics */}
       {canViewAnalytics && (
         <DashboardStatsGrid stats={dashboardStats} />
+      )}
+
+      {/* Charts Grid - requires dashboard.view_analytics */}
+      {canViewAnalytics && (
+        <DashboardChartsGrid
+          revenueData={revenueChartData}
+          unitsData={unitsBySKUData}
+          channelData={channelPerformanceData}
+          marginData={marginChartData}
+        />
+      )}
+
+      {/* Financial Section - requires dashboard.view_financials */}
+      {canViewFinancials && (
+        <ARAPSummary arData={arAgingData} apData={apSummaryData} />
+      )}
+
+      {/* Inventory Overview - requires dashboard.view_inventory */}
+      {canViewInventory && (
+        <InventoryOverview byLocation={inventoryByLocation} />
       )}
 
       {/* Recent Activity - requires dashboard.view_activity */}

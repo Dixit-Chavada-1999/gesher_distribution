@@ -175,6 +175,11 @@ function PipedriveCardComponent() {
               value={domain}
               onChange={(event) => setDomain(event.target.value)}
               autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              data-form-type="other"
+              data-lpignore="true"
             />
             <p className="text-xs text-muted-foreground">
               Found in your Pipedrive URL.
@@ -191,7 +196,12 @@ function PipedriveCardComponent() {
                 value={token}
                 onChange={(event) => setToken(event.target.value)}
                 className="font-mono"
-                autoComplete="off"
+                autoComplete="new-password"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-form-type="other"
+                data-lpignore="true"
               />
               <Button
                 type="button"

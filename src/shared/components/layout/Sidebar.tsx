@@ -19,16 +19,18 @@ import {
   X,
   LogOut,
   ChevronRight,
+  Inbox,
   // Only used by the hidden Permissions entry — uncomment with it.
   // Key,
   Package,
   MapPin,
   Building2,
   // DollarSign,
-  FileSignature,
-  ClipboardList,
-  // Truck, // Uncomment when Shipments module is enabled
+FileSignature,
+  ClipboardList, // Purchase Orders
+  Truck, // Operations dashboard
   // Receipt, // Uncomment when Invoices module is enabled
+  Factory, // Suppliers
 } from 'lucide-react';
 
 import { cn } from '@/shared/lib/utils';
@@ -48,6 +50,13 @@ const NAV_SECTIONS = [
         href: '/dashboard',
         icon: LayoutDashboard,
         permission: 'dashboard.view_module',
+      },
+      {
+        id: 'inbox',
+        label: 'Inbox',
+        href: '/inbox',
+        icon: Inbox,
+        permission: 'quotes.view_module', // Uses quotes permission for now
       },
     ],
   },
@@ -77,6 +86,13 @@ const NAV_SECTIONS = [
         href: '/customers',
         icon: Building2,
         permission: 'customers.view_module',
+      },
+      {
+        id: 'suppliers',
+        label: 'Suppliers',
+        href: '/suppliers',
+        icon: Factory,
+        permission: 'suppliers.view_module',
       },
   //     {
   //       id: 'pricing',
@@ -113,6 +129,18 @@ const NAV_SECTIONS = [
       // },
     ],
   },
+{
+    title: 'Operations',
+    items: [
+      {
+        id: 'operations',
+        label: 'Operations',
+        href: '/operations',
+        icon: Truck,
+        permission: 'dashboard.view_module', // Uses dashboard permission for now
+      },
+    ],
+  },
   {
     title: 'Procurement',
     items: [
@@ -123,10 +151,12 @@ const NAV_SECTIONS = [
         icon: ClipboardList,
         permission: 'purchase_orders.view_module',
       },
-    ],
+],
   },
+  // Shipments section is temporarily hidden from the sidebar.
+  // Uncomment this block when Shipments module is enabled.
   // {
-  //   title: 'Operations',
+  //   title: 'Shipments',
   //   items: [
   //     {
   //       id: 'shipments',

@@ -269,8 +269,8 @@ function QuickBooksCardComponent() {
         <div className="flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
           <p className="text-sm text-amber-900">
-            You&apos;ll be redirected to Intuit to authorise access. Nothing posts to
-            QuickBooks until Ankur signs off on the chart-of-accounts mapping.
+            You&apos;ll be redirected to Intuit to authorize access. Your data will sync
+            automatically once connected.
           </p>
         </div>
       </IntegrationCard>

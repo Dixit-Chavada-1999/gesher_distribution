@@ -142,7 +142,7 @@ export function useProducts(params: ProductListParams = {}, initialData?: unknow
   return {
     products: query.data?.products ?? [],
     meta: query.data?.meta ?? null,
-    loading: query.isLoading,
+    loading: query.isLoading || query.isFetching,
     error: query.error?.message ?? null,
     refetch,
   };

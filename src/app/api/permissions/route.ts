@@ -16,7 +16,7 @@ import type { RoleScope } from '@/features/roles/types';
 
 const querySchema = z.object({
   search: z.string().optional(),
-  permissionType: z.enum(['user', 'customer']).optional(),
+  permissionType: z.enum(['user', 'customer', 'supplier']).optional(),
   groupName: z.string().optional(),
   grouped: z
     .string()

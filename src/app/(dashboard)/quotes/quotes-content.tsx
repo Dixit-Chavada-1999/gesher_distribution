@@ -13,7 +13,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { Plus, RefreshCw } from 'lucide-react';
+import { Plus, RefreshCw, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -43,15 +43,21 @@ import {
   CreateQuoteDrawer,
   EditQuoteDrawer,
   useQuotes,
+  UploadPODialog,
 } from '@/features/quotes';
 import { ApproveQuoteDialog } from '@/features/quotes/components/ApproveQuoteDialog';
 import {
   deleteQuote,
   convertQuoteToSalesOrder,
   submitQuoteForApproval,
+  createQuoteFromData,
+  findOrCreateCustomerFromPO,
+  findOrCreateProductFromPO,
+  savePOExtraction,
 } from '@/features/quotes/actions';
 import type { QuoteListItem, QuoteStatus, QuoteWithItems } from '@/features/quotes/types';
 import { QUOTE_STATUS_LABELS } from '@/features/quotes/types';
+import type { ProcessedPOData } from '@/features/quotes/types/po-extract.types';
 
 // ============================================
 // COMPONENT
@@ -92,6 +98,9 @@ export function QuotesPageContent() {
   const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
   const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
 
+  // Upload PO dialog state
+  const [isUploadPODialogOpen, setIsUploadPODialogOpen] = useState(false);
+
   // Delete confirmation
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [quoteToDelete, setQuoteToDelete] = useState<QuoteListItem | null>(null);
@@ -127,6 +136,248 @@ export function QuotesPageContent() {
   );
 
   // ----------------------------------------
+  // SHARED PO PROCESSING FUNCTION
+  // ----------------------------------------
+
+  const processExtractedPOData = useCallback(async (data: ProcessedPOData) => {
+    try {
+      // Step 1: Find or create customer
+      let customerId = data.customer.customerId;
+      let customerCreated = false;
+
+      if (!data.customer.matched || !customerId) {
+        // Customer not matched - try to find or create
+        const customerName = data.extraction.customer?.name;
+
+        if (!customerName) {
+          toast.error('No customer name found in PO. Please create the quote manually.');
+          return;
+        }
+
+        const customerResult = await findOrCreateCustomerFromPO(
+          customerName,
+          data.extraction.customer?.address,
+          data.extraction.customer?.city,
+          data.extraction.customer?.state,
+          data.extraction.customer?.zip
+        );
+
+        if (!customerResult.success || !customerResult.data) {
+          toast.error(customerResult.error || 'Failed to find or create customer');
+          return;
+        }
+
+        customerId = customerResult.data.customerId;
+        customerCreated = customerResult.data.created;
+
+        if (customerCreated) {
+          toast.info(`New customer "${customerResult.data.customerName}" created`);
+        }
+      }
+
+      // Step 2: Process ALL products - find or create unmatched ones
+      const quoteItems: Array<{
+        productId: string;
+        sku: string;
+        description: string | null;
+        quantity: number;
+        unitCode: string;
+        unitPrice: number;
+        discountPercent: number;
+        taxRate: number;
+      }> = [];
+
+      let productsCreated = 0;
+
+      for (const product of data.products) {
+        if (product.matched && product.productId) {
+          // Product already matched - use it directly
+          quoteItems.push({
+            productId: product.productId,
+            sku: product.sku,
+            description: product.description || null,
+            quantity: product.quantity,
+            unitCode: 'EA',
+            unitPrice: product.unitPrice || Math.round(product.extractedUnitPrice * 100),
+            discountPercent: 0,
+            taxRate: 0,
+          });
+        } else {
+          // Product not matched - find or create
+          const extractedItem = data.extraction.lineItems.find(
+            (item) => item.description === product.description
+          );
+
+          const productResult = await findOrCreateProductFromPO(
+            product.sku || null,
+            product.description,
+            extractedItem?.tireSize || extractedItem?.vendorItemNo || null,
+            product.extractedUnitPrice,
+            product.baseCost ?? null // Pass base cost if provided during edit
+          );
+
+          if (productResult.success && productResult.data) {
+            quoteItems.push({
+              productId: productResult.data.productId,
+              sku: productResult.data.sku,
+              description: product.description || null,
+              quantity: product.quantity,
+              unitCode: 'EA',
+              unitPrice: productResult.data.unitPrice,
+              discountPercent: 0,
+              taxRate: 0,
+            });
+
+            if (productResult.data.created) {
+              productsCreated++;
+            }
+          } else {
+            // Failed to create product - log detailed error
+            console.error('Failed to process product:', {
+              sku: product.sku,
+              description: product.description,
+              error: productResult.error,
+              fullResult: productResult,
+            });
+            toast.error(`Failed to process product ${product.sku}: ${productResult.error}`);
+          }
+        }
+      }
+
+      if (quoteItems.length === 0) {
+        toast.error('No products could be processed. Please create the quote manually.');
+        return;
+      }
+
+      if (productsCreated > 0) {
+        toast.info(`${productsCreated} new product(s) created`);
+      }
+
+      // Step 3: Transform extracted data to quote format
+      const quoteData = {
+        quoteDate: data.extraction.poDate
+          ? new Date(data.extraction.poDate)
+          : new Date(),
+        validUntil: null,
+        customerId,
+        salesRepId: null,
+        currencyCode: 'USD',
+        status: 'draft' as const,
+        billingAddress: {
+          street: data.extraction.customer?.address || null,
+          city: data.extraction.customer?.city || null,
+          state: data.extraction.customer?.state || null,
+          postalCode: data.extraction.customer?.zip || null,
+          country: 'US',
+        },
+        shippingAddress: {
+          street: data.extraction.shipTo?.address || null,
+          city: data.extraction.shipTo?.city || null,
+          state: data.extraction.shipTo?.state || null,
+          postalCode: data.extraction.shipTo?.zip || null,
+          country: 'US',
+        },
+        items: quoteItems,
+        customerNotes: data.extraction.poNumber
+          ? `PO Reference: ${data.extraction.poNumber}`
+          : null,
+        internalNotes: `Created from PO upload. Extraction confidence: ${data.extraction.confidence}%${
+          customerCreated ? '. Customer was auto-created.' : ''
+        }${productsCreated > 0 ? `. ${productsCreated} product(s) auto-created.` : ''}`,
+        termsAndConditions: null,
+        poDocumentUrl: null, // Will be set after upload
+      };
+
+      // Step 4: Upload the PDF file if available
+      if (data.pdfFile) {
+        try {
+          const formData = new FormData();
+          formData.append('file', data.pdfFile);
+
+          const uploadResponse = await fetch('/api/po/upload', {
+            method: 'POST',
+            body: formData,
+          });
+
+          const uploadResult = await uploadResponse.json();
+
+          if (uploadResponse.ok && uploadResult.success) {
+            quoteData.poDocumentUrl = uploadResult.data.url;
+          } else {
+            console.error('Failed to upload PO document:', uploadResult.error);
+            // Continue without the document URL - don't fail the whole process
+          }
+        } catch (uploadError) {
+          console.error('Error uploading PO document:', uploadError);
+          // Continue without the document URL - don't fail the whole process
+        }
+      }
+
+      // Step 5: Create the quote
+      const result = await createQuoteFromData(quoteData);
+
+      if (result.success && result.data) {
+        // Step 6: Save extraction data to database
+        try {
+          const extractionResult = await savePOExtraction({
+            quoteId: result.data.id,
+            pdfFilename: data.pdfFile?.name,
+            pdfUrl: quoteData.poDocumentUrl || undefined,
+            confidence: data.extraction.confidence,
+            poNumber: data.extraction.poNumber,
+            poDate: data.extraction.poDate,
+            customer: data.extraction.customer,
+            shipTo: data.extraction.shipTo,
+            lineItems: data.extraction.lineItems.map((item) => ({
+              sku: item.sku,
+              description: item.description,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              tireSize: item.tireSize,
+            })),
+            matchedCustomer: {
+              customerId: customerId || null,
+              name: data.customer.name,
+              matched: data.customer.matched,
+            },
+            matchedProducts: data.products.map((p) => ({
+              productId: p.productId,
+              sku: p.sku,
+              name: p.name,
+              matched: p.matched,
+              quantity: p.quantity,
+              unitPrice: p.unitPrice,
+            })),
+            // Store complete raw extraction data
+            rawJson: {
+              extraction: data.extraction,
+              customer: data.customer,
+              products: data.products,
+              matchedCount: data.matchedCount,
+              unmatchedCount: data.unmatchedCount,
+            },
+          });
+
+          if (!extractionResult.success) {
+            console.error('Failed to save extraction data:', extractionResult.error);
+          }
+        } catch (extractionError) {
+          console.error('Error saving extraction data:', extractionError);
+          // Don't fail the whole process if extraction save fails
+        }
+
+        toast.success('Quote created from PO successfully');
+        refetchQuotes();
+      } else {
+        toast.error(result.error || 'Failed to create quote');
+      }
+    } catch (error) {
+      console.error('Create quote from PO error:', error);
+      toast.error('Failed to create quote from PO data');
+    }
+  }, [refetchQuotes]);
+
+  // ----------------------------------------
   // HANDLERS
   // ----------------------------------------
 
@@ -142,6 +393,20 @@ export function QuotesPageContent() {
   const handleCreateSuccess = useCallback(() => {
     refetchQuotes();
   }, [refetchQuotes]);
+
+  // Upload PO
+  const handleUploadPOClick = () => {
+    setIsUploadPODialogOpen(true);
+  };
+
+  const handleUploadPODialogClose = useCallback(() => {
+    setIsUploadPODialogOpen(false);
+  }, []);
+
+  // Wrapper for UploadPODialog that calls the shared processing function
+  const handleUploadPOSuccess = useCallback(async (data: ProcessedPOData) => {
+    await processExtractedPOData(data);
+  }, [processExtractedPOData]);
 
   // View
   const handleView = useCallback((quote: QuoteListItem) => {
@@ -315,10 +580,16 @@ export function QuotesPageContent() {
               <RefreshCw className={`h-4 w-4 ${isQuotesLoading ? 'animate-spin' : ''}`} />
             </Button>
             {canCreate && (
-              <Button onClick={handleCreateClick}>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Quote
-              </Button>
+              <>
+                <Button variant="outline" onClick={handleUploadPOClick}>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload PO
+                </Button>
+                <Button onClick={handleCreateClick}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Quote
+                </Button>
+              </>
             )}
           </div>
         }
@@ -327,7 +598,7 @@ export function QuotesPageContent() {
       {/* Quotes Table */}
       <QuotesTable
         data={quotes}
-        isLoading={isQuotesLoading || isSubmittingForApproval}
+        isLoading={isQuotesLoading}
         onRowClick={canViewDetail ? handleRowClick : undefined}
         onView={canViewDetail ? handleView : undefined}
         onEdit={canEdit ? handleEdit : undefined}
@@ -363,6 +634,8 @@ export function QuotesPageContent() {
         onSubmitForApproval={canSubmitForApproval ? handleSubmitForApproval : undefined}
         onApprove={canApprove ? handleApproveClick : undefined}
         onReject={canApprove ? handleRejectClick : undefined}
+        isConverting={isConverting}
+        isSubmitting={isSubmittingForApproval}
       />
 
       {/* Create Quote Drawer */}
@@ -370,6 +643,13 @@ export function QuotesPageContent() {
         open={isCreateDrawerOpen}
         onClose={handleCreateDrawerClose}
         onSuccess={handleCreateSuccess}
+      />
+
+      {/* Upload PO Dialog */}
+      <UploadPODialog
+        open={isUploadPODialogOpen}
+        onClose={handleUploadPODialogClose}
+        onSuccess={handleUploadPOSuccess}
       />
 
       {/* Edit Quote Drawer */}

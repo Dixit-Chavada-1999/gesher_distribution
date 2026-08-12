@@ -48,7 +48,7 @@ import type { RoleDetail, CreateRoleData, UpdateRoleData, RoleScope } from '../t
 const roleFormSchema = z.object({
   name: z.string().min(1, 'Name is required').max(50),
   description: z.string().max(500).optional(),
-  scope: z.enum(['user', 'customer']),
+  scope: z.enum(['user', 'customer', 'supplier']),
 });
 
 type RoleFormValues = {

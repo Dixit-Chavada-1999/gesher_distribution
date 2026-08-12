@@ -81,6 +81,7 @@ export const createUserSchema = z
     lastName: nameSchema,
     phone: phoneSchema.optional().nullable(),
     roleId: roleIdSchema,
+    supplierId: z.string().uuid().optional().nullable(),
     status: userStatusSchema.default('active'),
     password: passwordSchema.optional(),
     sendInvite: z.boolean().default(true),
@@ -108,6 +109,7 @@ export const updateUserSchema = z.object({
     .nullable()
     .or(z.literal('')),
   roleId: roleIdSchema.optional(),
+  supplierId: z.string().uuid().optional().nullable(),
   status: userStatusSchema.optional(),
   /** Optional new password - if provided, updates the user's auth password */
   password: passwordSchema.optional().or(z.literal('')),
@@ -166,6 +168,7 @@ export const createUserFormSchema = z
       .optional()
       .or(z.literal('')),
     roleId: z.string().min(1, 'Role is required').uuid('Select a valid role'),
+    supplierId: z.string().uuid().optional().or(z.literal('')),
     status: userStatusSchema,
     password: z.string().optional().or(z.literal('')),
     sendInvite: z.boolean(),
@@ -209,6 +212,7 @@ export const editUserFormSchema = z.object({
     .optional()
     .or(z.literal('')),
   roleId: z.string().min(1, 'Role is required').uuid('Select a valid role'),
+  supplierId: z.string().uuid().optional().or(z.literal('')),
   status: userStatusSchema,
   /** Optional new password - leave empty to keep current password */
   password: z.string().optional().or(z.literal('')),
@@ -272,6 +276,7 @@ export function createFormToDTO(values: CreateUserFormInput): CreateUserInput {
     lastName: values.lastName.trim(),
     phone: values.phone ? values.phone.trim() : null,
     roleId: values.roleId,
+    supplierId: values.supplierId && values.supplierId.length > 0 ? values.supplierId : null,
     status: values.status,
     password: values.sendInvite ? undefined : values.password || undefined,
     sendInvite: values.sendInvite,
@@ -287,6 +292,7 @@ export function editFormToDTO(values: EditUserFormInput): UpdateUserInput {
     lastName: values.lastName.trim(),
     phone: values.phone ? values.phone.trim() : null,
     roleId: values.roleId,
+    supplierId: values.supplierId && values.supplierId.length > 0 ? values.supplierId : null,
     status: values.status,
     // Only include password if provided (non-empty)
     password: values.password && values.password.length > 0 ? values.password : undefined,

@@ -190,6 +190,7 @@ export const quoteService = {
       // Validate input
       const validation = createQuoteSchema.safeParse(input);
       if (!validation.success) {
+        console.error('QuoteService.create validation errors:', validation.error.flatten());
         return {
           success: false,
           error: 'Validation failed',
@@ -206,9 +207,11 @@ export const quoteService = {
       };
     } catch (error) {
       console.error('QuoteService.create error:', error);
+      // Return the actual error message for debugging
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create quote';
       return {
         success: false,
-        error: 'Failed to create quote',
+        error: errorMessage,
       };
     }
   },

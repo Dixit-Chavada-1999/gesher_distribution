@@ -2,12 +2,11 @@
  * Purchase Orders Validation Schemas
  *
  * Zod schemas for purchase order validation.
- * Per client doc: POs always go to Galileo (Alon) - single supplier
+ * Supplier info is now at item level (per-item supplier assignment)
  */
 
 import { z } from 'zod';
 import type { CreatePurchaseOrderDTO, CreatePOItemDTO, POTotals } from '../types';
-import { DEFAULT_SUPPLIER } from '../types';
 
 // ============================================
 // SHARED SCHEMAS
@@ -30,6 +29,24 @@ export const poItemSchema = z.object({
   unitCode: z.string().default('EA'),
   unitPrice: z.number().int().min(0, 'Price must be non-negative'),
   taxRate: z.number().min(0).max(100).default(0),
+  // Per-item supplier (optional)
+  supplierId: z.string().uuid().nullable().optional(),
+  supplierName: z.string().nullable().optional(),
+});
+
+export const updatePOItemSchema = z.object({
+  id: z.string().uuid().optional(),
+  productId: z.string().uuid('Invalid product ID'),
+  salesOrderItemId: z.string().uuid().nullable().optional(),
+  sku: z.string().min(1, 'SKU is required'),
+  description: z.string().nullable(),
+  quantityOrdered: z.number().int().positive('Quantity must be positive'),
+  unitCode: z.string().default('EA'),
+  unitPrice: z.number().int().min(0, 'Price must be non-negative'),
+  taxRate: z.number().min(0).max(100).default(0),
+  // Per-item supplier (optional)
+  supplierId: z.string().uuid().nullable().optional(),
+  supplierName: z.string().nullable().optional(),
 });
 
 // ============================================
@@ -39,16 +56,13 @@ export const poItemSchema = z.object({
 export const createPurchaseOrderSchema = z.object({
   poDate: z.coerce.date(),
   expectedDeliveryDate: z.coerce.date().nullable().optional(),
-  // Supplier is optional - defaults to Galileo/Alon per client doc
-  supplierName: z.string().default(DEFAULT_SUPPLIER.name),
-  supplierContact: z.string().default(DEFAULT_SUPPLIER.contact),
   salesOrderId: z.string().uuid().nullable().optional(),
   warehouseId: z.string().uuid().nullable().optional(),
   currencyCode: z.string().default('USD'),
   status: z.enum(['draft', 'sent', 'confirmed', 'partial', 'received', 'cancelled'] as const).default('draft'),
   vendorAddress: addressSchema,
   shipToAddress: addressSchema,
-  items: z.array(poItemSchema).min(1, 'At least one item is required'),
+  items: z.array(poItemSchema).min(1, 'At least one item is required'), // Supplier info is on items
   vendorNotes: z.string().nullable().optional(),
   internalNotes: z.string().nullable().optional(),
 });
@@ -68,6 +82,9 @@ export const updatePurchaseOrderSchema = z.object({
   shipToAddress: addressSchema.optional(),
   vendorNotes: z.string().nullable().optional(),
   internalNotes: z.string().nullable().optional(),
+  // Items for updating (optional - if not provided, items won't be modified)
+  // Supplier info is on items
+  items: z.array(updatePOItemSchema).optional(),
 });
 
 export type UpdatePOInput = z.infer<typeof updatePurchaseOrderSchema>;
@@ -121,7 +138,6 @@ export function calculatePOTotals(
 export const poFormSchema = z.object({
   poDate: z.string().min(1, 'PO date is required'),
   expectedDeliveryDate: z.string().optional(),
-  // Supplier info is read-only (always Galileo/Alon)
   salesOrderId: z.string().optional(),
   warehouseId: z.string().optional(),
   currencyCode: z.string().default('USD'),
@@ -155,9 +171,6 @@ export function formToCreateDTO(
     expectedDeliveryDate: form.expectedDeliveryDate
       ? new Date(form.expectedDeliveryDate)
       : null,
-    // Supplier defaults to Galileo/Alon
-    supplierName: DEFAULT_SUPPLIER.name,
-    supplierContact: DEFAULT_SUPPLIER.contact,
     salesOrderId: form.salesOrderId || null,
     warehouseId: form.warehouseId || null,
     currencyCode: form.currencyCode || 'USD',
@@ -176,7 +189,7 @@ export function formToCreateDTO(
       postalCode: form.shipToAddressPostalCode || null,
       country: form.shipToAddressCountry || null,
     },
-    items,
+    items, // Supplier info is on items
     vendorNotes: form.vendorNotes || null,
     internalNotes: form.internalNotes || null,
   };
