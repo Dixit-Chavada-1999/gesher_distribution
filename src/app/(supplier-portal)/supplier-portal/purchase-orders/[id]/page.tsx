@@ -45,14 +45,9 @@ export default async function SupplierPurchaseOrderDetailPage({ params }: PagePr
     notFound();
   }
 
-  // Verify this PO has at least one item belonging to the supplier
-  // Note: If items don't have supplier_id set yet, allow viewing if PO appears in supplier's list
-  const hasSupplierItems = purchaseOrder.items?.some(
-    (item) => item.supplierId === user.supplierId
-  );
-
   // For now, allow viewing if items exist (supplier_id might not be set yet)
-  // TODO: Once all items have supplier_id, enable strict check
+  // TODO: Once all items have supplier_id, enable strict check:
+  // const hasSupplierItems = purchaseOrder.items?.some(item => item.supplierId === user.supplierId);
   if (!purchaseOrder.items || purchaseOrder.items.length === 0) {
     console.log('[SupplierPODetail] No items found, redirecting');
     redirect('/supplier-portal/purchase-orders');

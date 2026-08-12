@@ -166,7 +166,7 @@ export function EditPurchaseOrderDrawer({
           setItemSuppliers(itemSupplierMap);
 
           // If items have individual suppliers, switch to per-item mode
-          if (hasPerItemSuppliers && !result.data.supplierId) {
+          if (hasPerItemSuppliers) {
             setUseSingleSupplier(false);
           }
         }

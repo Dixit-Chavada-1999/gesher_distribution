@@ -258,7 +258,7 @@ class PurchaseOrderRepositoryImpl {
         if (!suppliers[row.purchase_order_id]) {
           suppliers[row.purchase_order_id] = new Set();
         }
-        suppliers[row.purchase_order_id].add(row.supplier_name);
+        suppliers[row.purchase_order_id]!.add(row.supplier_name);
       }
     }
 
