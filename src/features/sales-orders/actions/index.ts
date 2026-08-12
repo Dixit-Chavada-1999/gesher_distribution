@@ -552,15 +552,12 @@ async function createPurchaseOrderFromSalesOrder(
     // Calculate totals
     const subtotal = poItems.reduce((sum, item) => sum + (item.unitPrice * item.quantityOrdered), 0);
 
-    // Create the PO
+    // Create the PO (supplier info is now at item level per migration 069)
     const { data: newPO, error } = await db
       .from('purchase_orders')
       .insert({
         po_number: poNumber,
         sales_order_id: salesOrderId,
-        supplier_id: supplierId,
-        supplier_name: supplierInfo?.name || 'Unassigned',
-        supplier_contact: supplierInfo?.primaryContactName || '',
         po_date: new Date().toISOString().split('T')[0],
         expected_delivery_date: salesOrder.requestedDeliveryDate
           ? new Date(salesOrder.requestedDeliveryDate).toISOString().split('T')[0]
@@ -594,7 +591,7 @@ async function createPurchaseOrderFromSalesOrder(
       continue;
     }
 
-    // Create PO items
+    // Create PO items (supplier info is at item level per migration 068)
     if (newPO && poItems.length > 0) {
       const poItemsToInsert = poItems.map(item => ({
         purchase_order_id: newPO.id,
@@ -608,6 +605,8 @@ async function createPurchaseOrderFromSalesOrder(
         tax_rate: item.taxRate,
         line_total: item.unitPrice * item.quantityOrdered,
         sort_order: item.sortOrder,
+        supplier_id: supplierId || null,
+        supplier_name: supplierInfo?.name || null,
       }));
 
       const { error: itemsError } = await db

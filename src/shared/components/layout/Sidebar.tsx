@@ -32,6 +32,7 @@ import {
   Truck, // Operations dashboard
   // Receipt, // Uncomment when Invoices module is enabled
   Factory, // Suppliers
+  ClipboardCheck, // Pick Tickets
 } from 'lucide-react';
 
 import { cn } from '@/shared/lib/utils';
@@ -141,6 +142,13 @@ const NAV_SECTIONS = [
         href: '/operations',
         icon: Truck,
         permission: 'dashboard.view_module', // Uses dashboard permission for now
+      },
+      {
+        id: 'pick-tickets',
+        label: 'Pick Tickets',
+        href: '/pick-tickets',
+        icon: ClipboardCheck,
+        permission: 'pick_tickets.view_module',
       },
     ],
   },

@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useState, useTransition } from 'react';
-import { Loader2, MapPin, Package, FileText, Calendar, User, Building2, Truck, CheckCircle, XCircle } from 'lucide-react';
+import { Loader2, MapPin, Package, FileText, Calendar, User, Building2, Truck, CheckCircle, XCircle, ClipboardList } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -43,8 +43,16 @@ import {
 } from '@/shared/components/ui/alert-dialog';
 import { Textarea } from '@/shared/components/ui/textarea';
 import { Label } from '@/shared/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/components/ui/select';
 
-import { getSalesOrder, confirmSalesOrder, cancelSalesOrder } from '../actions';
+import { getSalesOrder, confirmSalesOrder, cancelSalesOrder, getSalesOrderMasterData } from '../actions';
+import { createPickTicketFromSalesOrder } from '@/features/pick-tickets/actions';
 import type { SalesOrderWithItems } from '../types';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from '../types';
 
@@ -182,7 +190,10 @@ export function ViewSalesOrderDrawer({
   const [isPending, startTransition] = useTransition();
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showPickTicketDialog, setShowPickTicketDialog] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
+  const [warehouses, setWarehouses] = useState<Array<{ id: string; code: string; name: string }>>([]);
 
   // ----------------------------------------
   // EFFECTS
@@ -191,11 +202,24 @@ export function ViewSalesOrderDrawer({
   useEffect(() => {
     if (open && orderId) {
       fetchOrder();
+      fetchWarehouses();
     } else {
       setOrder(null);
       setError(null);
     }
   }, [open, orderId]);
+
+  // Fetch warehouses for pick ticket dialog
+  const fetchWarehouses = async () => {
+    try {
+      const result = await getSalesOrderMasterData();
+      if (result.success && result.data) {
+        setWarehouses(result.data.warehouses);
+      }
+    } catch {
+      console.error('Failed to fetch warehouses');
+    }
+  };
 
   // ----------------------------------------
   // DATA FETCHING
@@ -276,12 +300,51 @@ export function ViewSalesOrderDrawer({
     });
   };
 
+  const handleCreatePickTicket = () => {
+    if (!order) {
+      return;
+    }
+
+    // Use selected warehouse or order's warehouse
+    const warehouseId = selectedWarehouseId || order.warehouseId || '';
+
+    if (!warehouseId) {
+      toast.error('Please select a warehouse');
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const result = await createPickTicketFromSalesOrder(order.id, warehouseId);
+        if (result.success) {
+          toast.success(`Pick ticket created for ${order.orderNumber}`);
+          setShowPickTicketDialog(false);
+          setSelectedWarehouseId('');
+          fetchOrder(); // Refresh order data
+        } else {
+          toast.error(result.error || 'Failed to create pick ticket');
+        }
+      } catch (error) {
+        console.error('Error creating pick ticket:', error);
+        toast.error('Failed to create pick ticket');
+      }
+    });
+  };
+
+  // Initialize selected warehouse when dialog opens
+  const handleOpenPickTicketDialog = () => {
+    setSelectedWarehouseId(order?.warehouseId || '');
+    setShowPickTicketDialog(true);
+  };
+
   // Can only edit draft or pending orders (and must have permission)
   const canEdit = order && ['draft', 'pending'].includes(order.status) && canEditPermission;
   // Can confirm draft or pending orders
   const canConfirm = order && ['draft', 'pending'].includes(order.status) && canEditPermission;
   // Can cancel any order except delivered/cancelled
   const canCancel = order && !['delivered', 'cancelled'].includes(order.status) && canEditPermission;
+  // Can create pick ticket for confirmed or processing orders
+  const canCreatePickTicket = order && ['confirmed', 'processing'].includes(order.status) && canEditPermission;
 
   // ----------------------------------------
   // RENDER
@@ -533,6 +596,16 @@ export function ViewSalesOrderDrawer({
                     Edit Order
                   </Button>
                 )}
+                {canCreatePickTicket && (
+                  <Button
+                    variant="outline"
+                    onClick={handleOpenPickTicketDialog}
+                    disabled={isPending}
+                  >
+                    <ClipboardList className="mr-2 h-4 w-4" />
+                    Create Pick Ticket
+                  </Button>
+                )}
                 {canConfirm && (
                   <Button onClick={() => setShowConfirmDialog(true)} disabled={isPending}>
                     <CheckCircle className="mr-2 h-4 w-4" />
@@ -594,6 +667,48 @@ export function ViewSalesOrderDrawer({
               >
                 {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Cancel Order
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Create Pick Ticket Dialog */}
+        <AlertDialog open={showPickTicketDialog} onOpenChange={setShowPickTicketDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Create Pick Ticket</AlertDialogTitle>
+              <AlertDialogDescription>
+                Create a pick ticket for order <span className="font-semibold">{order?.orderNumber}</span>.
+                Select the warehouse to fulfill from.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-4">
+              <Label htmlFor="warehouse">Warehouse</Label>
+              <Select
+                value={selectedWarehouseId}
+                onValueChange={setSelectedWarehouseId}
+              >
+                <SelectTrigger className="mt-2">
+                  <SelectValue placeholder="Select warehouse..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {warehouses.map((warehouse) => (
+                    <SelectItem key={warehouse.id} value={warehouse.id}>
+                      {warehouse.name} ({warehouse.code})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleCreatePickTicket}
+                disabled={isPending || !selectedWarehouseId}
+              >
+                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <ClipboardList className="mr-2 h-4 w-4" />
+                Create Pick Ticket
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
