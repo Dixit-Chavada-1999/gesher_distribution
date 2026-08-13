@@ -32,3 +32,15 @@ export {
 
 // Lib
 export { operationsData } from './lib';
+
+// Actions
+export {
+  fetchOperationsData,
+  fetchOperationsStats,
+  fetchImmediateAttention,
+  fetchSupplierSchedule,
+  fetchGDC1Inventory,
+  fetchRimInstallation,
+  refreshOperationsData,
+  fetchExportData,
+} from './actions';

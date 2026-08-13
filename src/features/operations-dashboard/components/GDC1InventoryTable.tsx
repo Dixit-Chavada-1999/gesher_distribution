@@ -7,6 +7,8 @@
  * Based on Jenny's "GDC 1" tab.
  */
 
+import { Pencil } from 'lucide-react';
+
 import {
   Card,
   CardContent,
@@ -23,13 +25,15 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 import { Badge } from '@/shared/components/ui/badge';
+import { Button } from '@/shared/components/ui/button';
 import type { GDC1InventoryItem } from '../types';
 
 interface GDC1InventoryTableProps {
   data: GDC1InventoryItem[];
+  onEdit?: (item: GDC1InventoryItem) => void;
 }
 
-export function GDC1InventoryTable({ data }: GDC1InventoryTableProps) {
+export function GDC1InventoryTable({ data, onEdit }: GDC1InventoryTableProps) {
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; className?: string; label: string }> = {
       'AVAILABLE': { variant: 'default', className: 'bg-green-500', label: 'Available' },
@@ -110,6 +114,7 @@ export function GDC1InventoryTable({ data }: GDC1InventoryTableProps) {
                 <TableHead className="text-right">38&quot; Price</TableHead>
                 <TableHead className="text-right">24&quot; Price</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="w-[60px]">Edit</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -156,6 +161,17 @@ export function GDC1InventoryTable({ data }: GDC1InventoryTableProps) {
                     {item.price24 ? formatCurrency(item.price24) : '-'}
                   </TableCell>
                   <TableCell>{getStatusBadge(item.status)}</TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => onEdit?.(item)}
+                      title="Edit Status"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
               {/* Totals Row */}
@@ -169,7 +185,7 @@ export function GDC1InventoryTable({ data }: GDC1InventoryTableProps) {
                 <TableCell colSpan={5}></TableCell>
                 <TableCell className="text-right text-orange-600">{totals.outstanding}</TableCell>
                 <TableCell className="text-right">{formatCurrency(totals.invoiceTotal)}</TableCell>
-                <TableCell colSpan={3}></TableCell>
+                <TableCell colSpan={4}></TableCell>
               </TableRow>
             </TableBody>
           </Table>

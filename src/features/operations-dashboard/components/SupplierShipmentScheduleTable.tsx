@@ -7,6 +7,8 @@
  * Shows incoming inventory shipments with status tracking.
  */
 
+import { Pencil } from 'lucide-react';
+
 import {
   Card,
   CardContent,
@@ -23,16 +25,19 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 import { Badge } from '@/shared/components/ui/badge';
+import { Button } from '@/shared/components/ui/button';
 import type { ShipmentScheduleItem } from '../types';
 
 interface SupplierShipmentScheduleTableProps {
   data: ShipmentScheduleItem[];
   title?: string;
+  onEdit?: (item: ShipmentScheduleItem) => void;
 }
 
 export function SupplierShipmentScheduleTable({
   data,
-  title = 'Incoming Inventory - Supplier Orders'
+  title = 'Incoming Inventory - Supplier Orders',
+  onEdit,
 }: SupplierShipmentScheduleTableProps) {
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; className?: string; label: string }> = {
@@ -92,6 +97,7 @@ export function SupplierShipmentScheduleTable({
                 <TableHead className="text-right">Outstanding</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="max-w-[200px]">Action / Notes</TableHead>
+                <TableHead className="w-[60px]">Edit</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -134,6 +140,17 @@ export function SupplierShipmentScheduleTable({
                   <TableCell className="max-w-[200px] text-xs text-muted-foreground truncate" title={item.actionRequired}>
                     {item.actionRequired}
                   </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => onEdit?.(item)}
+                      title="Edit Status"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
               {/* Totals Row */}
@@ -146,7 +163,7 @@ export function SupplierShipmentScheduleTable({
                 <TableCell colSpan={5}></TableCell>
                 <TableCell className="text-right">{totals.delivered}</TableCell>
                 <TableCell className="text-right text-orange-600">{totals.outstanding}</TableCell>
-                <TableCell colSpan={2}></TableCell>
+                <TableCell colSpan={3}></TableCell>
               </TableRow>
             </TableBody>
           </Table>

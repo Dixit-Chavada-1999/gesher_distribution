@@ -75,7 +75,7 @@ export async function getPendingPurchaseOrders(
 export async function confirmPO(
   input: ConfirmPOInput,
   userId: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; shipmentId?: string }> {
   // Validate PO exists and is in correct state
   const po = await repo.getSupplierPurchaseOrderById(input.poId);
   if (!po) {
@@ -93,6 +93,7 @@ export async function confirmPO(
   return repo.confirmPurchaseOrder(input.poId, userId, {
     expectedCompletionDate: input.expectedCompletionDate,
     supplierNotes: input.supplierNotes,
+    supplierReferenceNumber: input.supplierReferenceNumber,
   });
 }
 

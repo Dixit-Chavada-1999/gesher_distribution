@@ -40,6 +40,39 @@ export const SHIPMENT_STATUS_TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[
 };
 
 // ============================================
+// LOAD STATUS (Operations Dashboard - Jenny)
+// ============================================
+
+export type LoadStatus = 'available' | 'sold' | 'open' | 'hold' | 'in_transit' | 'invoiced';
+
+export const LOAD_STATUSES: LoadStatus[] = [
+  'available',
+  'sold',
+  'open',
+  'hold',
+  'in_transit',
+  'invoiced',
+];
+
+export const LOAD_STATUS_LABELS: Record<LoadStatus, string> = {
+  available: 'Available',
+  sold: 'Sold',
+  open: 'Open',
+  hold: 'Hold',
+  in_transit: 'In Transit',
+  invoiced: 'Invoiced',
+};
+
+export const LOAD_STATUS_COLORS: Record<LoadStatus, string> = {
+  available: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
+  sold: 'bg-blue-100 text-blue-800 border border-blue-200',
+  open: 'bg-amber-100 text-amber-800 border border-amber-200',
+  hold: 'bg-stone-100 text-stone-700 border border-stone-200',
+  in_transit: 'bg-sky-100 text-sky-800 border border-sky-200',
+  invoiced: 'bg-purple-100 text-purple-800 border border-purple-200',
+};
+
+// ============================================
 // DATABASE ENTITY TYPES
 // ============================================
 
@@ -78,6 +111,43 @@ export interface Shipment {
   // Notes
   notes: string | null;
   deliveryInstructions: string | null;
+
+  // ============================================
+  // Operations Dashboard Fields (Jenny)
+  // ============================================
+
+  // Supplier Reference (Galileo's SO#)
+  supplierReferenceNumber: string | null;
+
+  // Port & ETA Dates
+  etaToPort: Date | null;
+  confirmedEta: Date | null;
+  customerExpectedDelivery: Date | null;
+
+  // Quantity Tracking
+  qtyDelivered: number;
+  outstandingQty: number;
+  totalQty: number;
+
+  // Supplier Invoice
+  supplierInvoiceNumber: string | null;
+  supplierInvoiceAmount: number | null;
+
+  // Payment Milestones
+  payment50PercentDate: Date | null;
+  remaining50DueDate: Date | null;
+
+  // Operations Notes
+  actionRequired: string | null;
+  executiveNotes: string | null;
+
+  // Flags & Status
+  isDelayed: boolean;
+  loadStatus: LoadStatus;
+
+  // Customer Ship Window
+  customerShipWindowStart: Date | null;
+  customerShipWindowEnd: Date | null;
 
   // Audit
   createdAt: Date;
@@ -184,6 +254,25 @@ export interface CreateShipmentDTO {
   items: CreateShipmentItemDTO[];
   notes?: string | null;
   deliveryInstructions?: string | null;
+
+  // Operations Dashboard Fields
+  supplierReferenceNumber?: string | null;
+  etaToPort?: Date | null;
+  confirmedEta?: Date | null;
+  customerExpectedDelivery?: Date | null;
+  qtyDelivered?: number;
+  outstandingQty?: number;
+  totalQty?: number;
+  supplierInvoiceNumber?: string | null;
+  supplierInvoiceAmount?: number | null;
+  payment50PercentDate?: Date | null;
+  remaining50DueDate?: Date | null;
+  actionRequired?: string | null;
+  executiveNotes?: string | null;
+  isDelayed?: boolean;
+  loadStatus?: LoadStatus;
+  customerShipWindowStart?: Date | null;
+  customerShipWindowEnd?: Date | null;
 }
 
 export interface UpdateShipmentDTO {
@@ -201,6 +290,25 @@ export interface UpdateShipmentDTO {
   totalPackages?: number;
   notes?: string | null;
   deliveryInstructions?: string | null;
+
+  // Operations Dashboard Fields
+  supplierReferenceNumber?: string | null;
+  etaToPort?: Date | null;
+  confirmedEta?: Date | null;
+  customerExpectedDelivery?: Date | null;
+  qtyDelivered?: number;
+  outstandingQty?: number;
+  totalQty?: number;
+  supplierInvoiceNumber?: string | null;
+  supplierInvoiceAmount?: number | null;
+  payment50PercentDate?: Date | null;
+  remaining50DueDate?: Date | null;
+  actionRequired?: string | null;
+  executiveNotes?: string | null;
+  isDelayed?: boolean;
+  loadStatus?: LoadStatus;
+  customerShipWindowStart?: Date | null;
+  customerShipWindowEnd?: Date | null;
 }
 
 // ============================================
@@ -219,6 +327,14 @@ export interface ShipmentListParams {
   dateTo?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+
+  // Operations Dashboard Filters
+  loadStatus?: LoadStatus;
+  customerId?: string;
+  isDelayed?: boolean;
+  etaFrom?: string;
+  etaTo?: string;
+  supplierReferenceNumber?: string;
 }
 
 export interface ShipmentListItem {
@@ -233,6 +349,21 @@ export interface ShipmentListItem {
   salesOrderNumber: string | null;
   purchaseOrderNumber: string | null;
   createdAt: Date;
+
+  // Operations Dashboard Fields
+  supplierReferenceNumber: string | null;
+  etaToPort: string | null;
+  confirmedEta: string | null;
+  customerExpectedDelivery: string | null;
+  actualArrival: string | null;
+  qtyDelivered: number;
+  outstandingQty: number;
+  totalQty: number;
+  loadStatus: LoadStatus;
+  isDelayed: boolean;
+  actionRequired: string | null;
+  customerName: string | null;
+  customerPo: string | null;
 }
 
 export interface PaginatedResult<T> {

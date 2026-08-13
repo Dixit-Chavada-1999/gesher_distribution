@@ -204,6 +204,7 @@ export async function getPendingConfirmationPOs(
 
 /**
  * Confirm/Accept a purchase order
+ * Also creates a shipment record for operations tracking
  */
 export async function confirmPurchaseOrder(
   poId: string,
@@ -211,9 +212,50 @@ export async function confirmPurchaseOrder(
   data: {
     expectedCompletionDate?: string;
     supplierNotes?: string;
+    supplierReferenceNumber?: string;
   }
-): Promise<{ success: boolean; error?: string }> {
-  const { error } = await db
+): Promise<{ success: boolean; error?: string; shipmentId?: string }> {
+  // 1. Get PO details with items and sales order
+  const { data: poData, error: poError } = await db
+    .from('purchase_orders')
+    .select(`
+      *,
+      items:purchase_order_items(*),
+      sales_order:sales_orders(
+        id,
+        order_number,
+        customer_id,
+        shipping_address_street,
+        shipping_address_city,
+        shipping_address_state,
+        shipping_address_postal_code,
+        shipping_address_country,
+        requested_delivery_date,
+        customer:customers(id, name)
+      )
+    `)
+    .eq('id', poId)
+    .single();
+
+  if (poError || !poData) {
+    console.error('[confirmPurchaseOrder] Error fetching PO:', poError);
+    return { success: false, error: 'Failed to fetch purchase order details' };
+  }
+
+  // Get supplier_id from the first item (item-level supplier)
+  const items = poData.items as Array<{
+    id: string;
+    product_id: string;
+    sku: string;
+    description: string | null;
+    quantity_ordered: number;
+    supplier_id: string | null;
+  }>;
+
+  const supplierId = items?.[0]?.supplier_id || null;
+
+  // 2. Update PO status
+  const { error: updateError } = await db
     .from('purchase_orders')
     .update({
       status: 'confirmed',
@@ -227,12 +269,124 @@ export async function confirmPurchaseOrder(
     })
     .eq('id', poId);
 
-  if (error) {
-    console.error('[confirmPurchaseOrder] Error:', error);
-    return { success: false, error: error.message };
+  if (updateError) {
+    console.error('[confirmPurchaseOrder] Error updating PO:', updateError);
+    return { success: false, error: updateError.message };
   }
 
-  return { success: true };
+  // 3. Generate shipment number
+  const year = new Date().getFullYear();
+  const { data: lastShipment } = await db
+    .from('shipments')
+    .select('shipment_number')
+    .ilike('shipment_number', `SH-${year}-%`)
+    .order('shipment_number', { ascending: false })
+    .limit(1)
+    .single();
+
+  let nextNumber = 1;
+  if (lastShipment?.shipment_number) {
+    const match = lastShipment.shipment_number.match(/SH-\d{4}-(\d+)/);
+    if (match) {
+      nextNumber = parseInt(match[1], 10) + 1;
+    }
+  }
+  const shipmentNumber = `SH-${year}-${String(nextNumber).padStart(5, '0')}`;
+
+  // 4. Calculate total quantity from items
+  const totalQty = items?.reduce((sum, item) => sum + (item.quantity_ordered || 0), 0) || 0;
+
+  // 5. Get shipping address from Sales Order if exists
+  const salesOrder = poData.sales_order as {
+    id: string;
+    order_number: string;
+    customer_id: string;
+    shipping_address_street: string | null;
+    shipping_address_city: string | null;
+    shipping_address_state: string | null;
+    shipping_address_postal_code: string | null;
+    shipping_address_country: string | null;
+    requested_delivery_date: string | null;
+    customer: { id: string; name: string } | null;
+  } | null;
+
+  // 6. Create shipment record
+  const { data: shipment, error: shipmentError } = await db
+    .from('shipments')
+    .insert({
+      shipment_number: shipmentNumber,
+      shipment_date: new Date().toISOString().split('T')[0],
+      purchase_order_id: poId,
+      sales_order_id: salesOrder?.id || null,
+      supplier_id: supplierId,
+
+      // Supplier reference number (Galileo's SO#)
+      supplier_reference_number: data.supplierReferenceNumber || null,
+
+      // ETA dates
+      eta_to_port: data.expectedCompletionDate || poData.expected_delivery_date || null,
+      customer_expected_delivery: salesOrder?.requested_delivery_date || null,
+
+      // Quantities
+      total_qty: totalQty,
+      qty_delivered: 0,
+      outstanding_qty: totalQty,
+
+      // Status
+      status: 'pending',
+      load_status: 'open',
+      action_required: 'PO Confirmed - Awaiting Shipping Details',
+
+      // Ship to address from Sales Order
+      ship_to_name: salesOrder?.customer?.name || null,
+      ship_to_address_street: salesOrder?.shipping_address_street || null,
+      ship_to_address_city: salesOrder?.shipping_address_city || null,
+      ship_to_address_state: salesOrder?.shipping_address_state || null,
+      ship_to_address_postal_code: salesOrder?.shipping_address_postal_code || null,
+      ship_to_address_country: salesOrder?.shipping_address_country || 'US',
+
+      // Audit
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      created_by: userId,
+      updated_by: userId,
+    })
+    .select('id')
+    .single();
+
+  if (shipmentError) {
+    console.error('[confirmPurchaseOrder] Error creating shipment:', shipmentError);
+    // PO is already confirmed, so we continue but log the error
+    // In production, you might want to handle this differently
+    return { success: true, error: `PO confirmed but shipment creation failed: ${shipmentError.message}` };
+  }
+
+  // 7. Create shipment items from PO items
+  if (shipment && items && items.length > 0) {
+    const shipmentItems = items.map((item, index) => ({
+      shipment_id: shipment.id,
+      product_id: item.product_id,
+      sku: item.sku,
+      description: item.description,
+      quantity_shipped: item.quantity_ordered,
+      sort_order: index,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      created_by: userId,
+      updated_by: userId,
+    }));
+
+    const { error: itemsError } = await db
+      .from('shipment_items')
+      .insert(shipmentItems);
+
+    if (itemsError) {
+      console.error('[confirmPurchaseOrder] Error creating shipment items:', itemsError);
+      // Continue anyway, shipment is created
+    }
+  }
+
+  return { success: true, shipmentId: shipment?.id };
 }
 
 /**
@@ -264,6 +418,7 @@ export async function rejectPurchaseOrder(
 
 /**
  * Update production status
+ * Also syncs shipment load_status when production status changes
  */
 export async function updateProductionStatus(
   poId: string,
@@ -274,6 +429,7 @@ export async function updateProductionStatus(
     supplierNotes?: string;
   }
 ): Promise<{ success: boolean; error?: string }> {
+  // 1. Update PO production status
   const { error } = await db
     .from('purchase_orders')
     .update({
@@ -288,6 +444,41 @@ export async function updateProductionStatus(
   if (error) {
     console.error('[updateProductionStatus] Error:', error);
     return { success: false, error: error.message };
+  }
+
+  // 2. Sync shipment fields based on production status
+  // Always update eta_to_port if expectedCompletionDate is provided
+  const shipmentUpdateData: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+    updated_by: userId,
+  };
+
+  // Sync eta_to_port from expected completion date
+  if (data.expectedCompletionDate) {
+    shipmentUpdateData.eta_to_port = data.expectedCompletionDate;
+  }
+
+  // Map: production_status → load_status
+  // - "shipped" → "in_transit"
+  // - "ready_to_ship" → "open" (no change, already open)
+  // - "in_production" → "open" (no change)
+  if (data.productionStatus === 'shipped') {
+    shipmentUpdateData.status = 'in_transit';
+    shipmentUpdateData.load_status = 'in_transit';
+    shipmentUpdateData.action_required = 'In Transit - Awaiting Delivery';
+  }
+
+  // Update shipment if there's anything to update
+  if (Object.keys(shipmentUpdateData).length > 2) { // More than just updated_at/updated_by
+    const { error: shipmentError } = await db
+      .from('shipments')
+      .update(shipmentUpdateData)
+      .eq('purchase_order_id', poId);
+
+    if (shipmentError) {
+      console.error('[updateProductionStatus] Error syncing shipment:', shipmentError);
+      // Don't fail the whole operation, PO is already updated
+    }
   }
 
   return { success: true };

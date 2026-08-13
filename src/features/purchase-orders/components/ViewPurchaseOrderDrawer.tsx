@@ -70,7 +70,13 @@ export function ViewPurchaseOrderDrawer({
   };
 
   return (
-    <Sheet open={open} onOpenChange={onClose}>
+    <Sheet open={open} onOpenChange={(isOpen) => {
+      // Prevent closing while sending
+      if (!isOpen && isPending) {
+        return;
+      }
+      onClose(isOpen);
+    }}>
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
         <SheetHeader className="space-y-4">
           <div className="space-y-1">
@@ -241,15 +247,33 @@ export function ViewPurchaseOrderDrawer({
             <Separator />
             <div className="flex gap-2">
               {onEdit && po.status === 'draft' && (
-                <Button variant="outline" onClick={handleEditClick} className="flex-1">
+                <Button
+                  variant="outline"
+                  onClick={handleEditClick}
+                  className="flex-1"
+                  disabled={isPending}
+                >
                   <Pencil className="mr-2 h-4 w-4" />
                   Edit PO
                 </Button>
               )}
               {po.status === 'draft' && po.items.some((item) => item.supplierId) && (
-                <Button onClick={() => setShowSendDialog(true)} className="flex-1">
-                  <Send className="mr-2 h-4 w-4" />
-                  Send to Supplier
+                <Button
+                  onClick={() => setShowSendDialog(true)}
+                  className="flex-1"
+                  disabled={isPending}
+                >
+                  {isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="mr-2 h-4 w-4" />
+                      Send to Supplier
+                    </>
+                  )}
                 </Button>
               )}
               {po.status === 'draft' && !po.items.some((item) => item.supplierId) && (
@@ -283,8 +307,14 @@ export function ViewPurchaseOrderDrawer({
             <AlertDialogFooter>
               <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
               <AlertDialogAction onClick={handleSendToSupplier} disabled={isPending}>
-                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Send PO
+                {isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  'Send PO'
+                )}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

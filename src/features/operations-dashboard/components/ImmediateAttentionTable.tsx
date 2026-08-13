@@ -9,7 +9,7 @@
  * - Overdue items highlighted in red
  */
 
-import { AlertTriangle, Truck, Eye, MessageSquare } from 'lucide-react';
+import { AlertTriangle, Truck, Eye, MessageSquare, Pencil } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Badge } from '@/shared/components/ui/badge';
@@ -33,6 +33,7 @@ interface ImmediateAttentionTableProps {
   items: ImmediateAttentionItem[];
   onViewDetails?: (item: ImmediateAttentionItem) => void;
   onAddNote?: (item: ImmediateAttentionItem) => void;
+  onEdit?: (item: ImmediateAttentionItem) => void;
 }
 
 // ============================================
@@ -88,6 +89,7 @@ export function ImmediateAttentionTable({
   items,
   onViewDetails,
   onAddNote,
+  onEdit,
 }: ImmediateAttentionTableProps) {
   // Sort by overdue first, then by this week, then by date
   const sortedItems = [...items].sort((a, b) => {
@@ -179,7 +181,17 @@ export function ImmediateAttentionTable({
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7"
+                          onClick={() => onEdit?.(item)}
+                          title="Edit Status"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
                           onClick={() => onViewDetails?.(item)}
+                          title="View Details"
                         >
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
@@ -188,6 +200,7 @@ export function ImmediateAttentionTable({
                           size="icon"
                           className="h-7 w-7"
                           onClick={() => onAddNote?.(item)}
+                          title="Add Note"
                         >
                           <MessageSquare className="h-3.5 w-3.5" />
                         </Button>

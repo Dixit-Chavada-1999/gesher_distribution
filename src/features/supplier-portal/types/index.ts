@@ -187,6 +187,7 @@ export interface ConfirmPOInput {
   poId: string;
   expectedCompletionDate?: string;
   supplierNotes?: string;
+  supplierReferenceNumber?: string; // Supplier's Sales Order # (e.g., Galileo SO2600028)
 }
 
 export interface RejectPOInput {

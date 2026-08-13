@@ -15,7 +15,7 @@ import { Button } from '@/shared/components/ui/button';
 // ============================================
 
 interface OperationsHeaderProps {
-  lastUpdated?: Date;
+  lastUpdated?: Date | null;
   onRefresh?: () => void;
   onExport?: () => void;
   isRefreshing?: boolean;

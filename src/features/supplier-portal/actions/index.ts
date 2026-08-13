@@ -38,7 +38,7 @@ async function getSupplierUser() {
 
 export async function confirmPurchaseOrderAction(
   input: ConfirmPOInput
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; shipmentId?: string }> {
   const { user, error } = await getSupplierUser();
   if (error || !user) {
     return { success: false, error: error || 'Authentication required' };
@@ -51,9 +51,14 @@ export async function confirmPurchaseOrderAction(
   const result = await service.confirmPO(input, user.id);
 
   if (result.success) {
+    // Revalidate supplier portal pages
     revalidatePath('/supplier-portal');
     revalidatePath('/supplier-portal/purchase-orders');
     revalidatePath(`/supplier-portal/purchase-orders/${input.poId}`);
+    revalidatePath('/supplier-portal/shipments');
+
+    // Revalidate operations dashboard (Jenny's dashboard)
+    revalidatePath('/operations');
   }
 
   return result;
@@ -97,9 +102,15 @@ export async function updateProductionStatusAction(
   const result = await service.updateProduction(input, user.id);
 
   if (result.success) {
+    // Revalidate supplier portal pages
     revalidatePath('/supplier-portal');
     revalidatePath('/supplier-portal/purchase-orders');
     revalidatePath(`/supplier-portal/purchase-orders/${input.poId}`);
+    revalidatePath('/supplier-portal/shipments');
+
+    // Revalidate operations dashboard (Jenny's dashboard)
+    // Important when production status changes to "shipped" - shipment becomes in_transit
+    revalidatePath('/operations');
   }
 
   return result;
@@ -124,9 +135,13 @@ export async function updateShipmentAction(
   const result = await service.updateShipmentDetails(input, user.id);
 
   if (result.success) {
+    // Revalidate supplier portal pages
     revalidatePath('/supplier-portal');
     revalidatePath('/supplier-portal/shipments');
     revalidatePath(`/supplier-portal/shipments/${input.shipmentId}`);
+
+    // Revalidate operations dashboard (Jenny's dashboard)
+    revalidatePath('/operations');
   }
 
   return result;

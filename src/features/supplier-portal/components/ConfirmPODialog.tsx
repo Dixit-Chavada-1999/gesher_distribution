@@ -7,7 +7,7 @@
  */
 
 import { useState, useTransition } from 'react';
-import { CheckCircle2, Calendar, Loader2 } from 'lucide-react';
+import { CheckCircle2, Calendar, Loader2, FileText } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 import {
@@ -42,6 +42,7 @@ export function ConfirmPODialog({
 }: ConfirmPODialogProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [supplierReferenceNumber, setSupplierReferenceNumber] = useState('');
   const [expectedCompletionDate, setExpectedCompletionDate] = useState('');
   const [supplierNotes, setSupplierNotes] = useState('');
 
@@ -49,13 +50,14 @@ export function ConfirmPODialog({
     startTransition(async () => {
       const result = await confirmPurchaseOrderAction({
         poId,
+        supplierReferenceNumber: supplierReferenceNumber || undefined,
         expectedCompletionDate: expectedCompletionDate || undefined,
         supplierNotes: supplierNotes || undefined,
       });
 
       if (result.success) {
         toast.success('Order Confirmed', {
-          description: `${poNumber} has been confirmed successfully.`,
+          description: `${poNumber} has been confirmed. Shipment record created.`,
         });
         onOpenChange(false);
         onSuccess?.();
@@ -83,6 +85,25 @@ export function ConfirmPODialog({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="supplierReferenceNumber">
+              <span className="flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Your Sales Order # (Optional)
+              </span>
+            </Label>
+            <Input
+              id="supplierReferenceNumber"
+              type="text"
+              value={supplierReferenceNumber}
+              onChange={(e) => setSupplierReferenceNumber(e.target.value)}
+              placeholder="e.g., SO2600028"
+            />
+            <p className="text-xs text-muted-foreground">
+              Your internal sales order or reference number
+            </p>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="expectedCompletionDate">
               <span className="flex items-center gap-2">
