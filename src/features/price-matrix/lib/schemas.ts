@@ -26,7 +26,6 @@ export const priceMatrixFormSchema = z.object({
     }),
   maxQuantity: z
     .string()
-    .optional()
     .refine(
       (val) => !val || (!isNaN(parseInt(val)) && parseInt(val) >= 1),
       { message: 'Maximum quantity must be a positive number' }
@@ -45,7 +44,7 @@ export const priceMatrixFormSchema = z.object({
     }),
   status: priceStatusSchema,
   effectiveFrom: z.string().min(1, 'Effective from date is required'),
-  effectiveTo: z.string().optional(),
+  effectiveTo: z.string(),
 }).refine(
   (data) => {
     const cost = parseFloat(data.cost);
@@ -158,8 +157,8 @@ export function entityToFormValues(entity: {
     cost: (entity.cost / 100).toFixed(2),
     price: (entity.price / 100).toFixed(2),
     status: entity.status,
-    effectiveFrom: entity.effectiveFrom.toISOString().split('T')[0],
-    effectiveTo: entity.effectiveTo?.toISOString().split('T')[0] || '',
+    effectiveFrom: entity.effectiveFrom.toISOString().split('T')[0] ?? '',
+    effectiveTo: entity.effectiveTo?.toISOString().split('T')[0] ?? '',
   };
 }
 

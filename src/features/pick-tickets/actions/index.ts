@@ -298,10 +298,11 @@ export async function createPickTicketFromSalesOrder(
       .neq('status', 'cancelled')
       .limit(1);
 
-    if (existingPT && existingPT.length > 0) {
+    const firstExistingPT = existingPT?.[0];
+    if (firstExistingPT) {
       return {
         success: false,
-        error: `Pick ticket ${existingPT[0].pick_ticket_number} already exists for this sales order`,
+        error: `Pick ticket ${firstExistingPT.pick_ticket_number} already exists for this sales order`,
       };
     }
 
@@ -352,3 +353,9 @@ export async function createPickTicketFromSalesOrder(
     };
   }
 }
+
+// ============================================
+// PACKING LIST ACTIONS
+// Note: Import packing list actions directly from './packing-list.actions'
+// Re-exporting from a 'use server' file is not allowed in Next.js
+// ============================================

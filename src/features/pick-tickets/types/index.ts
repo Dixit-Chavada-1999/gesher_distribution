@@ -423,6 +423,7 @@ export interface ViewPickTicketDrawerProps {
   pickTicketId: string | null;
   onEdit?: (pickTicket: PickTicketListItem | PickTicketWithItems) => void;
   onStartPicking?: (pickTicket: PickTicketWithItems) => void;
+  onPackingListCreated?: () => void;
 }
 
 export interface PickingInterfaceProps {

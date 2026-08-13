@@ -70,7 +70,7 @@ export const updateOrderItemSchema = createOrderItemSchema.partial().extend({
 export const orderItemFormSchema = z.object({
   id: z.string().optional(),
   productId: z.string().min(1, 'Product is required'),
-  sku: z.string().default(''), // SKU is auto-filled when product is selected
+  sku: z.string(), // SKU is auto-filled when product is selected (empty string allowed)
   description: z.string().optional().default(''),
   quantity: z.union([z.string(), z.number()]).transform((val) => {
     const num = typeof val === 'string' ? parseInt(val, 10) : val;

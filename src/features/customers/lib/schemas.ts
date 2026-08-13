@@ -14,7 +14,7 @@ import type { Customer, CustomerFormValues } from '../types';
 
 export const customerStatusSchema = z.enum(['active', 'inactive']);
 export const customerChannelSchema = z.enum(['oem', 'dealer']);
-export const creditStatusSchema = z.enum(['approved', 'pending', 'hold', 'rejected']);
+export const creditStatusSchema = z.enum(['approved', 'pending', 'hold', 'suspended', 'blocked', 'rejected']);
 
 // ============================================
 // BASE FIELD SCHEMAS

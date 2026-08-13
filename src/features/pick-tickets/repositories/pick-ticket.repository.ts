@@ -16,9 +16,6 @@ import type {
   PickTicketStatus,
   PickTicketPriority,
   PaginatedResult,
-  SalesOrderSummary,
-  WarehouseSummary,
-  UserSummary,
 } from '../types';
 
 // ============================================
@@ -151,7 +148,7 @@ class PickTicketRepositoryImpl {
         created_at,
         sales_orders!inner(order_number, customers!inner(name)),
         locations!inner(name),
-        users(first_name, last_name)
+        users!pick_tickets_assigned_to_fkey(first_name, last_name)
       `,
         { count: 'exact' }
       )
@@ -302,7 +299,7 @@ class PickTicketRepositoryImpl {
         items:pick_ticket_items(*),
         sales_orders(id, order_number, status, customers(name)),
         locations(id, location_code, name),
-        users(id, first_name, last_name, email)
+        users!pick_tickets_assigned_to_fkey(id, first_name, last_name, email)
       `
       )
       .eq('id', id)

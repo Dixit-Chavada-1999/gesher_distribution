@@ -32,6 +32,7 @@ FileSignature,
   // Receipt, // Uncomment when Invoices module is enabled
   Factory, // Suppliers
   ClipboardCheck, // Pick Tickets
+  PackageCheck, // Packing Lists
 } from 'lucide-react';
 
 import { cn } from '@/shared/lib/utils';
@@ -146,6 +147,13 @@ const NAV_SECTIONS = [
         href: '/pick-tickets',
         icon: ClipboardCheck,
         permission: 'pick_tickets.view_module',
+      },
+      {
+        id: 'packing-lists',
+        label: 'Packing Lists',
+        href: '/packing-lists',
+        icon: PackageCheck,
+        permission: 'pick_tickets.view_module', // Uses same permission as pick tickets
       },
     ],
   },

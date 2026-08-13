@@ -199,7 +199,7 @@ export const DEFAULT_PRICE_MATRIX_FORM_VALUES: PriceMatrixFormValues = {
   cost: '',
   price: '',
   status: 'active',
-  effectiveFrom: new Date().toISOString().split('T')[0],
+  effectiveFrom: new Date().toISOString().split('T')[0] ?? '',
   effectiveTo: '',
 };
 

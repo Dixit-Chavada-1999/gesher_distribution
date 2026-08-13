@@ -255,6 +255,7 @@ export const MOCK_SALES_ORDERS_LIST: SalesOrderListItem[] = [
     orderDate: '2024-01-15',
     requestedDeliveryDate: '2024-01-22',
     status: 'confirmed',
+    creditStatus: 'ok',
     grandTotal: 384250, // cents
     currencyCode: 'USD',
     itemCount: 3,
@@ -268,6 +269,7 @@ export const MOCK_SALES_ORDERS_LIST: SalesOrderListItem[] = [
     orderDate: '2024-01-16',
     requestedDeliveryDate: '2024-01-25',
     status: 'processing',
+    creditStatus: 'ok',
     grandTotal: 215675, // cents
     currencyCode: 'USD',
     itemCount: 2,
@@ -281,6 +283,7 @@ export const MOCK_SALES_ORDERS_LIST: SalesOrderListItem[] = [
     orderDate: '2024-01-17',
     requestedDeliveryDate: '2024-01-24',
     status: 'draft',
+    creditStatus: 'ok',
     grandTotal: 158000, // cents
     currencyCode: 'USD',
     itemCount: 1,
@@ -294,6 +297,7 @@ export const MOCK_SALES_ORDERS_LIST: SalesOrderListItem[] = [
     orderDate: '2024-01-18',
     requestedDeliveryDate: '2024-01-28',
     status: 'shipped',
+    creditStatus: 'ok',
     grandTotal: 542525, // cents
     currencyCode: 'USD',
     itemCount: 4,
@@ -307,6 +311,7 @@ export const MOCK_SALES_ORDERS_LIST: SalesOrderListItem[] = [
     orderDate: '2024-01-19',
     requestedDeliveryDate: '2024-01-26',
     status: 'pending',
+    creditStatus: 'hold',
     grandTotal: 875000, // cents
     currencyCode: 'USD',
     itemCount: 5,
@@ -320,6 +325,7 @@ export const MOCK_SALES_ORDERS_LIST: SalesOrderListItem[] = [
     orderDate: '2024-01-20',
     requestedDeliveryDate: '2024-01-30',
     status: 'delivered',
+    creditStatus: 'ok',
     grandTotal: 234000, // cents
     currencyCode: 'USD',
     itemCount: 2,
@@ -333,6 +339,7 @@ export const MOCK_SALES_ORDERS_LIST: SalesOrderListItem[] = [
     orderDate: '2024-01-21',
     requestedDeliveryDate: '2024-02-01',
     status: 'cancelled',
+    creditStatus: 'ok',
     grandTotal: 125050, // cents
     currencyCode: 'USD',
     itemCount: 1,

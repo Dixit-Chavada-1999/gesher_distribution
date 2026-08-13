@@ -1122,7 +1122,7 @@ export async function getSalesOrdersOnHold(): Promise<ActionResult<SalesOrderLis
       id: row.id,
       orderNumber: row.order_number,
       customerId: row.customer_id,
-      customerName: (row.customers as { name: string })?.name || 'Unknown',
+      customerName: (row.customers as unknown as { name: string } | null)?.name || 'Unknown',
       orderDate: row.order_date,
       requestedDeliveryDate: row.requested_delivery_date,
       status: row.status as OrderStatus,

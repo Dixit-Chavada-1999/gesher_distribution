@@ -263,7 +263,7 @@ const [isReleasingHold, setIsReleasingHold] = useState(false);
   };
 
 const handleReleaseHold = async () => {
-    if (!order) return;
+    if (!order) { return; }
 
     setIsReleasingHold(true);
     try {

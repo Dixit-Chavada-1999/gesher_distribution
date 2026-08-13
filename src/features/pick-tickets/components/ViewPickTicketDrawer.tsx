@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+import { toast } from 'sonner';
 import {
   Sheet,
   SheetContent,
@@ -20,9 +22,12 @@ import {
   FileText,
   CheckCircle2,
   AlertCircle,
+  ClipboardList,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { usePickTicket } from '../hooks/usePickTicket';
+import { createPackingListFromPickTicket } from '../actions/packing-list.actions';
 import {
   PICK_TICKET_STATUS_COLORS,
   PICK_TICKET_STATUS_LABELS,
@@ -37,11 +42,34 @@ export function ViewPickTicketDrawer({
   pickTicketId,
   onEdit,
   onStartPicking,
+  onPackingListCreated,
 }: ViewPickTicketDrawerProps) {
-  const { data: pickTicket, isLoading } = usePickTicket(open ? pickTicketId : null);
+  const { data: pickTicket, isLoading, refetch } = usePickTicket(open ? pickTicketId : null);
+  const [isCreatingPackingList, setIsCreatingPackingList] = useState(false);
 
   const canEdit = pickTicket && ['pending', 'assigned'].includes(pickTicket.status);
   const canStartPicking = pickTicket && pickTicket.status === 'assigned';
+  const canCreatePackingList = pickTicket && pickTicket.status === 'picked' && !pickTicket.packingList;
+
+  const handleCreatePackingList = async () => {
+    if (!pickTicket) { return; }
+
+    setIsCreatingPackingList(true);
+    try {
+      const result = await createPackingListFromPickTicket(pickTicket.id);
+      if (result.success) {
+        toast.success('Packing list created successfully');
+        refetch();
+        onPackingListCreated?.();
+      } else {
+        toast.error(result.error || 'Failed to create packing list');
+      }
+    } catch {
+      toast.error('Failed to create packing list');
+    } finally {
+      setIsCreatingPackingList(false);
+    }
+  };
 
   // Calculate progress
   const totalQuantity = pickTicket?.items.reduce((sum, item) => sum + item.quantityToPick, 0) || 0;
@@ -258,6 +286,25 @@ export function ViewPickTicketDrawer({
                   <Play className="mr-2 h-4 w-4" />
                   Start Picking
                 </Button>
+              )}
+              {canCreatePackingList && (
+                <Button
+                  onClick={handleCreatePackingList}
+                  disabled={isCreatingPackingList}
+                  className="flex-1"
+                >
+                  {isCreatingPackingList ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <ClipboardList className="mr-2 h-4 w-4" />
+                  )}
+                  Create Packing List
+                </Button>
+              )}
+              {pickTicket.packingList && (
+                <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200">
+                  Packing List: {pickTicket.packingList.packingListNumber}
+                </Badge>
               )}
               {onEdit && canEdit && (
                 <Button onClick={() => onEdit(pickTicket)} variant="outline" className="flex-1">

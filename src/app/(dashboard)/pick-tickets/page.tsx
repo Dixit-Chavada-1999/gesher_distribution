@@ -8,7 +8,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { Plus, RefreshCw, Play } from 'lucide-react';
+import { Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -34,6 +34,7 @@ import {
 import {
   PickTicketsTable,
   ViewPickTicketDrawer,
+  AssignPickTicketDialog,
   usePickTickets,
 } from '@/features/pick-tickets';
 import { deletePickTicket, startPicking } from '@/features/pick-tickets/actions';
@@ -53,6 +54,10 @@ export default function PickTicketsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [pickTicketToDelete, setPickTicketToDelete] = useState<PickTicketListItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Assign dialog
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [pickTicketToAssign, setPickTicketToAssign] = useState<PickTicketListItem | null>(null);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<PickTicketStatus | 'all'>('all');
@@ -74,7 +79,7 @@ export default function PickTicketsPage() {
   // ----------------------------------------
 
   const handleCreateClick = () => {
-    toast.info('Create pick ticket functionality coming soon. Pick tickets are generated from sales orders.');
+    toast.info('Pick tickets are created from Sales Orders. Go to Sales Orders → Open a confirmed order → Click "Create Pick Ticket"');
   };
 
   const handleView = useCallback((pickTicket: PickTicketListItem) => {
@@ -87,13 +92,27 @@ export default function PickTicketsPage() {
     setSelectedPickTicketId(null);
   }, []);
 
-  const handleEdit = useCallback((_pickTicket: PickTicketListItem | PickTicketWithItems) => {
-    toast.info('Edit pick ticket functionality coming soon');
+  const handleEdit = useCallback((pickTicket: PickTicketListItem | PickTicketWithItems) => {
+    // For now, only priority and notes can be edited via the assign dialog or view drawer
+    // Full edit functionality would require an EditPickTicketDrawer
+    toast.info(`Edit functionality for ${pickTicket.pickTicketNumber} - Use the view drawer to see details`);
+    setSelectedPickTicketId(pickTicket.id);
+    setIsViewDrawerOpen(true);
   }, []);
 
-  const handleAssign = useCallback((_pickTicket: PickTicketListItem) => {
-    toast.info('Assign pick ticket functionality coming soon');
+  const handleAssign = useCallback((pickTicket: PickTicketListItem) => {
+    setPickTicketToAssign(pickTicket);
+    setAssignDialogOpen(true);
   }, []);
+
+  const handleAssignDialogClose = useCallback(() => {
+    setAssignDialogOpen(false);
+    setPickTicketToAssign(null);
+  }, []);
+
+  const handleAssignSuccess = useCallback(() => {
+    refetchPickTickets();
+  }, [refetchPickTickets]);
 
   const handleStartPicking = useCallback(async (pickTicket: PickTicketListItem | PickTicketWithItems) => {
     try {
@@ -216,6 +235,7 @@ export default function PickTicketsPage() {
         onClose={handleViewDrawerClose}
         onEdit={handleEdit}
         onStartPicking={handleStartPicking}
+        onPackingListCreated={refetchPickTickets}
       />
 
       {/* Delete Confirmation Dialog */}
@@ -243,6 +263,14 @@ export default function PickTicketsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Assign Pick Ticket Dialog */}
+      <AssignPickTicketDialog
+        pickTicket={pickTicketToAssign}
+        open={assignDialogOpen}
+        onClose={handleAssignDialogClose}
+        onSuccess={handleAssignSuccess}
+      />
     </div>
   );
 }
