@@ -26,6 +26,24 @@ export const QUOTE_STATUSES: QuoteStatus[] = [
   'converted',
 ];
 
+// ============================================
+// PRODUCT SOURCE (Where product is sourced from)
+// ============================================
+
+export type ProductSource = 'dropship' | 'warehouse';
+
+export const PRODUCT_SOURCES: ProductSource[] = ['dropship', 'warehouse'];
+
+export const PRODUCT_SOURCE_LABELS: Record<ProductSource, string> = {
+  dropship: 'Dropship',
+  warehouse: 'Direct / Warehouse',
+};
+
+export const PRODUCT_SOURCE_DESCRIPTIONS: Record<ProductSource, string> = {
+  dropship: 'Ships from Galileo to customer',
+  warehouse: 'Ships from US warehouse',
+};
+
 export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
   draft: 'Draft',
   pending_approval: 'Pending Approval',
@@ -70,6 +88,7 @@ export interface Quote {
   salesRepId: string | null;
   currencyCode: string;
   status: QuoteStatus;
+  productSource: ProductSource;
 
   // Billing Address
   billingAddressStreet: string | null;
@@ -98,6 +117,7 @@ export interface Quote {
 
   // PO Document
   poDocumentUrl: string | null;
+  customerPoNumber: string | null;  // Customer's PO number from email/PDF
 
   // Chain Link
   convertedToSalesOrderId: string | null;
@@ -207,6 +227,7 @@ export interface CreateQuoteDTO {
   salesRepId?: string | null;
   currencyCode?: string;
   status?: QuoteStatus;
+  productSource?: ProductSource;
   billingAddress: AddressDTO;
   shippingAddress: AddressDTO;
   items: CreateQuoteItemDTO[];
@@ -214,6 +235,7 @@ export interface CreateQuoteDTO {
   internalNotes?: string | null;
   termsAndConditions?: string | null;
   poDocumentUrl?: string | null;
+  customerPoNumber?: string | null;
 }
 
 export interface UpdateQuoteDTO {
@@ -222,6 +244,7 @@ export interface UpdateQuoteDTO {
   customerId?: string;
   salesRepId?: string | null;
   currencyCode?: string;
+  productSource?: ProductSource;
   billingAddress?: AddressDTO;
   shippingAddress?: AddressDTO;
   customerNotes?: string | null;
@@ -254,6 +277,7 @@ export interface QuoteListItem {
   quoteDate: string;
   validUntil: string | null;
   status: QuoteStatus;
+  productSource: ProductSource;
   grandTotal: number; // cents
   currencyCode: string;
   itemCount: number;
@@ -404,6 +428,7 @@ export interface QuoteFormData {
   salesRepId?: string;
   currencyId?: string;
   status?: QuoteStatus;
+  productSource?: ProductSource;
 
   billingAddress: Address;
   shippingAddress: Address;

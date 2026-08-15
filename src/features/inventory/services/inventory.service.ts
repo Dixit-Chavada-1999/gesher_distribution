@@ -241,12 +241,13 @@ export const inventoryService = {
   },
 
   /**
-   * Allocate inventory
+   * Allocate inventory (reserve for sales order)
    */
   async allocate(
     id: string,
     quantity: number,
-    userId?: string
+    userId?: string,
+    reference?: { type: string; id: string; number: string }
   ): Promise<ServiceResult<Inventory>> {
     try {
       if (quantity <= 0) {
@@ -256,7 +257,7 @@ export const inventoryService = {
         };
       }
 
-      const inventory = await inventoryRepository.allocate(id, quantity, userId);
+      const inventory = await inventoryRepository.allocate(id, quantity, userId, reference);
 
       return {
         success: true,
@@ -272,12 +273,42 @@ export const inventoryService = {
   },
 
   /**
+   * Allocate inventory by product and location
+   */
+  async allocateByProductLocation(
+    productId: string,
+    locationId: string,
+    quantity: number,
+    userId?: string,
+    reference?: { type: string; id: string; number: string }
+  ): Promise<ServiceResult<Inventory>> {
+    try {
+      const inventory = await inventoryRepository.findByProductAndLocation(productId, locationId);
+      if (!inventory) {
+        return {
+          success: false,
+          error: `No inventory found for product at this location`,
+        };
+      }
+
+      return this.allocate(inventory.id, quantity, userId, reference);
+    } catch (error) {
+      console.error('InventoryService.allocateByProductLocation error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to allocate inventory',
+      };
+    }
+  },
+
+  /**
    * Deallocate inventory
    */
   async deallocate(
     id: string,
     quantity: number,
-    userId?: string
+    userId?: string,
+    reference?: { type: string; id: string; number: string }
   ): Promise<ServiceResult<Inventory>> {
     try {
       if (quantity <= 0) {
@@ -287,7 +318,7 @@ export const inventoryService = {
         };
       }
 
-      const inventory = await inventoryRepository.deallocate(id, quantity, userId);
+      const inventory = await inventoryRepository.deallocate(id, quantity, userId, reference);
 
       return {
         success: true,
@@ -298,6 +329,163 @@ export const inventoryService = {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to deallocate inventory',
+      };
+    }
+  },
+
+  /**
+   * Deallocate inventory by product and location
+   */
+  async deallocateByProductLocation(
+    productId: string,
+    locationId: string,
+    quantity: number,
+    userId?: string,
+    reference?: { type: string; id: string; number: string }
+  ): Promise<ServiceResult<Inventory>> {
+    try {
+      const inventory = await inventoryRepository.findByProductAndLocation(productId, locationId);
+      if (!inventory) {
+        return {
+          success: false,
+          error: `No inventory found for product at this location`,
+        };
+      }
+
+      return this.deallocate(inventory.id, quantity, userId, reference);
+    } catch (error) {
+      console.error('InventoryService.deallocateByProductLocation error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to deallocate inventory',
+      };
+    }
+  },
+
+  /**
+   * Ship inventory (reduce on_hand and allocated when pick ticket completes)
+   */
+  async ship(
+    id: string,
+    quantity: number,
+    userId?: string,
+    reference?: { type: string; id: string; number: string }
+  ): Promise<ServiceResult<Inventory>> {
+    try {
+      if (quantity <= 0) {
+        return {
+          success: false,
+          error: 'Ship quantity must be positive',
+        };
+      }
+
+      const inventory = await inventoryRepository.ship(id, quantity, userId, reference);
+
+      return {
+        success: true,
+        data: inventory,
+      };
+    } catch (error) {
+      console.error('InventoryService.ship error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to ship inventory',
+      };
+    }
+  },
+
+  /**
+   * Ship inventory by product and location
+   */
+  async shipByProductLocation(
+    productId: string,
+    locationId: string,
+    quantity: number,
+    userId?: string,
+    reference?: { type: string; id: string; number: string }
+  ): Promise<ServiceResult<Inventory>> {
+    try {
+      const inventory = await inventoryRepository.findByProductAndLocation(productId, locationId);
+      if (!inventory) {
+        return {
+          success: false,
+          error: `No inventory found for product at this location`,
+        };
+      }
+
+      return this.ship(inventory.id, quantity, userId, reference);
+    } catch (error) {
+      console.error('InventoryService.shipByProductLocation error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to ship inventory',
+      };
+    }
+  },
+
+  /**
+   * Receive inventory (increase on_hand when shipment arrives)
+   */
+  async receive(
+    id: string,
+    quantity: number,
+    userId?: string,
+    reference?: { type: string; id: string; number: string }
+  ): Promise<ServiceResult<Inventory>> {
+    try {
+      if (quantity <= 0) {
+        return {
+          success: false,
+          error: 'Receive quantity must be positive',
+        };
+      }
+
+      const inventory = await inventoryRepository.receive(id, quantity, userId, reference);
+
+      return {
+        success: true,
+        data: inventory,
+      };
+    } catch (error) {
+      console.error('InventoryService.receive error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to receive inventory',
+      };
+    }
+  },
+
+  /**
+   * Receive inventory by product and location (or create if doesn't exist)
+   */
+  async receiveByProductLocation(
+    productId: string,
+    locationId: string,
+    quantity: number,
+    userId?: string,
+    reference?: { type: string; id: string; number: string }
+  ): Promise<ServiceResult<Inventory>> {
+    try {
+      let inventory = await inventoryRepository.findByProductAndLocation(productId, locationId);
+
+      // Create inventory record if doesn't exist
+      if (!inventory) {
+        inventory = await inventoryRepository.create({
+          productId,
+          locationId,
+          onHand: 0,
+          allocated: 0,
+          reorderPoint: 0,
+          reorderQty: 0,
+        }, userId);
+      }
+
+      return this.receive(inventory.id, quantity, userId, reference);
+    } catch (error) {
+      console.error('InventoryService.receiveByProductLocation error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to receive inventory',
       };
     }
   },

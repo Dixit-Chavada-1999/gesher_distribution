@@ -5,6 +5,7 @@
  *
  * Full inventory listing from GDC1 warehouse.
  * Based on Jenny's "GDC 1" tab.
+ * SKU items displayed dynamically based on shipment_items data.
  */
 
 import { Pencil } from 'lucide-react';
@@ -26,14 +27,15 @@ import {
 } from '@/shared/components/ui/table';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
-import type { GDC1InventoryItem } from '../types';
+import type { GDC1InventoryItem, SKUColumnInfo } from '../types';
 
 interface GDC1InventoryTableProps {
   data: GDC1InventoryItem[];
+  uniqueSkus: SKUColumnInfo[];  // Dynamic SKU columns with product names
   onEdit?: (item: GDC1InventoryItem) => void;
 }
 
-export function GDC1InventoryTable({ data, onEdit }: GDC1InventoryTableProps) {
+export function GDC1InventoryTable({ data, uniqueSkus, onEdit }: GDC1InventoryTableProps) {
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; className?: string; label: string }> = {
       'AVAILABLE': { variant: 'default', className: 'bg-green-500', label: 'Available' },
@@ -63,17 +65,27 @@ export function GDC1InventoryTable({ data, onEdit }: GDC1InventoryTableProps) {
     }).format(amount);
   };
 
-  // Calculate totals
+  // Get quantity for a specific SKU from items array
+  const getSkuQty = (items: { sku: string; qty: number }[], sku: string): number => {
+    const item = items?.find((i) => i.sku === sku);
+    return item?.qty || 0;
+  };
+
+  // Calculate totals including per-SKU totals
   const totals = data.reduce(
-    (acc, item) => ({
-      sku290: acc.sku290 + item.sku290_85R38Qty,
-      sku380: acc.sku380 + item.sku380_85R24Qty,
-      beadLock: acc.beadLock + item.skuBeadLockQty,
-      total: acc.total + item.totalQty,
-      outstanding: acc.outstanding + item.outstandingPoQty,
-      invoiceTotal: acc.invoiceTotal + (item.invoiceAmount || 0),
-    }),
-    { sku290: 0, sku380: 0, beadLock: 0, total: 0, outstanding: 0, invoiceTotal: 0 }
+    (acc, item) => {
+      // Calculate per-SKU totals
+      uniqueSkus.forEach((skuInfo) => {
+        acc.skuTotals[skuInfo.sku] = (acc.skuTotals[skuInfo.sku] || 0) + getSkuQty(item.items, skuInfo.sku);
+      });
+      return {
+        ...acc,
+        total: acc.total + item.totalQty,
+        outstanding: acc.outstanding + item.outstandingPoQty,
+        invoiceTotal: acc.invoiceTotal + (item.invoiceAmount || 0),
+      };
+    },
+    { total: 0, outstanding: 0, invoiceTotal: 0, skuTotals: {} as Record<string, number> }
   );
 
   // Group by status for summary
@@ -93,27 +105,33 @@ export function GDC1InventoryTable({ data, onEdit }: GDC1InventoryTableProps) {
           Invoice Total: {formatCurrency(totals.invoiceTotal)}
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-0">
         <div className="overflow-x-auto">
-          <Table>
+          <Table className="min-w-[2200px]">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[50px]">No.</TableHead>
-                <TableHead>Load #</TableHead>
-                <TableHead className="text-right">290/85R38</TableHead>
-                <TableHead className="text-right">380/85R24</TableHead>
-                <TableHead className="text-right">Bead Lock</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>PO</TableHead>
-                <TableHead>Ship Window</TableHead>
-                <TableHead>ETA Port</TableHead>
-                <TableHead>Customer Due</TableHead>
-                <TableHead className="text-right">Outstanding</TableHead>
-                <TableHead className="text-right">Invoice Amt</TableHead>
-                <TableHead className="text-right">38&quot; Price</TableHead>
-                <TableHead className="text-right">24&quot; Price</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead className="min-w-[140px] whitespace-nowrap">Load #</TableHead>
+                {/* Dynamic SKU columns - shows full product name */}
+                {uniqueSkus.map((skuInfo) => (
+                  <TableHead key={skuInfo.sku} className="text-right text-xs whitespace-nowrap min-w-[150px]" title={skuInfo.sku}>
+                    {skuInfo.productName}
+                  </TableHead>
+                ))}
+                <TableHead className="text-right whitespace-nowrap">Total</TableHead>
+                <TableHead className="whitespace-nowrap min-w-[150px]">Customer</TableHead>
+                <TableHead className="whitespace-nowrap min-w-[100px]">PO</TableHead>
+                <TableHead className="whitespace-nowrap">Ship Window</TableHead>
+                <TableHead className="whitespace-nowrap">ETA Port</TableHead>
+                <TableHead className="whitespace-nowrap">Customer Due</TableHead>
+                <TableHead className="whitespace-nowrap">Actual Delivery</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Qty Del.</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Outstanding</TableHead>
+                <TableHead className="whitespace-nowrap">Invoice #</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Invoice Amt</TableHead>
+                <TableHead className="whitespace-nowrap min-w-[150px]">Delivery Address</TableHead>
+                <TableHead className="whitespace-nowrap">Status</TableHead>
+                <TableHead className="min-w-[200px]">Action / Notes</TableHead>
                 <TableHead className="w-[60px]">Edit</TableHead>
               </TableRow>
             </TableHeader>
@@ -130,22 +148,26 @@ export function GDC1InventoryTable({ data, onEdit }: GDC1InventoryTableProps) {
                   }
                 >
                   <TableCell className="font-medium">{item.no}</TableCell>
-                  <TableCell className="font-mono text-sm">{item.loadNumber}</TableCell>
-                  <TableCell className="text-right">
-                    {item.sku290_85R38Qty > 0 ? item.sku290_85R38Qty : '-'}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {item.sku380_85R24Qty > 0 ? item.sku380_85R24Qty : '-'}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {item.skuBeadLockQty > 0 ? item.skuBeadLockQty : '-'}
-                  </TableCell>
+                  <TableCell className="font-mono text-sm whitespace-nowrap">{item.loadNumber}</TableCell>
+                  {/* Dynamic SKU quantity columns */}
+                  {uniqueSkus.map((skuInfo) => {
+                    const qty = getSkuQty(item.items, skuInfo.sku);
+                    return (
+                      <TableCell key={skuInfo.sku} className="text-right">
+                        {qty > 0 ? qty : '-'}
+                      </TableCell>
+                    );
+                  })}
                   <TableCell className="text-right font-semibold">{item.totalQty}</TableCell>
                   <TableCell>{item.customer}</TableCell>
                   <TableCell className="font-mono text-xs">{item.po}</TableCell>
                   <TableCell className="text-xs">{item.customerShipWindow || '-'}</TableCell>
                   <TableCell>{formatDate(item.etaToUsPort)}</TableCell>
                   <TableCell>{formatDate(item.customerDueDate)}</TableCell>
+                  <TableCell>{formatDate(item.actualDelivery)}</TableCell>
+                  <TableCell className="text-right">
+                    {item.qtyDelivered > 0 ? item.qtyDelivered : '-'}
+                  </TableCell>
                   <TableCell className="text-right">
                     {item.outstandingPoQty > 0 ? (
                       <span className="text-orange-600 font-semibold">{item.outstandingPoQty}</span>
@@ -153,14 +175,15 @@ export function GDC1InventoryTable({ data, onEdit }: GDC1InventoryTableProps) {
                       <span className="text-green-600">0</span>
                     )}
                   </TableCell>
+                  <TableCell className="font-mono text-xs">{item.invoiceNumber || '-'}</TableCell>
                   <TableCell className="text-right">{formatCurrency(item.invoiceAmount)}</TableCell>
-                  <TableCell className="text-right">
-                    {item.price38 ? formatCurrency(item.price38) : '-'}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {item.price24 ? formatCurrency(item.price24) : '-'}
+                  <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate" title={item.deliveryAddress || ''}>
+                    {item.deliveryAddress || '-'}
                   </TableCell>
                   <TableCell>{getStatusBadge(item.status)}</TableCell>
+                  <TableCell className="max-w-[200px] text-xs text-muted-foreground truncate" title={`${item.actionRequired || ''} ${item.ankurNotes || ''}`}>
+                    {item.actionRequired || item.ankurNotes || '-'}
+                  </TableCell>
                   <TableCell>
                     <Button
                       variant="ghost"
@@ -178,12 +201,16 @@ export function GDC1InventoryTable({ data, onEdit }: GDC1InventoryTableProps) {
               <TableRow className="bg-muted/50 font-semibold border-t-2">
                 <TableCell></TableCell>
                 <TableCell>TOTAL</TableCell>
-                <TableCell className="text-right">{totals.sku290}</TableCell>
-                <TableCell className="text-right">{totals.sku380}</TableCell>
-                <TableCell className="text-right">{totals.beadLock}</TableCell>
+                {/* Dynamic SKU totals */}
+                {uniqueSkus.map((skuInfo) => (
+                  <TableCell key={skuInfo.sku} className="text-right">
+                    {totals.skuTotals[skuInfo.sku] || 0}
+                  </TableCell>
+                ))}
                 <TableCell className="text-right">{totals.total}</TableCell>
-                <TableCell colSpan={5}></TableCell>
+                <TableCell colSpan={7}></TableCell>
                 <TableCell className="text-right text-orange-600">{totals.outstanding}</TableCell>
+                <TableCell></TableCell>
                 <TableCell className="text-right">{formatCurrency(totals.invoiceTotal)}</TableCell>
                 <TableCell colSpan={4}></TableCell>
               </TableRow>

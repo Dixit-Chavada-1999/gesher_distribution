@@ -21,6 +21,8 @@ export const quoteStatusSchema = z.enum([
   'converted',
 ]);
 
+export const productSourceSchema = z.enum(['dropship', 'warehouse']);
+
 export const unitCodeSchema = z.enum(['EA', 'SET', 'PR', 'BOX']);
 
 // ============================================
@@ -102,6 +104,7 @@ export const createQuoteSchema = z.object({
   salesRepId: z.string().uuid('Please select a valid sales representative.').nullable().optional(),
   currencyCode: z.string().length(3, 'Currency code must be 3 characters.').default('USD'),
   status: quoteStatusSchema.default('draft'),
+  productSource: productSourceSchema.nullable().optional(),
   billingAddress: addressSchema,
   shippingAddress: addressSchema,
   items: z.array(createQuoteItemSchema).min(1, 'At least one line item is required.'),
@@ -109,6 +112,7 @@ export const createQuoteSchema = z.object({
   internalNotes: z.string().nullable().optional(),
   termsAndConditions: z.string().nullable().optional(),
   poDocumentUrl: z.string().nullable().optional(),
+  customerPoNumber: z.string().max(100).nullable().optional(),
 });
 
 export const updateQuoteSchema = z.object({
@@ -117,6 +121,7 @@ export const updateQuoteSchema = z.object({
   customerId: z.string().uuid('Please select a valid customer.').optional(),
   salesRepId: z.string().uuid('Please select a valid sales representative.').nullable().optional(),
   currencyCode: z.string().length(3, 'Currency code must be 3 characters.').optional(),
+  productSource: productSourceSchema.nullable().optional(),
   billingAddress: addressSchema.optional(),
   shippingAddress: addressSchema.optional(),
   customerNotes: z.string().nullable().optional(),
@@ -136,12 +141,14 @@ export const quoteFormSchema = z.object({
   salesRepId: z.string().default(''),
   currencyId: z.string().default('USD'),
   status: quoteStatusSchema.default('draft'),
+  productSource: z.string().default(''),
   billingAddress: addressFormSchema,
   shippingAddress: addressFormSchema,
   items: z.array(quoteItemFormSchema).min(1, 'At least one line item is required.'),
   customerNotes: z.string().default(''),
   internalNotes: z.string().default(''),
   termsAndConditions: z.string().default(''),
+  customerPoNumber: z.string().default(''),
 });
 
 // ============================================
@@ -197,6 +204,7 @@ export function formToCreateDTO(form: QuoteFormInput) {
     salesRepId: form.salesRepId || null,
     currencyCode: form.currencyId || 'USD',
     status: form.status as QuoteStatus,
+    productSource: form.productSource ? (form.productSource as 'dropship' | 'warehouse') : null,
     billingAddress: {
       street: form.billingAddress.street || null,
       city: form.billingAddress.city || null,
@@ -237,6 +245,7 @@ export function quoteToFormValues(quote: {
   salesRepId: string | null;
   currencyCode: string;
   status: QuoteStatus;
+  productSource?: 'dropship' | 'warehouse' | null;
   billingAddressStreet: string | null;
   billingAddressCity: string | null;
   billingAddressState: string | null;
@@ -274,6 +283,7 @@ export function quoteToFormValues(quote: {
     salesRepId: quote.salesRepId || '',
     currencyId: quote.currencyCode,
     status: quote.status,
+    productSource: quote.productSource || '',
     billingAddress: {
       street: quote.billingAddressStreet || '',
       city: quote.billingAddressCity || '',

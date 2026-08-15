@@ -59,11 +59,9 @@ interface ViewEmailDrawerProps {
 function AttachmentItem({
   attachment,
   onExtract,
-  isEmailProcessed,
 }: {
   attachment: InboundEmailAttachment;
   onExtract: (attachment: InboundEmailAttachment) => void;
-  isEmailProcessed?: boolean;
 }) {
   const [downloading, setDownloading] = useState(false);
 
@@ -129,7 +127,7 @@ function AttachmentItem({
             <Download className="h-4 w-4" />
           )}
         </Button>
-        {attachment.is_pdf && !attachment.quote_id && !isEmailProcessed && (
+        {attachment.is_pdf && !attachment.quote_id && (
           <Button
             size="sm"
             onClick={() => onExtract(attachment)}
@@ -140,10 +138,10 @@ function AttachmentItem({
             <ArrowRight className="h-4 w-4 ml-1" />
           </Button>
         )}
-        {(attachment.quote_id || isEmailProcessed) && (
+        {attachment.quote_id && (
           <Badge variant="secondary" className="gap-1">
             <FileText className="h-3 w-3" />
-            {attachment.quote_id ? 'Quote Created' : 'Processed'}
+            Processed
           </Badge>
         )}
       </div>
@@ -295,7 +293,6 @@ export function ViewEmailDrawer({
                         key={attachment.id}
                         attachment={attachment}
                         onExtract={handleExtractPO}
-                        isEmailProcessed={emailDetails.status === 'processed'}
                       />
                     ))}
                   </div>

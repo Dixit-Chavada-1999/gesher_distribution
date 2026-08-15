@@ -53,11 +53,14 @@ export const PICK_TICKET_STATUS_COLORS: Record<PickTicketStatus, string> = {
 };
 
 // Valid status transitions
+// Two fulfillment paths:
+// 1. Quick ship: picking → picked → shipped (via Complete Picking)
+// 2. Full packing: picking → picked → packing → packed → shipped (via Packing List)
 export const PICK_TICKET_STATUS_TRANSITIONS: Record<PickTicketStatus, PickTicketStatus[]> = {
   pending: ['assigned', 'cancelled'],
   assigned: ['picking', 'cancelled'],
-  picking: ['picked', 'cancelled'],
-  picked: ['packing'],
+  picking: ['picked', 'shipped', 'cancelled'],
+  picked: ['packing', 'shipped'],  // shipped via Complete Picking, packing via Create Packing List
   packing: ['packed'],
   packed: ['shipped'],
   shipped: [],

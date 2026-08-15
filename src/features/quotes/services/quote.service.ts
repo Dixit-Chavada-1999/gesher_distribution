@@ -384,6 +384,14 @@ export const quoteService = {
         };
       }
 
+      // Check if productSource is set
+      if (!existing.productSource) {
+        return {
+          success: false,
+          error: 'Product source is required. Please select either Dropship or Direct / Warehouse before submitting for approval.',
+        };
+      }
+
       // Create approval event
       const { approvalEventRepository } = await import('@/features/approval-events/repositories/approval-event.repository');
       await approvalEventRepository.create({
@@ -540,6 +548,17 @@ export const quoteService = {
         };
       }
 
+      // Log quote productSource for debugging
+      console.log('[convertToSalesOrder] Quote productSource:', existing.productSource);
+
+      // Validate productSource is set
+      if (!existing.productSource) {
+        return {
+          success: false,
+          error: 'Product source is required. Please edit the quote and select a product source before converting to sales order.',
+        };
+      }
+
       // Check if transition is valid
       if (!isValidStatusTransition(existing.status, 'converted')) {
         return {
@@ -565,6 +584,7 @@ export const quoteService = {
           salesRepId: existing.salesRepId,
           currencyCode: existing.currencyCode,
           status: 'draft',
+          productSource: existing.productSource,
           billingAddress: {
             street: existing.billingAddressStreet,
             city: existing.billingAddressCity,
@@ -591,6 +611,7 @@ export const quoteService = {
           })),
           customerNotes: existing.customerNotes,
           internalNotes: existing.internalNotes,
+          customerPoNumber: existing.customerPoNumber,  // Copy PO number from quote
         },
         userId
       );

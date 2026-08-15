@@ -84,10 +84,43 @@ export async function getInboundEmails(
     const total = count || 0;
     const totalPages = Math.ceil(total / limit);
 
+    // Fetch attachment counts for these emails
+    const emailIds = (data || []).map((e) => e.id);
+    const attachmentCounts: Record<string, { total: number; processed: number }> = {};
+
+    if (emailIds.length > 0) {
+      const { data: attachments } = await supabase
+        .from('inbound_email_attachments')
+        .select('inbound_email_id, is_pdf, quote_id')
+        .in('inbound_email_id', emailIds);
+
+      if (attachments) {
+        // Count PDF attachments and processed ones per email
+        attachments.forEach((att) => {
+          if (!att.is_pdf) { return; }
+
+          if (!attachmentCounts[att.inbound_email_id]) {
+            attachmentCounts[att.inbound_email_id] = { total: 0, processed: 0 };
+          }
+          attachmentCounts[att.inbound_email_id].total++;
+          if (att.quote_id) {
+            attachmentCounts[att.inbound_email_id].processed++;
+          }
+        });
+      }
+    }
+
+    // Merge counts into emails
+    const emailsWithCounts = (data || []).map((email) => ({
+      ...email,
+      total_pdf_attachments: attachmentCounts[email.id]?.total || 0,
+      processed_pdf_attachments: attachmentCounts[email.id]?.processed || 0,
+    }));
+
     return {
       success: true,
       data: {
-        data: data as InboundEmail[],
+        data: emailsWithCounts as InboundEmail[],
         meta: {
           total,
           page,
@@ -226,6 +259,41 @@ export async function deleteInboundEmail(
   } catch (error) {
     console.error('deleteInboundEmail error:', error);
     return { success: false, error: 'Failed to delete email' };
+  }
+}
+
+// ============================================
+// UPDATE ATTACHMENT QUOTE ID
+// ============================================
+
+export async function updateAttachmentQuoteId(
+  attachmentId: string,
+  quoteId: string
+): Promise<ActionResult<InboundEmailAttachment>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('inbound_email_attachments')
+      .update({ quote_id: quoteId })
+      .eq('id', attachmentId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating attachment quote_id:', error);
+      return { success: false, error: 'Failed to update attachment' };
+    }
+
+    return { success: true, data: data as InboundEmailAttachment };
+  } catch (error) {
+    console.error('updateAttachmentQuoteId error:', error);
+    return { success: false, error: 'Failed to update attachment' };
   }
 }
 

@@ -105,6 +105,7 @@ const getDefaultValues = (initialData?: Partial<QuoteFormInput>): any => {
     salesRepId: initialData?.salesRepId || '',
     currencyId: initialData?.currencyId || 'USD',
     status: initialData?.status || 'draft',
+    productSource: initialData?.productSource || '',
     billingAddress: {
       street: initialData?.billingAddress?.street || defaultAddress.street,
       city: initialData?.billingAddress?.city || defaultAddress.city,

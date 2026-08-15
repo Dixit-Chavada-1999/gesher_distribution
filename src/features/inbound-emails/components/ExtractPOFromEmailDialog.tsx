@@ -51,7 +51,7 @@ import { ChevronDown, Plus, X } from 'lucide-react';
 import { convertPdfToImages } from '@/features/quotes/lib/pdf-to-images';
 import type { ProcessedPOData } from '@/features/quotes/types/po-extract.types';
 import type { InboundEmailAttachment } from '../types';
-import { updateInboundEmailStatus } from '../actions';
+import { updateAttachmentQuoteId } from '../actions';
 import {
   findOrCreateCustomerFromPO,
   findOrCreateProductFromPO,
@@ -557,6 +557,7 @@ export function ExtractPOFromEmailDialog({
         salesRepId: null,
         currencyCode: 'USD',
         status: 'draft' as const,
+        productSource: null,  // User must select product source before approval
         billingAddress: {
           street: data.extraction.customer?.address || null,
           city: data.extraction.customer?.city || null,
@@ -578,6 +579,8 @@ export function ExtractPOFromEmailDialog({
         // Use stored_path instead of full signed URL (which can be 1000+ chars)
         // The stored_path is like "inbound-emails/{id}/attachments/{filename}"
         poDocumentUrl: attachment?.stored_path || null,
+        // Store customer PO number for chain traceability
+        customerPoNumber: data.extraction.poNumber || null,
       };
 
       // Log quote data for debugging
@@ -591,9 +594,9 @@ export function ExtractPOFromEmailDialog({
       const result = await createQuoteFromData(quoteData);
 
       if (result.success && result.data) {
-        // Update inbound email status to 'processed'
-        if (attachment?.inbound_email_id) {
-          await updateInboundEmailStatus(attachment.inbound_email_id, 'processed');
+        // Update attachment's quote_id to link it to the created quote
+        if (attachment?.id && result.data.id) {
+          await updateAttachmentQuoteId(attachment.id, result.data.id);
         }
 
         toast.success('Quote created successfully');

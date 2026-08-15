@@ -22,6 +22,8 @@ export const orderStatusSchema = z.enum([
   'cancelled',
 ]);
 
+export const productSourceSchema = z.enum(['dropship', 'warehouse']);
+
 export const unitCodeSchema = z.enum(['EA', 'SET', 'PR', 'BOX']);
 
 // ============================================
@@ -108,6 +110,7 @@ export const createSalesOrderSchema = z.object({
   currencyCode: z.string().length(3).default('USD'),
   customerPoNumber: z.string().max(100).nullable().optional(),
   status: orderStatusSchema.default('draft'),
+  productSource: productSourceSchema.optional(),
   billingAddress: addressSchema,
   shippingAddress: addressSchema,
   shippingMethod: z.string().max(100).nullable().optional(),
@@ -124,6 +127,7 @@ export const updateSalesOrderSchema = z.object({
   warehouseId: z.string().uuid().nullable().optional(),
   currencyCode: z.string().length(3).optional(),
   customerPoNumber: z.string().max(100).nullable().optional(),
+  productSource: productSourceSchema.optional(),
   billingAddress: addressSchema.optional(),
   shippingAddress: addressSchema.optional(),
   shippingMethod: z.string().max(100).nullable().optional(),

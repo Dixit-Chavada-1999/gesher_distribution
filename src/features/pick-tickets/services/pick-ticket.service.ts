@@ -304,7 +304,8 @@ class PickTicketServiceImpl {
   }
 
   /**
-   * Complete picking (transition to picked status)
+   * Complete picking (transition to picked/shipped status and create shipment)
+   * Allowed from 'picking' or 'picked' status
    */
   async completePicking(id: string, userId?: string): Promise<ServiceResult<PickTicket>> {
     try {
@@ -314,8 +315,8 @@ class PickTicketServiceImpl {
         return { success: false, error: 'Pick ticket not found' };
       }
 
-      // Must be in picking status
-      if (existing.status !== 'picking') {
+      // Must be in picking or picked status (before packing list is created)
+      if (!['picking', 'picked'].includes(existing.status)) {
         return {
           success: false,
           error: `Cannot complete picking from ${existing.status} status`,
@@ -331,7 +332,8 @@ class PickTicketServiceImpl {
         };
       }
 
-      const pickTicket = await PickTicketRepository.updateStatus(id, 'picked', userId);
+      // Transition to 'shipped' status (shipment will be created by action)
+      const pickTicket = await PickTicketRepository.updateStatus(id, 'shipped', userId);
       return { success: true, data: pickTicket };
     } catch (error) {
       console.error('[PickTicketService.completePicking] Error:', error);

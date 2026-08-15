@@ -425,7 +425,8 @@ export async function submitSalesOrder(id: string): Promise<ActionResult<SalesOr
 
 /**
  * Confirm a pending order (pending -> confirmed)
- * Also creates a Purchase Order automatically
+ * Also creates a Purchase Order automatically for dropship orders
+ * Note: Inventory allocation happens when Pick Ticket is created (not here)
  */
 export async function confirmSalesOrder(id: string): Promise<ActionResult<SalesOrder>> {
   const supabase = await createClient();
@@ -455,9 +456,55 @@ export async function confirmSalesOrder(id: string): Promise<ActionResult<SalesO
     revalidatePath('/sales-orders');
     revalidatePath(`/sales-orders/${id}`);
     revalidatePath('/purchase-orders');
+    revalidatePath('/inventory');
   }
 
   return result;
+}
+
+/**
+ * Helper: Allocate inventory for Sales Order items (warehouse fulfillment)
+ */
+async function allocateInventoryForSalesOrder(
+  salesOrder: SalesOrderWithItems,
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  const { inventoryService } = await import('@/features/inventory/services/inventory.service');
+
+  const reference = {
+    type: 'sales_order',
+    id: salesOrder.id,
+    number: salesOrder.orderNumber,
+  };
+
+  const errors: string[] = [];
+
+  for (const item of salesOrder.items) {
+    if (!item.productId) {
+      continue; // Skip items without product ID
+    }
+
+    const result = await inventoryService.allocateByProductLocation(
+      item.productId,
+      salesOrder.warehouseId!,
+      item.quantity,
+      userId,
+      reference
+    );
+
+    if (!result.success) {
+      errors.push(`${item.sku}: ${result.error}`);
+    }
+  }
+
+  if (errors.length > 0) {
+    return {
+      success: false,
+      error: `Insufficient inventory: ${errors.join(', ')}`,
+    };
+  }
+
+  return { success: true };
 }
 
 /**
@@ -703,6 +750,7 @@ export async function deliverSalesOrder(id: string): Promise<ActionResult<SalesO
 
 /**
  * Cancel an order
+ * If warehouse fulfillment, deallocates inventory
  */
 export async function cancelSalesOrder(
   id: string,
@@ -721,14 +769,63 @@ export async function cancelSalesOrder(
     return { success: false, error: 'User profile not found' };
   }
 
+  // Get the SO first to check if we need to deallocate
+  const soResult = await salesOrderService.getById(id);
+  if (!soResult.success || !soResult.data) {
+    return { success: false, error: 'Sales order not found' };
+  }
+
+  const salesOrder = soResult.data;
+
+  // Only deallocate if order was confirmed and has warehouse
+  if (salesOrder.status === 'confirmed' && salesOrder.warehouseId) {
+    await deallocateInventoryForSalesOrder(salesOrder, appUser.id);
+  }
+
   const result = await salesOrderService.cancel(id, reason, appUser.id);
 
   if (result.success) {
     revalidatePath('/sales-orders');
     revalidatePath(`/sales-orders/${id}`);
+    revalidatePath('/inventory');
   }
 
   return result;
+}
+
+/**
+ * Helper: Deallocate inventory for cancelled Sales Order
+ */
+async function deallocateInventoryForSalesOrder(
+  salesOrder: SalesOrderWithItems,
+  userId: string
+): Promise<void> {
+  const { inventoryService } = await import('@/features/inventory/services/inventory.service');
+
+  const reference = {
+    type: 'sales_order',
+    id: salesOrder.id,
+    number: salesOrder.orderNumber,
+  };
+
+  for (const item of salesOrder.items) {
+    if (!item.productId) {
+      continue;
+    }
+
+    try {
+      await inventoryService.deallocateByProductLocation(
+        item.productId,
+        salesOrder.warehouseId!,
+        item.quantity,
+        userId,
+        reference
+      );
+    } catch (error) {
+      // Log but don't fail - best effort deallocation
+      console.error(`Failed to deallocate ${item.sku}:`, error);
+    }
+  }
 }
 
 // ============================================

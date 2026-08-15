@@ -319,10 +319,18 @@ export const PackingListRepository = {
   ): Promise<PackingList> {
     const now = new Date().toISOString();
 
+    // Generate packing list number
+    const { data: packingListNumber, error: numError } = await db.rpc('generate_packing_list_number');
+    if (numError || !packingListNumber) {
+      console.error('[PackingListRepository.create] Failed to generate packing list number:', numError);
+      throw new Error('Failed to generate packing list number');
+    }
+
     // Insert packing list
     const { data: plData, error: plError } = await db
       .from('packing_lists')
       .insert({
+        packing_list_number: packingListNumber,
         pick_ticket_id: dto.pickTicketId,
         sales_order_id: dto.salesOrderId,
         total_packages: dto.totalPackages || 1,

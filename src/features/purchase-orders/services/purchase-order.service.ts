@@ -5,6 +5,7 @@
  */
 
 import { purchaseOrderRepository } from '../repositories/purchase-order.repository';
+import { createClient } from '@/shared/lib/supabase/server';
 import {
   createPurchaseOrderSchema,
   updatePurchaseOrderSchema,
@@ -236,9 +237,98 @@ export const purchaseOrderService = {
 
   /**
    * Confirm PO (sent -> confirmed)
+   * Also auto-creates a shipment with source='supplier' for Supplier Schedule
    */
   async confirm(id: string, userId?: string): Promise<ServiceResult<PurchaseOrder>> {
-    return this.transitionStatus(id, 'confirmed', userId);
+    const result = await this.transitionStatus(id, 'confirmed', userId);
+
+    // If PO confirmed successfully, auto-create shipment with source='supplier'
+    if (result.success && result.data) {
+      try {
+        await this.createSupplierShipment(id, userId);
+      } catch (error) {
+        console.error('Failed to auto-create supplier shipment:', error);
+        // Don't fail the PO confirmation if shipment creation fails
+      }
+    }
+
+    return result;
+  },
+
+  /**
+   * Auto-create shipment from PO for Supplier Schedule (source='supplier')
+   */
+  async createSupplierShipment(poId: string, userId?: string): Promise<void> {
+    const supabase = await createClient();
+
+    // Get PO with items
+    const po = await purchaseOrderRepository.findById(poId);
+    if (!po) {
+      throw new Error('Purchase order not found');
+    }
+
+    // Generate shipment number
+    const { data: shipmentNumber, error: numError } = await supabase.rpc('generate_shipment_number');
+    if (numError) {
+      throw new Error(`Failed to generate shipment number: ${numError.message}`);
+    }
+
+    // Calculate total quantity
+    const totalQty = po.items.reduce((sum, item) => sum + item.quantityOrdered, 0);
+
+    // Create shipment with source='supplier'
+    const { data: shipment, error: shipmentError } = await supabase
+      .from('shipments')
+      .insert({
+        shipment_number: shipmentNumber,
+        shipment_date: new Date().toISOString().split('T')[0],
+        estimated_arrival: po.expectedDeliveryDate?.toISOString().split('T')[0] || null,
+        sales_order_id: po.salesOrderId || null,
+        purchase_order_id: po.id,
+        source: 'supplier',
+        load_status: 'open',
+        total_qty: totalQty,
+        outstanding_qty: totalQty,
+        ship_to_address_street: po.shipToAddressStreet,
+        ship_to_address_city: po.shipToAddressCity,
+        ship_to_address_state: po.shipToAddressState,
+        ship_to_address_postal_code: po.shipToAddressPostalCode,
+        ship_to_address_country: po.shipToAddressCountry,
+        status: 'pending',
+        created_by: userId || null,
+        updated_by: userId || null,
+      })
+      .select()
+      .single();
+
+    if (shipmentError) {
+      throw new Error(`Failed to create shipment: ${shipmentError.message}`);
+    }
+
+    // Create shipment items
+    const shipmentItems = po.items.map((item, index) => ({
+      shipment_id: shipment.id,
+      product_id: item.productId,
+      purchase_order_item_id: item.id,
+      sku: item.sku,
+      description: item.description,
+      quantity_shipped: item.quantityOrdered,
+      sort_order: index,
+      created_by: userId || null,
+      updated_by: userId || null,
+    }));
+
+    const { error: itemsError } = await supabase
+      .from('shipment_items')
+      .insert(shipmentItems);
+
+    if (itemsError) {
+      // Clean up shipment if items insertion fails
+      await supabase.from('shipments').delete().eq('id', shipment.id);
+      throw new Error(`Failed to create shipment items: ${itemsError.message}`);
+    }
+
+    console.log(`[PO Confirm] Auto-created shipment ${shipmentNumber} with source='supplier' for PO ${po.poNumber}`);
   },
 
   /**

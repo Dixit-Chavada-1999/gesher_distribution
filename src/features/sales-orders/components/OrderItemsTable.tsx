@@ -138,18 +138,18 @@ const OrderItemRow = memo(function OrderItemRow({
       {/* SKU (Read-only) */}
       <TableCell>
         <Input
-          value={item.sku}
+          value={item.sku || ''}
           readOnly
-          className="h-9 bg-muted font-mono text-sm"
+          className="h-9 bg-muted font-mono text-sm w-full"
         />
       </TableCell>
 
       {/* Description */}
-      <TableCell>
+      <TableCell className="max-w-[200px]">
         <Input
           value={item.description || ''}
           onChange={handleDescriptionChange}
-          className="h-9"
+          className="h-9 w-full truncate"
           placeholder="Description"
         />
       </TableCell>
@@ -159,9 +159,9 @@ const OrderItemRow = memo(function OrderItemRow({
         <Input
           type="number"
           min={1}
-          value={item.quantity}
+          value={item.quantity || ''}
           onChange={handleQuantityChange}
-          className="h-9 text-right"
+          className="h-9 text-right w-full"
         />
       </TableCell>
 
@@ -351,16 +351,16 @@ function OrderItemsTableComponent({
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50">
-              <TableHead className="w-[200px]">Product</TableHead>
-              <TableHead className="w-[100px]">SKU</TableHead>
+              <TableHead className="w-[180px]">Product</TableHead>
+              <TableHead className="w-[130px]">SKU</TableHead>
               <TableHead className="min-w-[150px]">Description</TableHead>
-              <TableHead className="w-[80px] text-right">Qty</TableHead>
-              <TableHead className="w-[100px]">Unit</TableHead>
-              <TableHead className="w-[120px] text-right">Unit Price</TableHead>
-              <TableHead className="w-[80px] text-right">Disc %</TableHead>
-              <TableHead className="w-[120px]">Tax</TableHead>
-              <TableHead className="w-[120px] text-right">Line Total</TableHead>
-              <TableHead className="w-[60px]" />
+              <TableHead className="w-[70px] text-right">Qty</TableHead>
+              <TableHead className="w-[70px]">Unit</TableHead>
+              <TableHead className="w-[100px] text-right">Unit Price</TableHead>
+              <TableHead className="w-[70px] text-right">Disc %</TableHead>
+              <TableHead className="w-[130px]">Tax</TableHead>
+              <TableHead className="w-[110px] text-right">Line Total</TableHead>
+              <TableHead className="w-[50px]" />
             </TableRow>
           </TableHeader>
           <TableBody>

@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Loader2, MapPin, FileText, Calendar, User, Building2, ArrowRight, ExternalLink } from 'lucide-react';
+import { Loader2, MapPin, FileText, Calendar, User, Building2, ArrowRight, ExternalLink, Package, Pencil, Check, X } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { useAuthStore } from '@/shared/stores';
@@ -30,8 +30,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/shared/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/components/ui/select';
+import { toast } from 'sonner';
 
-import { getQuote, getPODocumentSignedUrl } from '../actions';
+import { getQuote, getPODocumentSignedUrl, updateQuoteProductSource } from '../actions';
 import type { QuoteWithItems } from '../types';
 import { QUOTE_STATUS_LABELS, QUOTE_STATUS_COLORS } from '../types';
 
@@ -186,6 +194,8 @@ export function ViewQuoteDrawer({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [poDocumentUrl, setPoDocumentUrl] = useState<string | null>(null);
+  const [isEditingProductSource, setIsEditingProductSource] = useState(false);
+  const [isUpdatingProductSource, setIsUpdatingProductSource] = useState(false);
 
   // ----------------------------------------
   // EFFECTS
@@ -273,6 +283,29 @@ export function ViewQuoteDrawer({
     }
   };
 
+  const handleUpdateProductSource = async (value: 'dropship' | 'warehouse' | 'none') => {
+    if (!quote) return;
+
+    setIsUpdatingProductSource(true);
+    try {
+      // Convert 'none' to null
+      const productSource = value === 'none' ? null : value;
+      const result = await updateQuoteProductSource(quote.id, productSource);
+      if (result.success) {
+        // Update local state
+        setQuote({ ...quote, productSource });
+        setIsEditingProductSource(false);
+        toast.success('Product source updated');
+      } else {
+        toast.error(result.error || 'Failed to update product source');
+      }
+    } catch {
+      toast.error('Failed to update product source');
+    } finally {
+      setIsUpdatingProductSource(false);
+    }
+  };
+
   // Can only edit draft quotes (and must have permission)
   const canEdit = quote && quote.status === 'draft' && canEditPermission;
   // Can submit draft quotes for approval (and must have submit_for_approval permission)
@@ -349,6 +382,62 @@ export function ViewQuoteDrawer({
                       value={formatDate(quote.validUntil)}
                       icon={<Calendar className="h-4 w-4" />}
                     />
+                    {/* Product Source - Editable */}
+                    <div className="flex items-start gap-3">
+                      <div className="text-muted-foreground mt-0.5 flex-shrink-0">
+                        <Package className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-muted-foreground mb-0.5">Product Source</p>
+                        {isEditingProductSource ? (
+                          <div className="flex items-center gap-2">
+                            <Select
+                              defaultValue={quote.productSource || 'none'}
+                              onValueChange={(value) => handleUpdateProductSource(value as 'dropship' | 'warehouse' | 'none')}
+                              disabled={isUpdatingProductSource}
+                            >
+                              <SelectTrigger className="h-8 w-[180px]">
+                                <SelectValue placeholder="Select source" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">Select product source</SelectItem>
+                                <SelectItem value="dropship">Dropship</SelectItem>
+                                <SelectItem value="warehouse">Direct / Warehouse</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {isUpdatingProductSource ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => setIsEditingProductSource(false)}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium text-foreground">
+                              {quote.productSource === 'warehouse' ? 'Direct / Warehouse' : quote.productSource === 'dropship' ? 'Dropship' : '-'}
+                            </p>
+                            {quote.status !== 'converted' && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                onClick={() => setIsEditingProductSource(true)}
+                                title="Edit product source"
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </Section>
 

@@ -83,12 +83,16 @@ export function AssignPickTicketDialog({
           id: string;
           fullName: string;
           email: string;
+          roleScope: string | null;
         }> };
-        const userOptions = (userData.data || []).map((user) => ({
-          id: user.id,
-          fullName: user.fullName,
-          email: user.email,
-        }));
+        // Filter out supplier users - only show internal users for pick ticket assignment
+        const userOptions = (userData.data || [])
+          .filter((user) => user.roleScope !== 'supplier')
+          .map((user) => ({
+            id: user.id,
+            fullName: user.fullName,
+            email: user.email,
+          }));
         setUsers(userOptions);
       }
     } catch (error) {

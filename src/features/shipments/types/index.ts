@@ -40,6 +40,19 @@ export const SHIPMENT_STATUS_TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[
 };
 
 // ============================================
+// SHIPMENT SOURCE (Operations Dashboard)
+// ============================================
+
+export type ShipmentSource = 'supplier' | 'warehouse';
+
+export const SHIPMENT_SOURCES: ShipmentSource[] = ['supplier', 'warehouse'];
+
+export const SHIPMENT_SOURCE_LABELS: Record<ShipmentSource, string> = {
+  supplier: 'Supplier (Dropship)',
+  warehouse: 'Warehouse (Pick Ticket)',
+};
+
+// ============================================
 // LOAD STATUS (Operations Dashboard - Jenny)
 // ============================================
 
@@ -144,6 +157,9 @@ export interface Shipment {
   // Flags & Status
   isDelayed: boolean;
   loadStatus: LoadStatus;
+
+  // Source: supplier (Supplier Schedule) or warehouse (GDC1 Inventory)
+  source: ShipmentSource | null;
 
   // Customer Ship Window
   customerShipWindowStart: Date | null;
@@ -273,6 +289,9 @@ export interface CreateShipmentDTO {
   loadStatus?: LoadStatus;
   customerShipWindowStart?: Date | null;
   customerShipWindowEnd?: Date | null;
+
+  // Source: supplier (Supplier Schedule) or warehouse (GDC1 Inventory)
+  source?: ShipmentSource | null;
 }
 
 export interface UpdateShipmentDTO {

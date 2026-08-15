@@ -164,6 +164,22 @@ export function getQuotesTableColumns(
       },
     },
 
+    // Product Source
+    {
+      accessorKey: 'productSource',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Source" />
+      ),
+      cell: ({ row }) => {
+        const source = row.getValue('productSource') as string | null;
+        return (
+          <div className="text-sm">
+            {source === 'warehouse' ? 'Direct / Warehouse' : source === 'dropship' ? 'Dropship' : '-'}
+          </div>
+        );
+      },
+    },
+
     // Item Count
     {
       accessorKey: 'itemCount',

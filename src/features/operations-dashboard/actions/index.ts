@@ -28,6 +28,7 @@ import type {
   GDC1InventoryItem,
   RimInstallationItem,
   ShipmentStatus,
+  SKUColumnInfo,
 } from '../types';
 
 // ============================================
@@ -99,10 +100,10 @@ export async function fetchImmediateAttention(): Promise<ActionResult<ImmediateA
 /**
  * Fetch supplier shipment schedule
  */
-export async function fetchSupplierSchedule(): Promise<ActionResult<ShipmentScheduleItem[]>> {
+export async function fetchSupplierSchedule(): Promise<ActionResult<{ data: ShipmentScheduleItem[]; uniqueSkus: SKUColumnInfo[] }>> {
   try {
-    const data = await getSupplierSchedule();
-    return { success: true, data };
+    const result = await getSupplierSchedule();
+    return { success: true, data: result };
   } catch (error) {
     console.error('Error fetching supplier schedule:', error);
     return {
@@ -115,10 +116,10 @@ export async function fetchSupplierSchedule(): Promise<ActionResult<ShipmentSche
 /**
  * Fetch GDC1 inventory
  */
-export async function fetchGDC1Inventory(): Promise<ActionResult<GDC1InventoryItem[]>> {
+export async function fetchGDC1Inventory(): Promise<ActionResult<{ data: GDC1InventoryItem[]; uniqueSkus: SKUColumnInfo[] }>> {
   try {
-    const data = await getWarehouseInventory();
-    return { success: true, data };
+    const result = await getWarehouseInventory();
+    return { success: true, data: result };
   } catch (error) {
     console.error('Error fetching GDC1 inventory:', error);
     return {

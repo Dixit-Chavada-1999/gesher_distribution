@@ -59,6 +59,24 @@ export const ORDER_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   cancelled: [],
 };
 
+// ============================================
+// PRODUCT SOURCE (Where product is sourced from)
+// ============================================
+
+export type ProductSource = 'dropship' | 'warehouse';
+
+export const PRODUCT_SOURCES: ProductSource[] = ['dropship', 'warehouse'];
+
+export const PRODUCT_SOURCE_LABELS: Record<ProductSource, string> = {
+  dropship: 'Dropship',
+  warehouse: 'Direct / Warehouse',
+};
+
+export const PRODUCT_SOURCE_DESCRIPTIONS: Record<ProductSource, string> = {
+  dropship: 'Ships from Galileo to customer',
+  warehouse: 'Ships from US warehouse',
+};
+
 // Statuses that allow editing
 export const EDITABLE_ORDER_STATUSES: OrderStatus[] = ['draft', 'pending'];
 
@@ -106,6 +124,7 @@ export interface SalesOrder {
   customerPoNumber: string | null;
   status: OrderStatus;
   creditStatus: OrderCreditStatus;
+  productSource: ProductSource;
 
   // Billing Address
   billingAddressStreet: string | null;
@@ -172,6 +191,15 @@ export interface SalesOrderItem {
 }
 
 /**
+ * Pick Ticket summary for sales order
+ */
+export interface PickTicketSummary {
+  id: string;
+  ticketNumber: string;
+  status: string;
+}
+
+/**
  * Sales Order with all related data
  */
 export interface SalesOrderWithItems extends SalesOrder {
@@ -179,6 +207,7 @@ export interface SalesOrderWithItems extends SalesOrder {
   customer?: CustomerSummary;
   salesRep?: UserSummary;
   warehouse?: LocationSummary;
+  pickTickets?: PickTicketSummary[];
 }
 
 // ============================================
@@ -252,6 +281,7 @@ export interface CreateSalesOrderDTO {
   currencyCode?: string;
   customerPoNumber?: string | null;
   status?: OrderStatus;
+  productSource?: ProductSource;
   billingAddress: AddressDTO;
   shippingAddress: AddressDTO;
   shippingMethod?: string | null;
@@ -268,6 +298,7 @@ export interface UpdateSalesOrderDTO {
   warehouseId?: string | null;
   currencyCode?: string;
   customerPoNumber?: string | null;
+  productSource?: ProductSource;
   billingAddress?: AddressDTO;
   shippingAddress?: AddressDTO;
   shippingMethod?: string | null;
@@ -303,6 +334,7 @@ export interface SalesOrderListItem {
   requestedDeliveryDate: string | null;
   status: OrderStatus;
   creditStatus: OrderCreditStatus;
+  productSource: ProductSource;
   grandTotal: number; // cents
   currencyCode: string;
   itemCount: number;
@@ -485,6 +517,7 @@ export interface SalesOrderFormData {
   currencyId?: string;
   customerPoNumber?: string;
   status?: OrderStatus;
+  productSource?: ProductSource;
 
   billingAddress: Address;
   shippingAddress: Address;

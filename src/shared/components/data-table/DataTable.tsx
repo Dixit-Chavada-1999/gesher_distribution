@@ -21,7 +21,7 @@ import {
   type RowSelectionState,
   type PaginationState,
 } from '@tanstack/react-table';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 import { cn } from '@/shared/lib/utils';
 import {
@@ -147,17 +147,21 @@ export function DataTable<TData, TValue>({
     [data, onRowSelectionChange]
   );
 
-  // Handle pagination changes
+  // Handle pagination changes - don't call parent callback inside setState
   const handlePaginationChange = useCallback(
     (updater: PaginationState | ((old: PaginationState) => PaginationState)) => {
       setPagination((old) => {
         const newPagination = typeof updater === 'function' ? updater(old) : updater;
-        onPaginationChange?.(newPagination);
         return newPagination;
       });
     },
-    [onPaginationChange]
+    []
   );
+
+  // Notify parent of pagination changes via useEffect (not during render)
+  useEffect(() => {
+    onPaginationChange?.(pagination);
+  }, [pagination, onPaginationChange]);
 
   // Create table instance
   const table = useReactTable({

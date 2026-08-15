@@ -103,8 +103,8 @@ function InfoItem({ label, value, icon }: { label: string; value: React.ReactNod
     <div className="flex items-start gap-3">
       {icon && <div className="text-muted-foreground mt-0.5 flex-shrink-0">{icon}</div>}
       <div className="flex-1 min-w-0">
-        <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
-        <p className="text-sm font-medium text-foreground">{value}</p>
+        <div className="text-xs text-muted-foreground mb-0.5">{label}</div>
+        <div className="text-sm font-medium text-foreground">{value}</div>
       </div>
     </div>
   );
@@ -370,8 +370,15 @@ const handleReleaseHold = async () => {
   const canConfirm = order && ['draft', 'pending'].includes(order.status) && canEditPermission;
   // Can cancel any order except delivered/cancelled
   const canCancel = order && !['delivered', 'cancelled'].includes(order.status) && canEditPermission;
-  // Can create pick ticket for confirmed or processing orders
-  const canCreatePickTicket = order && ['confirmed', 'processing'].includes(order.status) && canEditPermission;
+  // Check if pick ticket already exists
+  const hasPickTicket = order?.pickTickets && order.pickTickets.length > 0;
+
+  // Can create pick ticket for confirmed or processing orders (only for warehouse, not dropship, and no existing pick ticket)
+  const canCreatePickTicket = order &&
+    ['confirmed', 'processing'].includes(order.status) &&
+    order.productSource === 'warehouse' &&
+    !hasPickTicket &&
+    canEditPermission;
 
   // Check if order is on credit hold
   const isOnHold = order?.creditStatus === 'hold';
@@ -485,6 +492,17 @@ const handleReleaseHold = async () => {
                       value={order.customerPoNumber || '-'}
                       icon={<FileText className="h-4 w-4" />}
                     />
+                    <InfoItem
+                      label="Product Source"
+                      value={order.productSource === 'warehouse' ? 'Direct / Warehouse' : order.productSource === 'dropship' ? 'Dropship' : '-'}
+                    />
+                    {order.pickTickets && order.pickTickets.length > 0 && (
+                      <InfoItem
+                        label="Pick Ticket"
+                        value={order.pickTickets.map(pt => pt.ticketNumber).join(', ')}
+                        icon={<ClipboardList className="h-4 w-4" />}
+                      />
+                    )}
                   </div>
                 </Section>
 

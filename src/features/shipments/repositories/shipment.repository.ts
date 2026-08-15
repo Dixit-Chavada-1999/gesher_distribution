@@ -335,6 +335,7 @@ class ShipmentRepositoryImpl {
         weight_unit: data.weightUnit || 'lbs',
         total_packages: data.totalPackages || 1,
         status: data.status || 'pending',
+        source: data.source || null,
         notes: data.notes || null,
         delivery_instructions: data.deliveryInstructions || null,
         created_by: userId || null,

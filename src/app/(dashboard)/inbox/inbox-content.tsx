@@ -17,7 +17,6 @@ import {
   Inbox as InboxIcon,
   Clock,
   CheckCircle,
-  XCircle,
   AlertCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -62,54 +61,48 @@ import { toast } from 'sonner';
 // STATUS BADGE COMPONENT
 // ============================================
 
-type StatusConfig = { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: React.ReactNode };
+function StatusBadge({
+  totalPdfAttachments = 0,
+  processedPdfAttachments = 0,
+}: {
+  totalPdfAttachments?: number;
+  processedPdfAttachments?: number;
+}) {
+  // If no PDF attachments, show "No PDFs"
+  if (totalPdfAttachments === 0) {
+    return (
+      <Badge variant="outline" className="gap-1">
+        <AlertCircle className="h-3 w-3" />
+        No PDFs
+      </Badge>
+    );
+  }
 
-function StatusBadge({ status }: { status: string }) {
-  const defaultConfig: StatusConfig = {
-    label: 'Pending',
-    variant: 'secondary',
-    icon: <Clock className="h-3 w-3" />,
-  };
+  // All processed
+  if (processedPdfAttachments === totalPdfAttachments) {
+    return (
+      <Badge variant="default" className="gap-1">
+        <CheckCircle className="h-3 w-3" />
+        Processed
+      </Badge>
+    );
+  }
 
-  const config: Record<string, StatusConfig> = {
-    received: {
-      label: 'Pending',
-      variant: 'secondary',
-      icon: <Clock className="h-3 w-3" />,
-    },
-    attachments_processed: {
-      label: 'Pending',
-      variant: 'secondary',
-      icon: <Clock className="h-3 w-3" />,
-    },
-    extracted: {
-      label: 'Pending',
-      variant: 'secondary',
-      icon: <Clock className="h-3 w-3" />,
-    },
-    processed: {
-      label: 'Processed',
-      variant: 'default',
-      icon: <CheckCircle className="h-3 w-3" />,
-    },
-    failed: {
-      label: 'Failed',
-      variant: 'destructive',
-      icon: <XCircle className="h-3 w-3" />,
-    },
-    ignored: {
-      label: 'Ignored',
-      variant: 'outline',
-      icon: <AlertCircle className="h-3 w-3" />,
-    },
-  };
+  // Partially processed
+  if (processedPdfAttachments > 0) {
+    return (
+      <Badge variant="secondary" className="gap-1 bg-amber-100 text-amber-800 border-amber-200">
+        <Clock className="h-3 w-3" />
+        ({processedPdfAttachments}/{totalPdfAttachments})
+      </Badge>
+    );
+  }
 
-  const { label, variant, icon } = config[status] || defaultConfig;
-
+  // None processed - Pending
   return (
-    <Badge variant={variant} className="gap-1">
-      {icon}
-      {label}
+    <Badge variant="secondary" className="gap-1">
+      <Clock className="h-3 w-3" />
+      Pending
     </Badge>
   );
 }
@@ -340,7 +333,10 @@ export function InboxContent() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <StatusBadge status={email.status} />
+                      <StatusBadge
+                        totalPdfAttachments={email.total_pdf_attachments}
+                        processedPdfAttachments={email.processed_pdf_attachments}
+                      />
                     </TableCell>
                     <TableCell>
                       <span className="text-sm text-muted-foreground">

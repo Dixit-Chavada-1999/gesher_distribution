@@ -1,6 +1,7 @@
 export { PickTicketsTable } from './PickTicketsTable';
 export { PickTicketsTableColumns } from './PickTicketsTableColumns';
 export { ViewPickTicketDrawer } from './ViewPickTicketDrawer';
+export { EditPickTicketDrawer } from './EditPickTicketDrawer';
 export { AssignPickTicketDialog } from './AssignPickTicketDialog';
 
 // Packing Lists

@@ -31,7 +31,7 @@ import {
 } from '@/shared/components/ui/table';
 
 import { usePackingList } from '../hooks';
-import { markPackingListAsPacked } from '../actions/packing-list.actions';
+import { markPackingListAsPacked, transitionPackingListStatus } from '../actions/packing-list.actions';
 import { PACKING_LIST_STATUS_LABELS, PACKING_LIST_STATUS_COLORS } from '../types';
 
 interface ViewPackingListDrawerProps {
@@ -108,7 +108,30 @@ export function ViewPackingListDrawer({
     }
   };
 
+  const handleShip = async () => {
+    if (!packingList) {
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      const result = await transitionPackingListStatus(packingList.id, 'shipped');
+      if (result.success) {
+        toast.success('Shipment created successfully! Check GDC1 Inventory.');
+        refetch();
+        onStatusChange?.();
+      } else {
+        toast.error(result.error || 'Failed to ship');
+      }
+    } catch {
+      toast.error('Failed to ship');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   const canMarkAsPacked = packingList?.status === 'draft';
+  const canShip = packingList?.status === 'packed';
 
   return (
     <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -275,6 +298,13 @@ export function ViewPackingListDrawer({
                   {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   <CheckCircle className="mr-2 h-4 w-4" />
                   Mark as Packed
+                </Button>
+              )}
+              {canShip && (
+                <Button onClick={handleShip} disabled={isUpdating} className="bg-emerald-600 hover:bg-emerald-700">
+                  {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  <Truck className="mr-2 h-4 w-4" />
+                  Ship & Create Shipment
                 </Button>
               )}
             </div>

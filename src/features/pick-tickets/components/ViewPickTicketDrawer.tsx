@@ -28,6 +28,7 @@ import {
 import { cn } from '@/shared/lib/utils';
 import { usePickTicket } from '../hooks/usePickTicket';
 import { createPackingListFromPickTicket } from '../actions/packing-list.actions';
+import { completePicking, startPicking, pickItem, transitionPickTicketStatus } from '../actions';
 import {
   PICK_TICKET_STATUS_COLORS,
   PICK_TICKET_STATUS_LABELS,
@@ -46,9 +47,14 @@ export function ViewPickTicketDrawer({
 }: ViewPickTicketDrawerProps) {
   const { data: pickTicket, isLoading, refetch } = usePickTicket(open ? pickTicketId : null);
   const [isCreatingPackingList, setIsCreatingPackingList] = useState(false);
+  const [isStartingPicking, setIsStartingPicking] = useState(false);
+  const [isCompletingPicking, setIsCompletingPicking] = useState(false);
+  const [pickingItemId, setPickingItemId] = useState<string | null>(null);
 
   const canEdit = pickTicket && ['pending', 'assigned'].includes(pickTicket.status);
   const canStartPicking = pickTicket && pickTicket.status === 'assigned';
+  // Allow Complete Picking from both 'picking' and 'picked' statuses (before packing list is created)
+  const canCompletePicking = pickTicket && ['picking', 'picked'].includes(pickTicket.status) && !pickTicket.packingList;
   const canCreatePackingList = pickTicket && pickTicket.status === 'picked' && !pickTicket.packingList;
 
   const handleCreatePackingList = async () => {
@@ -70,6 +76,94 @@ export function ViewPickTicketDrawer({
       setIsCreatingPackingList(false);
     }
   };
+
+  const handleStartPicking = async () => {
+    if (!pickTicket) { return; }
+
+    setIsStartingPicking(true);
+    try {
+      const result = await startPicking(pickTicket.id);
+      if (result.success) {
+        toast.success('Picking started');
+        refetch();
+      } else {
+        toast.error(result.error || 'Failed to start picking');
+      }
+    } catch {
+      toast.error('Failed to start picking');
+    } finally {
+      setIsStartingPicking(false);
+    }
+  };
+
+  const handleCompletePicking = async () => {
+    if (!pickTicket) { return; }
+
+    setIsCompletingPicking(true);
+    try {
+      const result = await completePicking(pickTicket.id);
+      if (result.success) {
+        toast.success('Picking completed! Shipment created.');
+        refetch();
+        onClose();
+      } else {
+        toast.error(result.error || 'Failed to complete picking');
+      }
+    } catch {
+      toast.error('Failed to complete picking');
+    } finally {
+      setIsCompletingPicking(false);
+    }
+  };
+
+  const handlePickItem = async (itemId: string, currentPicked: number, quantityToPick: number, increment: number) => {
+    if (!pickTicket) { return; }
+
+    const newQuantity = Math.max(0, Math.min(quantityToPick, currentPicked + increment));
+    if (newQuantity === currentPicked) { return; }
+
+    setPickingItemId(itemId);
+    try {
+      const result = await pickItem(pickTicket.id, {
+        pickTicketItemId: itemId,
+        quantityPicked: newQuantity,
+      });
+      if (result.success) {
+        // Check if all items will now be fully picked after this update
+        const allItemsPicked = pickTicket.items.every((item) => {
+          if (item.id === itemId) {
+            // Use the new quantity for this item
+            return newQuantity >= item.quantityToPick;
+          }
+          // Use current quantity for other items
+          return item.quantityPicked >= item.quantityToPick;
+        });
+
+        // Auto-transition to 'picked' status when all items are picked
+        if (allItemsPicked && pickTicket.status === 'picking') {
+          const transitionResult = await transitionPickTicketStatus(pickTicket.id, 'picked');
+          if (transitionResult.success) {
+            toast.success('All items picked! Ready to complete.');
+          }
+        }
+
+        refetch();
+      } else {
+        toast.error(result.error || 'Failed to update picked quantity');
+      }
+    } catch {
+      toast.error('Failed to update picked quantity');
+    } finally {
+      setPickingItemId(null);
+    }
+  };
+
+  const handlePickAll = async (itemId: string, quantityToPick: number) => {
+    await handlePickItem(itemId, 0, quantityToPick, quantityToPick);
+  };
+
+  // Check if picking is active (can pick items)
+  const canPickItems = pickTicket && pickTicket.status === 'picking';
 
   // Calculate progress
   const totalQuantity = pickTicket?.items.reduce((sum, item) => sum + item.quantityToPick, 0) || 0;
@@ -235,12 +329,49 @@ export function ViewPickTicketDrawer({
                               </p>
                             )}
                           </div>
-                          <div className="text-right">
+                          <div className="text-right flex items-center gap-2">
+                            {canPickItems && (
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => handlePickItem(item.id, item.quantityPicked, item.quantityToPick, -1)}
+                                  disabled={item.quantityPicked === 0 || pickingItemId === item.id}
+                                >
+                                  -
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => handlePickItem(item.id, item.quantityPicked, item.quantityToPick, 1)}
+                                  disabled={item.quantityPicked >= item.quantityToPick || pickingItemId === item.id}
+                                >
+                                  +
+                                </Button>
+                                {!isPicked && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-6 text-xs"
+                                    onClick={() => handlePickAll(item.id, item.quantityToPick)}
+                                    disabled={pickingItemId === item.id}
+                                  >
+                                    All
+                                  </Button>
+                                )}
+                              </div>
+                            )}
                             <p className={cn(
-                              'text-sm font-medium',
+                              'text-sm font-medium min-w-[50px]',
                               isPicked ? 'text-emerald-600' : ''
                             )}>
-                              {item.quantityPicked} / {item.quantityToPick}
+                              {pickingItemId === item.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin inline" />
+                              ) : (
+                                `${item.quantityPicked} / ${item.quantityToPick}`
+                              )}
                             </p>
                           </div>
                         </div>
@@ -280,38 +411,65 @@ export function ViewPickTicketDrawer({
 
             {/* Actions */}
             <Separator />
-            <div className="flex gap-2">
-              {onStartPicking && canStartPicking && (
-                <Button onClick={() => onStartPicking(pickTicket)} className="flex-1">
-                  <Play className="mr-2 h-4 w-4" />
-                  Start Picking
-                </Button>
-              )}
-              {canCreatePackingList && (
-                <Button
-                  onClick={handleCreatePackingList}
-                  disabled={isCreatingPackingList}
-                  className="flex-1"
-                >
-                  {isCreatingPackingList ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <ClipboardList className="mr-2 h-4 w-4" />
-                  )}
-                  Create Packing List
-                </Button>
-              )}
-              {pickTicket.packingList && (
-                <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200">
-                  Packing List: {pickTicket.packingList.packingListNumber}
-                </Badge>
-              )}
-              {onEdit && canEdit && (
-                <Button onClick={() => onEdit(pickTicket)} variant="outline" className="flex-1">
-                  <Pencil className="mr-2 h-4 w-4" />
-                  Edit
-                </Button>
-              )}
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-2">
+                {canStartPicking && (
+                  <Button
+                    onClick={handleStartPicking}
+                    disabled={isStartingPicking}
+                    className="flex-1"
+                  >
+                    {isStartingPicking ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Play className="mr-2 h-4 w-4" />
+                    )}
+                    Start Picking
+                  </Button>
+                )}
+                {canCompletePicking && (
+                  <Button
+                    onClick={handleCompletePicking}
+                    disabled={isCompletingPicking}
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                  >
+                    {isCompletingPicking ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                    )}
+                    Complete Picking
+                  </Button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                {canCreatePackingList && (
+                  <Button
+                    onClick={handleCreatePackingList}
+                    disabled={isCreatingPackingList}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    {isCreatingPackingList ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <ClipboardList className="mr-2 h-4 w-4" />
+                    )}
+                    Create Packing List
+                  </Button>
+                )}
+                {pickTicket.packingList && (
+                  <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200">
+                    Packing List: {pickTicket.packingList.packingListNumber}
+                  </Badge>
+                )}
+                {onEdit && canEdit && (
+                  <Button onClick={() => onEdit(pickTicket)} variant="outline" className="flex-1">
+                    <Pencil className="mr-2 h-4 w-4" />
+                    Edit
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         ) : (

@@ -263,6 +263,7 @@ export function QuotesPageContent() {
         salesRepId: null,
         currencyCode: 'USD',
         status: 'draft' as const,
+        productSource: null,
         billingAddress: {
           street: data.extraction.customer?.address || null,
           city: data.extraction.customer?.city || null,
@@ -486,6 +487,7 @@ export function QuotesPageContent() {
       if (result.success && result.data) {
         toast.success(`Quote converted to Sales Order successfully`);
         refetchQuotes();
+        setIsViewDrawerOpen(false); // Close view drawer after successful conversion
       } else {
         toast.error(result.error || 'Failed to convert quote');
       }

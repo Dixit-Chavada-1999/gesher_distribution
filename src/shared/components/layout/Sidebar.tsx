@@ -25,6 +25,7 @@ import {
   Package,
   MapPin,
   Building2,
+  Warehouse,
   // DollarSign,
 FileSignature,
   ClipboardList, // Purchase Orders
@@ -81,6 +82,13 @@ const NAV_SECTIONS = [
         href: '/locations',
         icon: MapPin,
         permission: 'locations.view_module',
+      },
+      {
+        id: 'inventory',
+        label: 'Inventory',
+        href: '/inventory',
+        icon: Warehouse,
+        permission: 'inventory.view_module',
       },
       {
         id: 'customers',

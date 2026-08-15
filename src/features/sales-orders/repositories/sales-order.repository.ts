@@ -40,6 +40,7 @@ interface DbSalesOrder {
   customer_po_number: string | null;
   status: OrderStatus;
   credit_status?: OrderCreditStatus;
+  product_source?: 'dropship' | 'warehouse';
   billing_address_street: string | null;
   billing_address_city: string | null;
   billing_address_state: string | null;
@@ -153,6 +154,7 @@ class SalesOrderRepositoryImpl {
         requested_delivery_date,
         status,
         credit_status,
+        product_source,
         grand_total,
         currency_code,
         created_at,
@@ -268,10 +270,11 @@ class SalesOrderRepositoryImpl {
     const items = await this.findItemsByOrderId(id);
 
     // Fetch related data
-    const [customer, salesRep, warehouse] = await Promise.all([
+    const [customer, salesRep, warehouse, pickTickets] = await Promise.all([
       this.getCustomerSummary(order.customer_id),
       order.sales_rep_id ? this.getUserSummary(order.sales_rep_id) : null,
       order.warehouse_id ? this.getLocationSummary(order.warehouse_id) : null,
+      this.getPickTicketsSummary(id),
     ]);
 
     return {
@@ -280,7 +283,30 @@ class SalesOrderRepositoryImpl {
       customer: customer || undefined,
       salesRep: salesRep || undefined,
       warehouse: warehouse || undefined,
+      pickTickets: pickTickets || undefined,
     };
+  }
+
+  /**
+   * Get pick tickets summary for a sales order
+   */
+  private async getPickTicketsSummary(salesOrderId: string): Promise<{ id: string; ticketNumber: string; status: string }[] | null> {
+    const { data, error } = await db
+      .from('pick_tickets')
+      .select('id, ticket_number, status')
+      .eq('sales_order_id', salesOrderId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+
+    if (error || !data) {
+      return null;
+    }
+
+    return data.map((row) => ({
+      id: row.id,
+      ticketNumber: row.ticket_number,
+      status: row.status,
+    }));
   }
 
   /**
@@ -423,6 +449,7 @@ class SalesOrderRepositoryImpl {
         currency_code: data.currencyCode || 'USD',
         customer_po_number: data.customerPoNumber || null,
         status: data.status || 'draft',
+        product_source: data.productSource || 'dropship',
         billing_address_street: data.billingAddress.street,
         billing_address_city: data.billingAddress.city,
         billing_address_state: data.billingAddress.state,
@@ -508,6 +535,7 @@ class SalesOrderRepositoryImpl {
     if (data.warehouseId !== undefined) {updateData.warehouse_id = data.warehouseId;}
     if (data.currencyCode !== undefined) {updateData.currency_code = data.currencyCode;}
     if (data.customerPoNumber !== undefined) {updateData.customer_po_number = data.customerPoNumber;}
+    if (data.productSource !== undefined) {updateData.product_source = data.productSource;}
     if (data.billingAddress !== undefined) {
       updateData.billing_address_street = data.billingAddress.street;
       updateData.billing_address_city = data.billingAddress.city;
@@ -919,6 +947,7 @@ class SalesOrderRepositoryImpl {
       customerPoNumber: data.customer_po_number,
       status: data.status,
       creditStatus: data.credit_status || 'ok',
+      productSource: data.product_source || 'dropship',
       billingAddressStreet: data.billing_address_street,
       billingAddressCity: data.billing_address_city,
       billingAddressState: data.billing_address_state,
@@ -981,6 +1010,7 @@ class SalesOrderRepositoryImpl {
       requested_delivery_date: string | null;
       status: OrderStatus;
       credit_status?: OrderCreditStatus;
+      product_source?: 'dropship' | 'warehouse';
       grand_total: number;
       currency_code: string;
       created_at: string;
@@ -999,6 +1029,7 @@ class SalesOrderRepositoryImpl {
       requestedDeliveryDate: data.requested_delivery_date,
       status: data.status,
       creditStatus: data.credit_status || 'ok',
+      productSource: data.product_source || 'dropship',
       grandTotal: data.grand_total,
       currencyCode: data.currency_code,
       itemCount: itemCounts[data.id] || 0,

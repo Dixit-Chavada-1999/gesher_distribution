@@ -34,6 +34,7 @@ import {
 import {
   PickTicketsTable,
   ViewPickTicketDrawer,
+  EditPickTicketDrawer,
   AssignPickTicketDialog,
   usePickTickets,
 } from '@/features/pick-tickets';
@@ -48,6 +49,7 @@ export default function PickTicketsPage() {
 
   // Drawer states
   const [isViewDrawerOpen, setIsViewDrawerOpen] = useState(false);
+  const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
   const [selectedPickTicketId, setSelectedPickTicketId] = useState<string | null>(null);
 
   // Delete confirmation
@@ -93,12 +95,18 @@ export default function PickTicketsPage() {
   }, []);
 
   const handleEdit = useCallback((pickTicket: PickTicketListItem | PickTicketWithItems) => {
-    // For now, only priority and notes can be edited via the assign dialog or view drawer
-    // Full edit functionality would require an EditPickTicketDrawer
-    toast.info(`Edit functionality for ${pickTicket.pickTicketNumber} - Use the view drawer to see details`);
     setSelectedPickTicketId(pickTicket.id);
-    setIsViewDrawerOpen(true);
+    setIsEditDrawerOpen(true);
   }, []);
+
+  const handleEditDrawerClose = useCallback(() => {
+    setIsEditDrawerOpen(false);
+    // Don't clear selectedPickTicketId here as view drawer might still need it
+  }, []);
+
+  const handleEditSuccess = useCallback(() => {
+    refetchPickTickets();
+  }, [refetchPickTickets]);
 
   const handleAssign = useCallback((pickTicket: PickTicketListItem) => {
     setPickTicketToAssign(pickTicket);
@@ -236,6 +244,14 @@ export default function PickTicketsPage() {
         onEdit={handleEdit}
         onStartPicking={handleStartPicking}
         onPackingListCreated={refetchPickTickets}
+      />
+
+      {/* Edit Pick Ticket Drawer */}
+      <EditPickTicketDrawer
+        pickTicketId={selectedPickTicketId}
+        open={isEditDrawerOpen}
+        onClose={handleEditDrawerClose}
+        onSuccess={handleEditSuccess}
       />
 
       {/* Delete Confirmation Dialog */}

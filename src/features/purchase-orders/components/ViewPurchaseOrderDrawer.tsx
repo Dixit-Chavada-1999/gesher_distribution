@@ -13,6 +13,14 @@ import { Button } from '@/shared/components/ui/button';
 import { Separator } from '@/shared/components/ui/separator';
 import { Skeleton } from '@/shared/components/ui/skeleton';
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/shared/components/ui/table';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -22,7 +30,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/shared/components/ui/alert-dialog';
-import { Pencil, Building2, MapPin, Package, Send, Loader2, Calendar } from 'lucide-react';
+import { Pencil, Building2, MapPin, Send, Loader2, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/shared/lib/utils';
 import { usePurchaseOrder } from '../hooks/usePurchaseOrder';
@@ -77,7 +85,7 @@ export function ViewPurchaseOrderDrawer({
       }
       onClose(isOpen);
     }}>
-      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
         <SheetHeader className="space-y-4">
           <div className="space-y-1">
             {isLoading ? (
@@ -146,52 +154,51 @@ export function ViewPurchaseOrderDrawer({
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
                 Items ({po.items.length})
               </h3>
-              <div className="space-y-2">
-                {po.items.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg"
-                  >
-                    <Package className="h-4 w-4 text-muted-foreground mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="font-medium text-sm">{item.sku}</p>
-                          {item.description && (
-                            <p className="text-xs text-muted-foreground truncate">
-                              {item.description}
+              <div className="rounded-md border overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="font-semibold">Product</TableHead>
+                      <TableHead className="text-right font-semibold">Qty</TableHead>
+                      <TableHead className="text-right font-semibold">Unit Price</TableHead>
+                      <TableHead className="text-right font-semibold">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {po.items.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium text-foreground">{item.sku}</p>
+                            {item.description && (
+                              <p className="text-sm text-muted-foreground">{item.description}</p>
+                            )}
+                            {item.supplierId && (
+                              <Link
+                                href={`/suppliers/${item.supplierId}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-xs inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors mt-1"
+                              >
+                                <Building2 className="h-3 w-3" />
+                                <span>{item.supplierName}</span>
+                              </Link>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <span className="font-medium">{item.quantityOrdered}</span>
+                          {item.quantityReceived > 0 && (
+                            <p className="text-xs text-emerald-600">
+                              {item.quantityReceived} received
                             </p>
                           )}
-                        </div>
-                        <p className="text-sm font-medium">
-                          ${(item.lineTotal / 100).toFixed(2)}
-                        </p>
-                      </div>
-                      <div className="mt-1 flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">
-                          {item.quantityOrdered} x ${(item.unitPrice / 100).toFixed(2)}
-                          {item.quantityReceived > 0 && (
-                            <span className="ml-2 text-emerald-600">
-                              ({item.quantityReceived} received)
-                            </span>
-                          )}
-                        </span>
-                        {/* Show per-item supplier */}
-                        {item.supplierId && (
-                          <Link
-                            href={`/suppliers/${item.supplierId}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-xs flex items-center gap-1 text-muted-foreground bg-background px-2 py-0.5 rounded hover:bg-muted hover:text-foreground transition-colors"
-                          >
-                            <Building2 className="h-3 w-3" />
-                            <span>Supplier:</span>
-                            <span className="font-medium">{item.supplierName}</span>
-                          </Link>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                        </TableCell>
+                        <TableCell className="text-right">${(item.unitPrice / 100).toFixed(2)}</TableCell>
+                        <TableCell className="text-right font-semibold">${(item.lineTotal / 100).toFixed(2)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             </div>
 

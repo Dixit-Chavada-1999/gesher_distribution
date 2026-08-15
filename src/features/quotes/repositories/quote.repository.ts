@@ -36,6 +36,7 @@ interface DbQuote {
   sales_rep_id: string | null;
   currency_code: string;
   status: QuoteStatus;
+  product_source: 'dropship' | 'warehouse';
   billing_address_street: string | null;
   billing_address_city: string | null;
   billing_address_state: string | null;
@@ -54,6 +55,7 @@ interface DbQuote {
   internal_notes: string | null;
   terms_and_conditions: string | null;
   po_document_url: string | null;
+  customer_po_number: string | null;
   converted_to_sales_order_id: string | null;
   converted_at: string | null;
   converted_by: string | null;
@@ -143,6 +145,7 @@ class QuoteRepositoryImpl {
         quote_date,
         valid_until,
         status,
+        product_source,
         grand_total,
         currency_code,
         created_at,
@@ -400,6 +403,7 @@ class QuoteRepositoryImpl {
         sales_rep_id: data.salesRepId || null,
         currency_code: data.currencyCode || 'USD',
         status: data.status || 'draft',
+        product_source: data.productSource,
         billing_address_street: data.billingAddress.street,
         billing_address_city: data.billingAddress.city,
         billing_address_state: data.billingAddress.state,
@@ -418,6 +422,7 @@ class QuoteRepositoryImpl {
         internal_notes: data.internalNotes || null,
         terms_and_conditions: data.termsAndConditions || null,
         po_document_url: data.poDocumentUrl || null,
+        customer_po_number: data.customerPoNumber || null,
         created_by: userId || null,
         updated_by: userId || null,
       })
@@ -480,6 +485,10 @@ class QuoteRepositoryImpl {
     if (data.customerId !== undefined) {updateData.customer_id = data.customerId;}
     if (data.salesRepId !== undefined) {updateData.sales_rep_id = data.salesRepId;}
     if (data.currencyCode !== undefined) {updateData.currency_code = data.currencyCode;}
+    if (data.productSource !== undefined) {
+      console.log('[QuoteRepository.update] Saving productSource:', data.productSource);
+      updateData.product_source = data.productSource;
+    }
     if (data.billingAddress !== undefined) {
       updateData.billing_address_street = data.billingAddress.street;
       updateData.billing_address_city = data.billingAddress.city;
@@ -805,6 +814,7 @@ class QuoteRepositoryImpl {
       salesRepId: data.sales_rep_id,
       currencyCode: data.currency_code,
       status: data.status,
+      productSource: data.product_source || 'dropship',
       billingAddressStreet: data.billing_address_street,
       billingAddressCity: data.billing_address_city,
       billingAddressState: data.billing_address_state,
@@ -823,6 +833,7 @@ class QuoteRepositoryImpl {
       internalNotes: data.internal_notes,
       termsAndConditions: data.terms_and_conditions,
       poDocumentUrl: data.po_document_url,
+      customerPoNumber: data.customer_po_number,
       convertedToSalesOrderId: data.converted_to_sales_order_id,
       convertedAt: data.converted_at ? new Date(data.converted_at) : null,
       convertedBy: data.converted_by,
@@ -863,6 +874,7 @@ class QuoteRepositoryImpl {
       quote_date: string;
       valid_until: string | null;
       status: QuoteStatus;
+      product_source?: 'dropship' | 'warehouse';
       grand_total: number;
       currency_code: string;
       created_at: string;
@@ -880,6 +892,7 @@ class QuoteRepositoryImpl {
       quoteDate: data.quote_date,
       validUntil: data.valid_until,
       status: data.status,
+      productSource: data.product_source || 'dropship',
       grandTotal: data.grand_total,
       currencyCode: data.currency_code,
       itemCount: itemCounts[data.id] || 0,

@@ -328,8 +328,11 @@ export async function updateQuoteFromData(
   }
 
   // Validate
+  console.log('[updateQuoteFromData] Input data:', JSON.stringify(data, null, 2));
+
   const validation = updateQuoteSchema.safeParse(data);
   if (!validation.success) {
+    console.log('[updateQuoteFromData] Validation failed:', validation.error.flatten());
     return {
       success: false,
       error: 'Validation failed',
@@ -337,7 +340,11 @@ export async function updateQuoteFromData(
     };
   }
 
+  console.log('[updateQuoteFromData] Validated data:', JSON.stringify(validation.data, null, 2));
+
   const result = await quoteService.update(id, validation.data, appUser.id);
+
+  console.log('[updateQuoteFromData] Update result:', result.success, result.data?.productSource);
 
   if (result.success) {
     revalidatePath('/quotes');
@@ -1414,6 +1421,82 @@ export async function linkExtractionToQuote(
     return {
       success: false,
       error: 'Failed to link extraction to quote',
+    };
+  }
+}
+
+// ============================================
+// PRODUCT SOURCE
+// ============================================
+
+/**
+ * Update quote product source
+ * Allows inline editing of product source field
+ */
+export async function updateQuoteProductSource(
+  quoteId: string,
+  productSource: 'dropship' | 'warehouse' | null
+): Promise<ActionResult<Quote>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  // Get app user ID
+  const appUser = await getAppUserByAuthId(user.id);
+  if (!appUser) {
+    return { success: false, error: 'User profile not found' };
+  }
+
+  try {
+    // Check if quote exists and is editable
+    const existing = await db
+      .from('quotes')
+      .select('id, status, product_source')
+      .eq('id', quoteId)
+      .is('deleted_at', null)
+      .single();
+
+    if (!existing.data) {
+      return { success: false, error: 'Quote not found' };
+    }
+
+    // Only allow editing if not converted
+    if (existing.data.status === 'converted') {
+      return { success: false, error: 'Cannot edit converted quote' };
+    }
+
+    // Update product source
+    const { data: updated, error: updateError } = await db
+      .from('quotes')
+      .update({
+        product_source: productSource,
+        updated_by: appUser.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', quoteId)
+      .select()
+      .single();
+
+    if (updateError) {
+      console.error('Update product source error:', updateError);
+      return { success: false, error: 'Failed to update product source' };
+    }
+
+    revalidatePath('/quotes');
+    revalidatePath(`/quotes/${quoteId}`);
+
+    return {
+      success: true,
+      data: updated as unknown as Quote,
+    };
+  } catch (error) {
+    console.error('updateQuoteProductSource error:', error);
+    return {
+      success: false,
+      error: 'Failed to update product source',
     };
   }
 }

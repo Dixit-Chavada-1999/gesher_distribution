@@ -16,6 +16,7 @@ import type {
   GDC1InventoryItem,
   RimInstallationItem,
   ShipmentStatus,
+  SKUColumnInfo,
 } from '../types';
 
 // ============================================
@@ -439,13 +440,35 @@ export async function getImmediateAttention(): Promise<ImmediateAttentionItem[]>
 }
 
 // ============================================
+// GET UNIQUE SKUs FOR DYNAMIC COLUMNS
+// ============================================
+
+export async function getUniqueSKUs(): Promise<string[]> {
+  const supabase = await createClient();
+
+  const { data: items, error } = await supabase
+    .from('shipment_items')
+    .select('sku')
+    .not('sku', 'is', null);
+
+  if (error) {
+    console.error('Error fetching unique SKUs:', error);
+    return [];
+  }
+
+  // Get unique SKUs and sort them
+  const uniqueSkus = [...new Set(items?.map((i) => i.sku) || [])].sort();
+  return uniqueSkus;
+}
+
+// ============================================
 // GET SUPPLIER SHIPMENT SCHEDULE (Galileo)
 // ============================================
 
-export async function getSupplierShipmentSchedule(): Promise<ShipmentScheduleItem[]> {
+export async function getSupplierShipmentSchedule(): Promise<{ data: ShipmentScheduleItem[]; uniqueSkus: SKUColumnInfo[] }> {
   const supabase = await createClient();
 
-  // Get ALL shipments for supplier schedule
+  // Get shipments from SUPPLIER (Dropship) - source = 'supplier'
   const { data: shipments, error } = await supabase
     .from('shipments')
     .select(`
@@ -467,6 +490,7 @@ export async function getSupplierShipmentSchedule(): Promise<ShipmentScheduleIte
       ship_to_address_state,
       ship_to_address_postal_code,
       sales_order_id,
+      source,
       sales_orders(
         id,
         customer_po_number,
@@ -478,6 +502,7 @@ export async function getSupplierShipmentSchedule(): Promise<ShipmentScheduleIte
       )
     `)
     .is('deleted_at', null)
+    .eq('source', 'supplier')
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -485,22 +510,40 @@ export async function getSupplierShipmentSchedule(): Promise<ShipmentScheduleIte
     throw error;
   }
 
-  // Get shipment items for SKU breakdown
+  // Get shipment items for SKU breakdown with product names
   const shipmentIds = shipments?.map((s) => s.id) || [];
 
   const { data: items } = await supabase
     .from('shipment_items')
-    .select('shipment_id, sku, quantity_shipped')
+    .select(`
+      shipment_id,
+      sku,
+      description,
+      quantity_shipped,
+      products(id, name)
+    `)
     .in('shipment_id', shipmentIds);
 
-  // Group items by shipment
-  const itemsByShipment = new Map<string, { sku: string; qty: number }[]>();
+  // Group items by shipment and build SKU info map
+  const itemsByShipment = new Map<string, { sku: string; productName: string; qty: number }[]>();
+  const skuInfoMap = new Map<string, string>(); // sku -> productName
+
   items?.forEach((item) => {
+    // Get product name: prefer products.name, fallback to description, then sku
+    const productData = item.products as { id: string; name: string } | null;
+    const productName = productData?.name || item.description || item.sku;
+
+    // Store SKU info for column headers
+    if (!skuInfoMap.has(item.sku)) {
+      skuInfoMap.set(item.sku, productName);
+    }
+
     if (!itemsByShipment.has(item.shipment_id)) {
       itemsByShipment.set(item.shipment_id, []);
     }
     itemsByShipment.get(item.shipment_id)!.push({
       sku: item.sku,
+      productName,
       qty: item.quantity_shipped,
     });
   });
@@ -508,7 +551,7 @@ export async function getSupplierShipmentSchedule(): Promise<ShipmentScheduleIte
   const result: ShipmentScheduleItem[] = [];
 
   shipments?.forEach((s, index) => {
-    // Handle relationship data
+    // Handle relationship data - sales orders
     const salesOrderData = s.sales_orders as {
       id: string;
       customer_po_number: string | null;
@@ -516,22 +559,8 @@ export async function getSupplierShipmentSchedule(): Promise<ShipmentScheduleIte
       customers: { id: string; name: string } | null;
     } | null;
 
-    // Calculate SKU quantities
+    // Get shipment items for this shipment
     const shipmentItems = itemsByShipment.get(s.id) || [];
-    let sku290 = 0;
-    let sku380 = 0;
-    let skuBead = 0;
-
-    shipmentItems.forEach((item) => {
-      const skuLower = item.sku.toLowerCase();
-      if (skuLower.includes('290/85r38') && !skuLower.includes('bead')) {
-        sku290 += item.qty;
-      } else if (skuLower.includes('380/85r24')) {
-        sku380 += item.qty;
-      } else if (skuLower.includes('bead')) {
-        skuBead += item.qty;
-      }
-    });
 
     // Build address
     const addressParts = [
@@ -557,9 +586,7 @@ export async function getSupplierShipmentSchedule(): Promise<ShipmentScheduleIte
       id: s.id,
       no: index + 1,
       loadNumber,
-      sku290_85R38Qty: sku290,
-      sku380_85R24Qty: sku380,
-      skuBeadLockQty: skuBead,
+      items: shipmentItems,
       totalQty: s.total_qty || 0,
       customer: salesOrderData?.customers?.name || 'Unknown',
       po: poNumber,
@@ -575,55 +602,68 @@ export async function getSupplierShipmentSchedule(): Promise<ShipmentScheduleIte
     });
   });
 
-  return result;
+  // Build unique SKUs with product names for column headers
+  const uniqueSkus: SKUColumnInfo[] = [];
+  const seenSkus = new Set<string>();
+
+  skuInfoMap.forEach((productName, sku) => {
+    if (!seenSkus.has(sku)) {
+      seenSkus.add(sku);
+      uniqueSkus.push({ sku, productName });
+    }
+  });
+
+  // Sort by SKU
+  uniqueSkus.sort((a, b) => a.sku.localeCompare(b.sku));
+
+  return { data: result, uniqueSkus };
 }
 
 // ============================================
 // GET GDC1 INVENTORY
 // ============================================
 
-export async function getGDC1Inventory(): Promise<GDC1InventoryItem[]> {
+/**
+ * GDC1 Inventory - Sales Orders fulfilled from warehouse
+ *
+ * Shows Sales Orders where product_source = 'warehouse'
+ * Status mapping:
+ *   - draft, pending → AVAILABLE (in stock, not committed)
+ *   - confirmed, processing → SOLD (committed to customer)
+ *   - shipped, delivered → INVOICED
+ *   - cancelled → excluded
+ */
+export async function getGDC1Inventory(): Promise<{ data: GDC1InventoryItem[]; uniqueSkus: SKUColumnInfo[] }> {
   const supabase = await createClient();
 
-  // Get ALL shipments for GDC1 inventory view
-  const { data: shipments, error } = await supabase
-    .from('shipments')
+  // Get Sales Orders where product_source = 'warehouse'
+  const { data: salesOrders, error } = await supabase
+    .from('sales_orders')
     .select(`
       id,
-      shipment_number,
-      supplier_reference_number,
-      total_qty,
-      qty_delivered,
-      outstanding_qty,
-      eta_to_port,
-      estimated_arrival,
-      customer_expected_delivery,
-      actual_arrival,
-      load_status,
-      action_required,
-      executive_notes,
-      supplier_invoice_number,
-      supplier_invoice_amount,
-      payment_50_percent_date,
-      remaining_50_due_date,
-      customer_ship_window_start,
-      customer_ship_window_end,
-      ship_to_address_street,
-      ship_to_address_city,
-      ship_to_address_state,
-      ship_to_address_postal_code,
-      sales_order_id,
-      sales_orders(
+      order_number,
+      order_date,
+      customer_id,
+      customer_po_number,
+      requested_delivery_date,
+      status,
+      product_source,
+      shipping_address_street,
+      shipping_address_city,
+      shipping_address_state,
+      shipping_address_postal_code,
+      subtotal,
+      grand_total,
+      internal_notes,
+      created_at,
+      customers(
         id,
-        customer_po_number,
-        requested_delivery_date,
-        customers(
-          id,
-          name
-        )
+        name
       )
     `)
     .is('deleted_at', null)
+    .eq('product_source', 'warehouse')
+    .neq('status', 'cancelled')
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -631,112 +671,130 @@ export async function getGDC1Inventory(): Promise<GDC1InventoryItem[]> {
     throw error;
   }
 
-  // Get shipment items for SKU breakdown and pricing
-  const shipmentIds = shipments?.map((s) => s.id) || [];
+  // Get sales order items for SKU breakdown with product names
+  const salesOrderIds = salesOrders?.map((s) => s.id) || [];
 
   const { data: items } = await supabase
-    .from('shipment_items')
-    .select('shipment_id, sku, quantity_shipped')
-    .in('shipment_id', shipmentIds);
+    .from('sales_order_items')
+    .select(`
+      sales_order_id,
+      sku,
+      description,
+      quantity,
+      unit_price,
+      line_total,
+      products(id, name)
+    `)
+    .in('sales_order_id', salesOrderIds);
 
-  // Group items by shipment
-  const itemsByShipment = new Map<string, { sku: string; qty: number }[]>();
+  // Group items by sales order and build SKU info map
+  const itemsBySalesOrder = new Map<string, { sku: string; productName: string; qty: number }[]>();
+  const skuInfoMap = new Map<string, string>(); // sku -> productName
+
   items?.forEach((item) => {
-    if (!itemsByShipment.has(item.shipment_id)) {
-      itemsByShipment.set(item.shipment_id, []);
+    // Get product name: prefer products.name, fallback to description, then sku
+    const productData = item.products as { id: string; name: string } | null;
+    const productName = productData?.name || item.description || item.sku;
+
+    // Store SKU info for column headers
+    if (!skuInfoMap.has(item.sku)) {
+      skuInfoMap.set(item.sku, productName);
     }
-    itemsByShipment.get(item.shipment_id)!.push({
+
+    if (!itemsBySalesOrder.has(item.sales_order_id)) {
+      itemsBySalesOrder.set(item.sales_order_id, []);
+    }
+    itemsBySalesOrder.get(item.sales_order_id)!.push({
       sku: item.sku,
-      qty: item.quantity_shipped,
+      productName,
+      qty: item.quantity,
     });
   });
+
+  // Map Sales Order status to GDC1 status
+  const mapSalesOrderStatus = (status: string): ShipmentStatus => {
+    switch (status) {
+      case 'draft':
+      case 'pending':
+        return 'AVAILABLE';  // In stock, not committed
+      case 'confirmed':
+      case 'processing':
+        return 'SOLD';       // Committed to customer
+      case 'shipped':
+      case 'delivered':
+        return 'INVOICED';   // Shipped/Delivered
+      default:
+        return 'OPEN';
+    }
+  };
 
   const result: GDC1InventoryItem[] = [];
 
-  shipments?.forEach((s, index) => {
-    // Handle relationship data
-    const salesOrderData = s.sales_orders as {
-      id: string;
-      customer_po_number: string | null;
-      requested_delivery_date: string | null;
-      customers: { id: string; name: string } | null;
-    } | null;
+  salesOrders?.forEach((so, index) => {
+    // Handle relationship data - customers
+    const customerData = so.customers as { id: string; name: string } | null;
 
-    // Calculate SKU quantities
-    const shipmentItems = itemsByShipment.get(s.id) || [];
-    let sku290 = 0;
-    let sku380 = 0;
-    let skuBead = 0;
+    // Get sales order items
+    const soItems = itemsBySalesOrder.get(so.id) || [];
 
-    shipmentItems.forEach((item) => {
-      const skuLower = item.sku.toLowerCase();
-      if (skuLower.includes('290/85r38') && !skuLower.includes('bead')) {
-        sku290 += item.qty;
-      } else if (skuLower.includes('380/85r24')) {
-        sku380 += item.qty;
-      } else if (skuLower.includes('bead')) {
-        skuBead += item.qty;
-      }
-    });
+    // Calculate total quantity
+    const totalQty = soItems.reduce((sum, item) => sum + item.qty, 0);
 
     // Build address
     const addressParts = [
-      s.ship_to_address_street,
-      s.ship_to_address_city,
-      s.ship_to_address_state,
-      s.ship_to_address_postal_code,
+      so.shipping_address_street,
+      so.shipping_address_city,
+      so.shipping_address_state,
+      so.shipping_address_postal_code,
     ].filter(Boolean);
 
-    // Build ship window string
+    // Build ship window from requested_delivery_date (single date for now)
     let shipWindow: string | null = null;
-    if (s.customer_ship_window_start && s.customer_ship_window_end) {
-      const start = new Date(s.customer_ship_window_start);
-      const end = new Date(s.customer_ship_window_end);
-      shipWindow = `${(start.getMonth() + 1).toString().padStart(2, '0')}/${start.getDate().toString().padStart(2, '0')}-${(end.getMonth() + 1).toString().padStart(2, '0')}/${end.getDate().toString().padStart(2, '0')}`;
+    if (so.requested_delivery_date) {
+      const date = new Date(so.requested_delivery_date);
+      shipWindow = `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
     }
 
-    // Load # priority: shipment_number > supplier_reference_number > N/A
-    const loadNumber = s.shipment_number || s.supplier_reference_number || 'N/A';
-
-    // PO # from sales order
-    const poNumber = salesOrderData?.customer_po_number || null;
-
-    // Use eta_to_port or estimated_arrival as fallback
-    const etaDate = s.eta_to_port || s.estimated_arrival;
-
-    // Use customer_expected_delivery or requested_delivery_date from SO as fallback
-    const customerDueDate = s.customer_expected_delivery || salesOrderData?.requested_delivery_date;
-
     result.push({
-      id: s.id,
+      id: so.id,
       no: index + 1,
-      loadNumber,
-      sku290_85R38Qty: sku290,
-      sku380_85R24Qty: sku380,
-      skuBeadLockQty: skuBead,
-      totalQty: s.total_qty || 0,
-      customer: salesOrderData?.customers?.name || null,
-      po: poNumber,
+      loadNumber: so.order_number,
+      items: soItems,
+      totalQty: totalQty,
+      customer: customerData?.name || null,
+      po: so.customer_po_number || null,
       customerShipWindow: shipWindow,
       deliveryAddress: addressParts.join(', '),
-      etaToUsPort: etaDate,
-      customerDueDate: customerDueDate,
-      actualDelivery: s.actual_arrival,
-      qtyDelivered: s.qty_delivered || 0,
-      outstandingPoQty: s.outstanding_qty || 0,
-      invoiceNumber: s.supplier_invoice_number,
-      invoiceAmount: s.supplier_invoice_amount || 0,
-      price38: 0, // TODO: Get from price matrix or product
-      price24: 0, // TODO: Get from price matrix or product
-      payment50PercentDate: s.payment_50_percent_date,
-      remaining50DueDate: s.remaining_50_due_date,
-      status: mapLoadStatus(s.load_status),
-      actionRequired: s.action_required || '',
-      ankurNotes: s.executive_notes || '',
+      etaToUsPort: null,  // Not applicable for warehouse orders
+      customerDueDate: so.requested_delivery_date,
+      actualDelivery: null,  // Will be updated when shipped
+      qtyDelivered: 0,       // Will be updated when shipped
+      outstandingPoQty: totalQty,  // All qty is outstanding until shipped
+      invoiceNumber: null,   // Will be updated when invoiced
+      invoiceAmount: so.grand_total ? so.grand_total / 100 : 0,  // Convert cents to dollars
+      payment50PercentDate: null,
+      remaining50DueDate: null,
+      status: mapSalesOrderStatus(so.status),
+      actionRequired: '',
+      ankurNotes: so.internal_notes || '',
     });
   });
 
-  return result;
+  // Build unique SKUs with product names for column headers
+  const uniqueSkus: SKUColumnInfo[] = [];
+  const seenSkus = new Set<string>();
+
+  skuInfoMap.forEach((productName, sku) => {
+    if (!seenSkus.has(sku)) {
+      seenSkus.add(sku);
+      uniqueSkus.push({ sku, productName });
+    }
+  });
+
+  // Sort by SKU
+  uniqueSkus.sort((a, b) => a.sku.localeCompare(b.sku));
+
+  return { data: result, uniqueSkus };
 }
 
 // ============================================

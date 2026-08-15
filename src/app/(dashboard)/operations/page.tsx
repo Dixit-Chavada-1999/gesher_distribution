@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui
 import { Loader2 } from 'lucide-react';
 
 // Import components directly to avoid barrel export issues
-import { OperationsHeader } from '@/features/operations-dashboard/components/OperationsHeader';
+import { OperationsHeader, type ExportOption } from '@/features/operations-dashboard/components/OperationsHeader';
 import { OperationsStatsGrid } from '@/features/operations-dashboard/components/OperationsStatsGrid';
 import { ImmediateAttentionTable } from '@/features/operations-dashboard/components/ImmediateAttentionTable';
 import { SKUBreakdown } from '@/features/operations-dashboard/components/SKUBreakdown';
@@ -31,11 +31,8 @@ import { EditShipmentDialog } from '@/features/operations-dashboard/components/E
 // Server actions
 import { fetchOperationsData } from '@/features/operations-dashboard/actions';
 
-// Mock data as fallback
-import { operationsData as mockData } from '@/features/operations-dashboard/lib/mock-data';
-
 // Export utilities
-import { exportByType, type ExportType } from '@/features/operations-dashboard/lib/export';
+import { exportToXLSX, type XLSXExportType } from '@/features/operations-dashboard/lib/xlsx-export';
 
 // Types
 import type {
@@ -59,13 +56,36 @@ interface EditableShipment {
   totalQty?: number;
 }
 
+// Empty data structure for initial state
+const emptyData: OperationsData = {
+  stats: {
+    availableInventoryQty: 0,
+    availableLoads: 0,
+    availableInventoryValue: 0,
+    committedCustomerQty: 0,
+    inTransitNext7Days: 0,
+    openLoads: 0,
+    outstandingQty: 0,
+    invoiceAmount: 0,
+  },
+  skuBreakdown: [],
+  customerCommitments: [],
+  shipmentStatusMix: [],
+  immediateAttention: [],
+  supplierShipmentSchedule: [],
+  supplierScheduleSkus: [],
+  gdc1Inventory: [],
+  gdc1InventorySkus: [],
+  rimInstallationRequired: [],
+  storyInBrief: '',
+};
+
 export default function OperationsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [data, setData] = useState<OperationsData>(mockData);
+  const [data, setData] = useState<OperationsData>(emptyData);
   const [error, setError] = useState<string | null>(null);
-  const [useMockData, setUseMockData] = useState(false);
 
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -89,21 +109,14 @@ export default function OperationsPage() {
 
       if (result.success && result.data) {
         setData(result.data);
-        setUseMockData(false);
         setError(null);
       } else {
-        // If no data in database, use mock data
-        console.warn('No data from database, using mock data:', result.error);
-        setData(mockData);
-        setUseMockData(true);
-        setError(null); // Don't show error, just use mock data
+        console.error('Failed to fetch operations data:', result.error);
+        setError(result.error || 'Failed to load data');
       }
     } catch (err) {
       console.error('Error loading operations data:', err);
-      // Fall back to mock data on error
-      setData(mockData);
-      setUseMockData(true);
-      setError(null);
+      setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -120,8 +133,9 @@ export default function OperationsPage() {
     loadData(true);
   };
 
-  const handleExport = (type: ExportType = 'all') => {
-    exportByType(type, data);
+  const handleExport = (type: ExportOption = 'all') => {
+    // Export to XLSX
+    exportToXLSX(type as XLSXExportType, data);
   };
 
   // Handle edit from Immediate Attention table
@@ -189,13 +203,6 @@ export default function OperationsPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      {/* Mock Data Indicator */}
-      {useMockData && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
-          Showing demo data. Add shipments to the database to see real data.
-        </div>
-      )}
-
       {/* Error Message */}
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
@@ -262,6 +269,7 @@ export default function OperationsPage() {
         <TabsContent value="supplier-schedule" className="space-y-6">
           <SupplierShipmentScheduleTable
             data={data.supplierShipmentSchedule}
+            uniqueSkus={data.supplierScheduleSkus || []}
             onEdit={handleEditScheduleItem}
           />
         </TabsContent>
@@ -270,6 +278,7 @@ export default function OperationsPage() {
         <TabsContent value="gdc1-inventory" className="space-y-6">
           <GDC1InventoryTable
             data={data.gdc1Inventory}
+            uniqueSkus={data.gdc1InventorySkus || []}
             onEdit={handleEditGDC1Item}
           />
         </TabsContent>

@@ -84,6 +84,30 @@ export interface ImmediateAttentionItem {
 }
 
 // ============================================
+// SHIPMENT ITEM DETAIL (for dynamic SKU display)
+// ============================================
+
+export interface ShipmentItemDetail {
+  sku: string;
+  productName?: string;  // Product name for display (optional, fetched from database)
+  qty: number;
+}
+
+// SKU info for column headers
+export interface SKUColumnInfo {
+  sku: string;
+  productName: string;
+}
+
+// ============================================
+// DYNAMIC SKU COLUMNS
+// ============================================
+
+export interface DynamicSKUColumns {
+  uniqueSkus: SKUColumnInfo[];  // All unique SKUs with product names for column headers
+}
+
+// ============================================
 // SHIPMENT SCHEDULE TYPES (Supplier)
 // ============================================
 
@@ -91,9 +115,7 @@ export interface ShipmentScheduleItem {
   id: string;
   no: number;
   loadNumber: string;
-  sku290_85R38Qty: number;
-  sku380_85R24Qty: number;
-  skuBeadLockQty: number;
+  items: ShipmentItemDetail[];
   totalQty: number;
   customer: string;
   po: string;
@@ -116,9 +138,7 @@ export interface GDC1InventoryItem {
   id: string;
   no: number;
   loadNumber: string;
-  sku290_85R38Qty: number;
-  sku380_85R24Qty: number;
-  skuBeadLockQty: number;
+  items: ShipmentItemDetail[];
   totalQty: number;
   customer: string | null;
   po: string | null;
@@ -131,8 +151,6 @@ export interface GDC1InventoryItem {
   outstandingPoQty: number;
   invoiceNumber: string | null;
   invoiceAmount: number;
-  price38: number;
-  price24: number;
   payment50PercentDate: string | null;
   remaining50DueDate: string | null;
   status: ShipmentStatus;
@@ -167,7 +185,9 @@ export interface OperationsData {
   shipmentStatusMix: ShipmentStatusMix[];
   immediateAttention: ImmediateAttentionItem[];
   supplierShipmentSchedule: ShipmentScheduleItem[];
+  supplierScheduleSkus: SKUColumnInfo[];  // Dynamic SKU column headers with product names
   gdc1Inventory: GDC1InventoryItem[];
+  gdc1InventorySkus: SKUColumnInfo[];  // Dynamic SKU column headers with product names
   rimInstallationRequired: RimInstallationItem[];
   storyInBrief: string;
 }

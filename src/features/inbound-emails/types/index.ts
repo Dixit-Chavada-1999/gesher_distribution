@@ -109,6 +109,9 @@ export interface InboundEmail {
   status: InboundEmailStatus;
   created_at: string;
   updated_at: string;
+  // Attachment counts (populated by query)
+  total_pdf_attachments?: number;
+  processed_pdf_attachments?: number;
 }
 
 /**

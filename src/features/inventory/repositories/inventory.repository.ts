@@ -72,12 +72,11 @@ class InventoryRepositoryImpl {
         products!inner (
           id,
           sku,
-          name,
-          unit_code
+          name
         ),
         locations!inner (
           id,
-          code,
+          location_code,
           name
         )
       `,
@@ -150,12 +149,11 @@ class InventoryRepositoryImpl {
         products (
           id,
           sku,
-          name,
-          unit_code
+          name
         ),
         locations (
           id,
-          code,
+          location_code,
           name
         )
       `
@@ -278,12 +276,13 @@ class InventoryRepositoryImpl {
   }
 
   /**
-   * Allocate inventory
+   * Allocate inventory (reserve for sales order)
    */
   async allocate(
     id: string,
     quantity: number,
-    userId?: string
+    userId?: string,
+    reference?: { type: string; id: string; number: string }
   ): Promise<Inventory> {
     const current = await this.findById(id);
     if (!current) {
@@ -292,10 +291,26 @@ class InventoryRepositoryImpl {
 
     const newAllocated = current.allocated + quantity;
     if (newAllocated > current.onHand) {
-      throw new Error('Cannot allocate more than on_hand quantity');
+      throw new Error(`Cannot allocate ${quantity} - only ${current.onHand - current.allocated} available`);
     }
 
-    return this.update(id, { allocated: newAllocated }, userId);
+    const result = await this.update(id, { allocated: newAllocated }, userId);
+
+    // Log inventory movement
+    await this.logMovement({
+      productId: current.productId,
+      locationId: current.locationId,
+      movementType: 'allocate',
+      quantity: quantity, // positive for allocation
+      onHandAfter: result.onHand,
+      allocatedAfter: result.allocated,
+      referenceType: reference?.type,
+      referenceId: reference?.id,
+      referenceNumber: reference?.number,
+      createdBy: userId,
+    });
+
+    return result;
   }
 
   /**
@@ -304,7 +319,8 @@ class InventoryRepositoryImpl {
   async deallocate(
     id: string,
     quantity: number,
-    userId?: string
+    userId?: string,
+    reference?: { type: string; id: string; number: string }
   ): Promise<Inventory> {
     const current = await this.findById(id);
     if (!current) {
@@ -316,7 +332,147 @@ class InventoryRepositoryImpl {
       throw new Error('Cannot deallocate more than currently allocated');
     }
 
-    return this.update(id, { allocated: newAllocated }, userId);
+    const result = await this.update(id, { allocated: newAllocated }, userId);
+
+    // Log inventory movement
+    await this.logMovement({
+      productId: current.productId,
+      locationId: current.locationId,
+      movementType: 'deallocate',
+      quantity: quantity, // positive for deallocate (releasing)
+      onHandAfter: result.onHand,
+      allocatedAfter: result.allocated,
+      referenceType: reference?.type,
+      referenceId: reference?.id,
+      referenceNumber: reference?.number,
+      createdBy: userId,
+    });
+
+    return result;
+  }
+
+  /**
+   * Ship inventory (reduce on_hand and allocated when pick ticket completes)
+   */
+  async ship(
+    id: string,
+    quantity: number,
+    userId?: string,
+    reference?: { type: string; id: string; number: string }
+  ): Promise<Inventory> {
+    const current = await this.findById(id);
+    if (!current) {
+      throw new Error('Inventory record not found');
+    }
+
+    // Validate
+    if (quantity > current.allocated) {
+      throw new Error(`Cannot ship ${quantity} - only ${current.allocated} allocated`);
+    }
+
+    const newOnHand = current.onHand - quantity;
+    const newAllocated = current.allocated - quantity;
+
+    if (newOnHand < 0) {
+      throw new Error('Cannot reduce on_hand below 0');
+    }
+
+    const result = await this.update(id, {
+      onHand: newOnHand,
+      allocated: newAllocated
+    }, userId);
+
+    // Log inventory movement
+    await this.logMovement({
+      productId: current.productId,
+      locationId: current.locationId,
+      movementType: 'ship',
+      quantity: -quantity, // negative for outgoing
+      onHandAfter: result.onHand,
+      allocatedAfter: result.allocated,
+      referenceType: reference?.type,
+      referenceId: reference?.id,
+      referenceNumber: reference?.number,
+      createdBy: userId,
+    });
+
+    return result;
+  }
+
+  /**
+   * Receive inventory (increase on_hand when shipment arrives)
+   */
+  async receive(
+    id: string,
+    quantity: number,
+    userId?: string,
+    reference?: { type: string; id: string; number: string }
+  ): Promise<Inventory> {
+    const current = await this.findById(id);
+    if (!current) {
+      throw new Error('Inventory record not found');
+    }
+
+    const newOnHand = current.onHand + quantity;
+    const result = await this.update(id, { onHand: newOnHand }, userId);
+
+    // Log inventory movement
+    await this.logMovement({
+      productId: current.productId,
+      locationId: current.locationId,
+      movementType: 'receive',
+      quantity: quantity, // positive for incoming
+      onHandAfter: result.onHand,
+      allocatedAfter: result.allocated,
+      referenceType: reference?.type,
+      referenceId: reference?.id,
+      referenceNumber: reference?.number,
+      createdBy: userId,
+    });
+
+    return result;
+  }
+
+  // ==========================================
+  // INVENTORY MOVEMENTS LOGGING
+  // ==========================================
+
+  /**
+   * Log inventory movement for audit trail
+   */
+  private async logMovement(data: {
+    productId: string;
+    locationId: string;
+    movementType: 'receive' | 'allocate' | 'deallocate' | 'ship' | 'adjust' | 'transfer_out' | 'transfer_in';
+    quantity: number;
+    onHandAfter: number;
+    allocatedAfter: number;
+    referenceType?: string;
+    referenceId?: string;
+    referenceNumber?: string;
+    notes?: string;
+    reason?: string;
+    createdBy?: string;
+  }): Promise<void> {
+    try {
+      await db.from('inventory_movements').insert({
+        product_id: data.productId,
+        location_id: data.locationId,
+        movement_type: data.movementType,
+        quantity: data.quantity,
+        on_hand_after: data.onHandAfter,
+        allocated_after: data.allocatedAfter,
+        reference_type: data.referenceType || null,
+        reference_id: data.referenceId || null,
+        reference_number: data.referenceNumber || null,
+        notes: data.notes || null,
+        reason: data.reason || null,
+        created_by: data.createdBy || null,
+      });
+    } catch (error) {
+      // Log error but don't fail the main operation
+      console.error('Failed to log inventory movement:', error);
+    }
   }
 
   /**
@@ -353,12 +509,11 @@ class InventoryRepositoryImpl {
         products!inner (
           id,
           sku,
-          name,
-          unit_code
+          name
         ),
         locations!inner (
           id,
-          code,
+          location_code,
           name
         )
       `
@@ -406,8 +561,8 @@ class InventoryRepositoryImpl {
     updated_at: string;
     created_by: string | null;
     updated_by: string | null;
-    products: { id: string; sku: string; name: string; unit_code: string } | null;
-    locations: { id: string; code: string; name: string } | null;
+    products: { id: string; sku: string; name: string } | null;
+    locations: { id: string; location_code: string; name: string } | null;
   }): InventoryWithDetails {
     const available = data.on_hand - data.allocated;
     const isLowStock = available <= data.reorder_point;
@@ -431,13 +586,13 @@ class InventoryRepositoryImpl {
             id: data.products.id,
             sku: data.products.sku,
             name: data.products.name,
-            unitCode: data.products.unit_code,
+            unitCode: 'EA', // Default unit code
           }
         : undefined,
       location: data.locations
         ? {
             id: data.locations.id,
-            code: data.locations.code,
+            code: data.locations.location_code,
             name: data.locations.name,
           }
         : undefined,
@@ -454,8 +609,8 @@ class InventoryRepositoryImpl {
     reorder_qty: number;
     created_at: string;
     updated_at: string;
-    products: { id: string; sku: string; name: string; unit_code: string } | { id: string; sku: string; name: string; unit_code: string }[];
-    locations: { id: string; code: string; name: string } | { id: string; code: string; name: string }[];
+    products: { id: string; sku: string; name: string } | { id: string; sku: string; name: string }[];
+    locations: { id: string; location_code: string; name: string } | { id: string; location_code: string; name: string }[];
   }): InventoryListItem {
     const product = Array.isArray(data.products) ? data.products[0] : data.products;
     const location = Array.isArray(data.locations) ? data.locations[0] : data.locations;
@@ -468,7 +623,7 @@ class InventoryRepositoryImpl {
       productSku: product?.sku || 'Unknown',
       productName: product?.name || 'Unknown',
       locationId: data.location_id,
-      locationCode: location?.code || 'Unknown',
+      locationCode: location?.location_code || 'Unknown',
       locationName: location?.name || 'Unknown',
       onHand: data.on_hand,
       allocated: data.allocated,

@@ -148,6 +148,7 @@ export function EditQuoteDrawer({ open, onClose, quoteId, onSuccess }: EditQuote
         customerId: dto.customerId,
         salesRepId: dto.salesRepId,
         currencyCode: dto.currencyCode,
+        productSource: dto.productSource,
         billingAddress: dto.billingAddress,
         shippingAddress: dto.shippingAddress,
         customerNotes: dto.customerNotes,

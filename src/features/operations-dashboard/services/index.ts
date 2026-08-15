@@ -34,8 +34,8 @@ export async function getOperationsData(): Promise<OperationsData> {
     customerCommitments,
     shipmentStatusMix,
     immediateAttention,
-    supplierShipmentSchedule,
-    gdc1Inventory,
+    supplierScheduleResult,
+    gdc1InventoryResult,
     rimInstallationRequired,
   ] = await Promise.all([
     getOperationsStats(),
@@ -48,6 +48,12 @@ export async function getOperationsData(): Promise<OperationsData> {
     getRimInstallationRequired(),
   ]);
 
+  // Extract data and unique SKUs from results
+  const supplierShipmentSchedule = supplierScheduleResult.data;
+  const supplierScheduleSkus = supplierScheduleResult.uniqueSkus;
+  const gdc1Inventory = gdc1InventoryResult.data;
+  const gdc1InventorySkus = gdc1InventoryResult.uniqueSkus;
+
   // Generate story in brief based on fetched data
   const storyInBrief = await generateStoryInBrief(stats, skuBreakdown, rimInstallationRequired);
 
@@ -58,7 +64,9 @@ export async function getOperationsData(): Promise<OperationsData> {
     shipmentStatusMix,
     immediateAttention,
     supplierShipmentSchedule,
+    supplierScheduleSkus,
     gdc1Inventory,
+    gdc1InventorySkus,
     rimInstallationRequired,
     storyInBrief,
   };
@@ -107,14 +115,16 @@ export async function getAttentionItems() {
  * Get supplier shipment schedule (Galileo)
  */
 export async function getSupplierSchedule() {
-  return getSupplierShipmentSchedule();
+  const result = await getSupplierShipmentSchedule();
+  return { data: result.data, uniqueSkus: result.uniqueSkus };
 }
 
 /**
  * Get GDC1 warehouse inventory
  */
 export async function getWarehouseInventory() {
-  return getGDC1Inventory();
+  const result = await getGDC1Inventory();
+  return { data: result.data, uniqueSkus: result.uniqueSkus };
 }
 
 /**
@@ -179,11 +189,17 @@ export async function getExportData(options: ExportOptions = {}) {
   }
 
   if (includeShipmentSchedule) {
-    promises.push(getSupplierShipmentSchedule().then((result) => { data.supplierShipmentSchedule = result; }));
+    promises.push(getSupplierShipmentSchedule().then((result) => {
+      data.supplierShipmentSchedule = result.data;
+      data.supplierScheduleSkus = result.uniqueSkus;
+    }));
   }
 
   if (includeGdc1Inventory) {
-    promises.push(getGDC1Inventory().then((result) => { data.gdc1Inventory = result; }));
+    promises.push(getGDC1Inventory().then((result) => {
+      data.gdc1Inventory = result.data;
+      data.gdc1InventorySkus = result.uniqueSkus;
+    }));
   }
 
   if (includeRimInstallation) {

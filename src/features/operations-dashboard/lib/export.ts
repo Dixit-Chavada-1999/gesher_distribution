@@ -66,15 +66,29 @@ function downloadCSV(content: string, filename: string): void {
 // ============================================
 
 /**
+ * Format items array as a readable string for CSV export
+ */
+function formatItemsForExport(items: { sku: string; qty: number }[] | undefined): string {
+  if (!items || items.length === 0) {
+    return '';
+  }
+  return items.map(item => `${item.sku}: ${item.qty}`).join('; ');
+}
+
+/**
  * Export Supplier Shipment Schedule to CSV
  */
 export function exportSupplierSchedule(data: ShipmentScheduleItem[]): void {
-  const headers: { key: keyof ShipmentScheduleItem; label: string }[] = [
+  // Transform data to include items as a string
+  const transformedData = data.map(item => ({
+    ...item,
+    itemsDisplay: formatItemsForExport(item.items),
+  }));
+
+  const headers: { key: keyof typeof transformedData[0]; label: string }[] = [
     { key: 'no', label: 'No.' },
     { key: 'loadNumber', label: 'Load Number' },
-    { key: 'sku290_85R38Qty', label: '290/85R38 Qty' },
-    { key: 'sku380_85R24Qty', label: '380/85R24 Qty' },
-    { key: 'skuBeadLockQty', label: 'Bead Lock Qty' },
+    { key: 'itemsDisplay', label: 'Items' },
     { key: 'totalQty', label: 'Total Qty' },
     { key: 'customer', label: 'Customer' },
     { key: 'po', label: 'PO' },
@@ -89,7 +103,7 @@ export function exportSupplierSchedule(data: ShipmentScheduleItem[]): void {
     { key: 'actionRequired', label: 'Action Required' },
   ];
 
-  const csv = toCSV(data, headers);
+  const csv = toCSV(transformedData, headers);
   const date = new Date().toISOString().split('T')[0];
   downloadCSV(csv, `supplier-shipment-schedule-${date}.csv`);
 }
@@ -98,12 +112,16 @@ export function exportSupplierSchedule(data: ShipmentScheduleItem[]): void {
  * Export GDC1 Inventory to CSV
  */
 export function exportGDC1Inventory(data: GDC1InventoryItem[]): void {
-  const headers: { key: keyof GDC1InventoryItem; label: string }[] = [
+  // Transform data to include items as a string
+  const transformedData = data.map(item => ({
+    ...item,
+    itemsDisplay: formatItemsForExport(item.items),
+  }));
+
+  const headers: { key: keyof typeof transformedData[0]; label: string }[] = [
     { key: 'no', label: 'No.' },
     { key: 'loadNumber', label: 'Load Number' },
-    { key: 'sku290_85R38Qty', label: '290/85R38 Qty' },
-    { key: 'sku380_85R24Qty', label: '380/85R24 Qty' },
-    { key: 'skuBeadLockQty', label: 'Bead Lock Qty' },
+    { key: 'itemsDisplay', label: 'Items' },
     { key: 'totalQty', label: 'Total Qty' },
     { key: 'customer', label: 'Customer' },
     { key: 'po', label: 'PO' },
@@ -115,8 +133,6 @@ export function exportGDC1Inventory(data: GDC1InventoryItem[]): void {
     { key: 'outstandingPoQty', label: 'Outstanding Qty' },
     { key: 'invoiceNumber', label: 'Invoice #' },
     { key: 'invoiceAmount', label: 'Invoice Amount' },
-    { key: 'price38', label: 'Price 38' },
-    { key: 'price24', label: 'Price 24' },
     { key: 'payment50PercentDate', label: '50% Payment Date' },
     { key: 'remaining50DueDate', label: 'Remaining 50% Due' },
     { key: 'deliveryAddress', label: 'Delivery Address' },
@@ -125,7 +141,7 @@ export function exportGDC1Inventory(data: GDC1InventoryItem[]): void {
     { key: 'ankurNotes', label: 'Notes' },
   ];
 
-  const csv = toCSV(data, headers);
+  const csv = toCSV(transformedData, headers);
   const date = new Date().toISOString().split('T')[0];
   downloadCSV(csv, `gdc1-inventory-${date}.csv`);
 }
@@ -142,7 +158,7 @@ export function exportCustomerCommitments(data: CustomerCommitment[]): void {
     { key: 'inTransitNext7Days', label: 'In Transit Next 7 Days' },
   ];
 
-  const csv = toCSV(data, headers);
+  const csv = toCSV(data as unknown as Record<string, unknown>[], headers as { key: string; label: string }[]);
   const date = new Date().toISOString().split('T')[0];
   downloadCSV(csv, `customer-commitments-${date}.csv`);
 }
@@ -164,7 +180,7 @@ export function exportImmediateAttention(data: ImmediateAttentionItem[]): void {
     { key: 'isThisWeek', label: 'This Week' },
   ];
 
-  const csv = toCSV(data, headers);
+  const csv = toCSV(data as unknown as Record<string, unknown>[], headers as { key: string; label: string }[]);
   const date = new Date().toISOString().split('T')[0];
   downloadCSV(csv, `immediate-attention-${date}.csv`);
 }
@@ -181,29 +197,105 @@ export function exportSKUBreakdown(data: SKUBreakdown[]): void {
     { key: 'shareOfCombined', label: 'Share %' },
   ];
 
-  const csv = toCSV(data, headers);
+  const csv = toCSV(data as unknown as Record<string, unknown>[], headers as { key: string; label: string }[]);
   const date = new Date().toISOString().split('T')[0];
   downloadCSV(csv, `sku-breakdown-${date}.csv`);
 }
 
 /**
- * Export all data to multiple CSV files (as ZIP would require additional library)
- * For now, exports the main schedule which is what Jenny uses most
+ * Export Executive Summary to CSV
+ * Includes: Immediate Attention, SKU Breakdown, Customer Commitments
+ */
+export function exportExecutiveSummary(data: OperationsData): void {
+  // Export immediate attention first
+  exportImmediateAttention(data.immediateAttention);
+
+  // Slight delays to avoid browser blocking multiple downloads
+  setTimeout(() => {
+    exportSKUBreakdown(data.skuBreakdown);
+  }, 300);
+
+  setTimeout(() => {
+    exportCustomerCommitments(data.customerCommitments);
+  }, 600);
+}
+
+/**
+ * Export Shipment Overview to CSV
+ * Includes: In-Transit items and Customer Summary
+ */
+export function exportShipmentOverview(data: OperationsData): void {
+  // Transform in-transit items with all relevant fields
+  const shipmentOverviewData = data.immediateAttention.map((item, index) => ({
+    no: index + 1,
+    loadNumber: item.loadNumber,
+    customer: item.customer,
+    po: item.po,
+    qty: item.qty,
+    etaPort: item.etaPort,
+    customerEtaDue: item.customerEtaDue,
+    status: item.status,
+    actionRequired: item.actionRequired,
+    isOverdue: item.isOverdue ? 'Yes' : 'No',
+    isThisWeek: item.isThisWeek ? 'Yes' : 'No',
+  }));
+
+  const headers: { key: keyof typeof shipmentOverviewData[0]; label: string }[] = [
+    { key: 'no', label: 'No.' },
+    { key: 'loadNumber', label: 'Load #' },
+    { key: 'customer', label: 'Customer' },
+    { key: 'po', label: 'PO' },
+    { key: 'qty', label: 'Qty' },
+    { key: 'etaPort', label: 'ETA Port' },
+    { key: 'customerEtaDue', label: 'Customer ETA/Due' },
+    { key: 'status', label: 'Status' },
+    { key: 'actionRequired', label: 'Action Required / Notes' },
+    { key: 'isOverdue', label: 'Overdue' },
+    { key: 'isThisWeek', label: 'This Week' },
+  ];
+
+  const csv = toCSV(shipmentOverviewData, headers);
+  const date = new Date().toISOString().split('T')[0];
+  downloadCSV(csv, `shipment-overview-${date}.csv`);
+
+  // Also export customer commitments
+  setTimeout(() => {
+    exportCustomerCommitments(data.customerCommitments);
+  }, 300);
+}
+
+/**
+ * Export all data to multiple CSV files
+ * Downloads 4 CSVs: Executive Summary components, Shipment Overview, Supplier Schedule, GDC1 Inventory
  */
 export function exportAllData(data: OperationsData): void {
-  // Export the main sheets Jenny uses
-  exportSupplierSchedule(data.supplierShipmentSchedule);
+  // Export immediate attention
+  exportImmediateAttention(data.immediateAttention);
 
-  // Slight delay to avoid browser blocking multiple downloads
+  // Staggered downloads to avoid browser blocking
+  setTimeout(() => {
+    exportSKUBreakdown(data.skuBreakdown);
+  }, 300);
+
+  setTimeout(() => {
+    exportCustomerCommitments(data.customerCommitments);
+  }, 600);
+
+  setTimeout(() => {
+    exportSupplierSchedule(data.supplierShipmentSchedule);
+  }, 900);
+
   setTimeout(() => {
     exportGDC1Inventory(data.gdc1Inventory);
-  }, 500);
+  }, 1200);
 }
 
 /**
  * Export options dialog helper
  */
 export type ExportType =
+  | 'executive-summary'
+  | 'shipment-overview'
   | 'supplier-schedule'
   | 'gdc1-inventory'
   | 'customer-commitments'
@@ -213,6 +305,12 @@ export type ExportType =
 
 export function exportByType(type: ExportType, data: OperationsData): void {
   switch (type) {
+    case 'executive-summary':
+      exportExecutiveSummary(data);
+      break;
+    case 'shipment-overview':
+      exportShipmentOverview(data);
+      break;
     case 'supplier-schedule':
       exportSupplierSchedule(data.supplierShipmentSchedule);
       break;

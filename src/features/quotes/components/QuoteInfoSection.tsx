@@ -205,6 +205,30 @@ function QuoteInfoSectionComponent({
             <p className="text-sm text-destructive">{errors.currencyId.message}</p>
           )}
         </div>
+
+        {/* Product Source */}
+        <div className="space-y-2">
+          <Label htmlFor="productSource">Product Source</Label>
+          <Controller
+            name="productSource"
+            control={control}
+            render={({ field }) => (
+              <Select value={field.value || ''} onValueChange={(value) => field.onChange(value === '' ? null : value)}>
+                <SelectTrigger id="productSource" className={errors.productSource ? 'border-destructive' : ''}>
+                  <SelectValue placeholder="Select product source" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Select product source</SelectItem>
+                  <SelectItem value="dropship">Dropship</SelectItem>
+                  <SelectItem value="warehouse">Direct / Warehouse</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          />
+          {errors.productSource && (
+            <p className="text-sm text-destructive">{errors.productSource.message}</p>
+          )}
+        </div>
       </div>
     </div>
   );
