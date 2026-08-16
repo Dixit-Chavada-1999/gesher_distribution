@@ -14,6 +14,8 @@ import type {
   CreateShipmentDTO,
   UpdateShipmentDTO,
   ShipmentStatus,
+  LoadStatus,
+  ShipmentSource,
   PaginatedResult,
   SalesOrderSummary,
   PurchaseOrderSummary,
@@ -48,11 +50,37 @@ interface DbShipment {
   status: ShipmentStatus;
   notes: string | null;
   delivery_instructions: string | null;
+  // Operations dashboard columns (migrations 071 and 077)
+  supplier_reference_number: string | null;
+  eta_to_port: string | null;
+  confirmed_eta: string | null;
+  customer_expected_delivery: string | null;
+  qty_delivered: number | null;
+  outstanding_qty: number | null;
+  total_qty: number | null;
+  supplier_invoice_number: string | null;
+  supplier_invoice_amount: number | null;
+  payment_50_percent_date: string | null;
+  remaining_50_due_date: string | null;
+  action_required: string | null;
+  executive_notes: string | null;
+  is_delayed: boolean | null;
+  load_status: LoadStatus | null;
+  source: ShipmentSource | null;
+  customer_ship_window_start: string | null;
+  customer_ship_window_end: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
   updated_by: string | null;
   deleted_at: string | null;
+}
+
+/** Per-shipment lookups resolved in one round trip for the list query. */
+interface OrderLookups {
+  salesOrders: Record<string, string>;
+  purchaseOrders: Record<string, string>;
+  salesOrderInfo: Record<string, { customerName: string | null; customerPo: string | null }>;
 }
 
 interface DbShipmentItem {
@@ -104,11 +132,22 @@ class ShipmentRepositoryImpl {
         shipment_number,
         shipment_date,
         estimated_arrival,
+        actual_arrival,
         carrier,
         tracking_number,
         status,
         sales_order_id,
         purchase_order_id,
+        supplier_reference_number,
+        eta_to_port,
+        confirmed_eta,
+        customer_expected_delivery,
+        qty_delivered,
+        outstanding_qty,
+        total_qty,
+        load_status,
+        is_delayed,
+        action_required,
         created_at
       `,
         { count: 'exact' }
@@ -262,21 +301,30 @@ class ShipmentRepositoryImpl {
    */
   private async getOrderNumbers(
     shipments: Array<{ sales_order_id: string | null; purchase_order_id: string | null }>
-  ): Promise<{ salesOrders: Record<string, string>; purchaseOrders: Record<string, string> }> {
+  ): Promise<OrderLookups> {
     const soIds = shipments.map((s) => s.sales_order_id).filter(Boolean) as string[];
     const poIds = shipments.map((s) => s.purchase_order_id).filter(Boolean) as string[];
 
     const salesOrders: Record<string, string> = {};
     const purchaseOrders: Record<string, string> = {};
+    const salesOrderInfo: OrderLookups['salesOrderInfo'] = {};
 
     if (soIds.length > 0) {
       const { data } = await db
         .from('sales_orders')
-        .select('id, order_number')
+        .select('id, order_number, customer_po_number, customers(name)')
         .in('id', soIds);
 
       for (const row of data || []) {
         salesOrders[row.id] = row.order_number;
+
+        // Supabase types an embedded to-one relation as an array; PostgREST
+        // returns a single object. Accept either.
+        const customer = Array.isArray(row.customers) ? row.customers[0] : row.customers;
+        salesOrderInfo[row.id] = {
+          customerName: customer?.name ?? null,
+          customerPo: row.customer_po_number ?? null,
+        };
       }
     }
 
@@ -291,7 +339,7 @@ class ShipmentRepositoryImpl {
       }
     }
 
-    return { salesOrders, purchaseOrders };
+    return { salesOrders, purchaseOrders, salesOrderInfo };
   }
 
   /**
@@ -554,6 +602,37 @@ class ShipmentRepositoryImpl {
       status: data.status,
       notes: data.notes,
       deliveryInstructions: data.delivery_instructions,
+
+      // Operations dashboard fields
+      supplierReferenceNumber: data.supplier_reference_number,
+      etaToPort: data.eta_to_port ? new Date(data.eta_to_port) : null,
+      confirmedEta: data.confirmed_eta ? new Date(data.confirmed_eta) : null,
+      customerExpectedDelivery: data.customer_expected_delivery
+        ? new Date(data.customer_expected_delivery)
+        : null,
+      qtyDelivered: data.qty_delivered ?? 0,
+      outstandingQty: data.outstanding_qty ?? 0,
+      totalQty: data.total_qty ?? 0,
+      supplierInvoiceNumber: data.supplier_invoice_number,
+      supplierInvoiceAmount: data.supplier_invoice_amount,
+      payment50PercentDate: data.payment_50_percent_date
+        ? new Date(data.payment_50_percent_date)
+        : null,
+      remaining50DueDate: data.remaining_50_due_date
+        ? new Date(data.remaining_50_due_date)
+        : null,
+      actionRequired: data.action_required,
+      executiveNotes: data.executive_notes,
+      isDelayed: data.is_delayed ?? false,
+      loadStatus: data.load_status ?? 'open',
+      source: data.source,
+      customerShipWindowStart: data.customer_ship_window_start
+        ? new Date(data.customer_ship_window_start)
+        : null,
+      customerShipWindowEnd: data.customer_ship_window_end
+        ? new Date(data.customer_ship_window_end)
+        : null,
+
       createdAt: new Date(data.created_at),
       updatedAt: new Date(data.updated_at),
       createdBy: data.created_by,
@@ -586,16 +665,31 @@ class ShipmentRepositoryImpl {
       shipment_number: string;
       shipment_date: string;
       estimated_arrival: string | null;
+      actual_arrival: string | null;
       carrier: string | null;
       tracking_number: string | null;
       status: ShipmentStatus;
       sales_order_id: string | null;
       purchase_order_id: string | null;
+      supplier_reference_number: string | null;
+      eta_to_port: string | null;
+      confirmed_eta: string | null;
+      customer_expected_delivery: string | null;
+      qty_delivered: number | null;
+      outstanding_qty: number | null;
+      total_qty: number | null;
+      load_status: LoadStatus | null;
+      is_delayed: boolean | null;
+      action_required: string | null;
       created_at: string;
     },
     itemCounts: Record<string, number>,
-    orderNumbers: { salesOrders: Record<string, string>; purchaseOrders: Record<string, string> }
+    orderNumbers: OrderLookups
   ): ShipmentListItem {
+    const soInfo = data.sales_order_id
+      ? orderNumbers.salesOrderInfo[data.sales_order_id]
+      : undefined;
+
     return {
       id: data.id,
       shipmentNumber: data.shipment_number,
@@ -608,6 +702,21 @@ class ShipmentRepositoryImpl {
       salesOrderNumber: data.sales_order_id ? orderNumbers.salesOrders[data.sales_order_id] || null : null,
       purchaseOrderNumber: data.purchase_order_id ? orderNumbers.purchaseOrders[data.purchase_order_id] || null : null,
       createdAt: new Date(data.created_at),
+
+      // Operations dashboard fields
+      supplierReferenceNumber: data.supplier_reference_number,
+      etaToPort: data.eta_to_port,
+      confirmedEta: data.confirmed_eta,
+      customerExpectedDelivery: data.customer_expected_delivery,
+      actualArrival: data.actual_arrival,
+      qtyDelivered: data.qty_delivered ?? 0,
+      outstandingQty: data.outstanding_qty ?? 0,
+      totalQty: data.total_qty ?? 0,
+      loadStatus: data.load_status ?? 'open',
+      isDelayed: data.is_delayed ?? false,
+      actionRequired: data.action_required,
+      customerName: soInfo?.customerName ?? null,
+      customerPo: soInfo?.customerPo ?? null,
     };
   }
 }

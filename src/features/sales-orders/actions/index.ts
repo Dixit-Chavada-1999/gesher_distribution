@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Sales Orders Server Actions
  *
  * Server actions for the Sales Orders module.
@@ -462,50 +462,6 @@ export async function confirmSalesOrder(id: string): Promise<ActionResult<SalesO
   return result;
 }
 
-/**
- * Helper: Allocate inventory for Sales Order items (warehouse fulfillment)
- */
-async function allocateInventoryForSalesOrder(
-  salesOrder: SalesOrderWithItems,
-  userId: string
-): Promise<{ success: boolean; error?: string }> {
-  const { inventoryService } = await import('@/features/inventory/services/inventory.service');
-
-  const reference = {
-    type: 'sales_order',
-    id: salesOrder.id,
-    number: salesOrder.orderNumber,
-  };
-
-  const errors: string[] = [];
-
-  for (const item of salesOrder.items) {
-    if (!item.productId) {
-      continue; // Skip items without product ID
-    }
-
-    const result = await inventoryService.allocateByProductLocation(
-      item.productId,
-      salesOrder.warehouseId!,
-      item.quantity,
-      userId,
-      reference
-    );
-
-    if (!result.success) {
-      errors.push(`${item.sku}: ${result.error}`);
-    }
-  }
-
-  if (errors.length > 0) {
-    return {
-      success: false,
-      error: `Insufficient inventory: ${errors.join(', ')}`,
-    };
-  }
-
-  return { success: true };
-}
 
 /**
  * Helper: Create Purchase Order from Sales Order
@@ -1203,6 +1159,7 @@ export async function getSalesOrdersOnHold(): Promise<ActionResult<SalesOrderLis
         requested_delivery_date,
         status,
         credit_status,
+        product_source,
         grand_total,
         currency_code,
         created_at
@@ -1224,6 +1181,8 @@ export async function getSalesOrdersOnHold(): Promise<ActionResult<SalesOrderLis
       requestedDeliveryDate: row.requested_delivery_date,
       status: row.status as OrderStatus,
       creditStatus: row.credit_status as 'ok' | 'hold',
+      // Matches the repository mapper, which defaults a null source to dropship
+      productSource: row.product_source || 'dropship',
       grandTotal: row.grand_total,
       currencyCode: row.currency_code,
       itemCount: 0, // Not fetched for this list

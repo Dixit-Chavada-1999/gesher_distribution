@@ -83,7 +83,9 @@ export function ViewPurchaseOrderDrawer({
       if (!isOpen && isPending) {
         return;
       }
-      onClose(isOpen);
+      if (!isOpen) {
+        onClose();
+      }
     }}>
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
         <SheetHeader className="space-y-4">

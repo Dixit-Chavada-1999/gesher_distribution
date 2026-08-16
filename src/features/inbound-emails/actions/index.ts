@@ -99,12 +99,13 @@ export async function getInboundEmails(
         attachments.forEach((att) => {
           if (!att.is_pdf) { return; }
 
-          if (!attachmentCounts[att.inbound_email_id]) {
-            attachmentCounts[att.inbound_email_id] = { total: 0, processed: 0 };
-          }
-          attachmentCounts[att.inbound_email_id].total++;
+          const counts =
+            attachmentCounts[att.inbound_email_id] ??
+            (attachmentCounts[att.inbound_email_id] = { total: 0, processed: 0 });
+
+          counts.total++;
           if (att.quote_id) {
-            attachmentCounts[att.inbound_email_id].processed++;
+            counts.processed++;
           }
         });
       }

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Sales Order Mock Data
  *
  * SAMPLE/DUMMY data for development and testing.
@@ -256,6 +256,7 @@ export const MOCK_SALES_ORDERS_LIST: SalesOrderListItem[] = [
     requestedDeliveryDate: '2024-01-22',
     status: 'confirmed',
     creditStatus: 'ok',
+    productSource: 'dropship',
     grandTotal: 384250, // cents
     currencyCode: 'USD',
     itemCount: 3,
@@ -270,6 +271,7 @@ export const MOCK_SALES_ORDERS_LIST: SalesOrderListItem[] = [
     requestedDeliveryDate: '2024-01-25',
     status: 'processing',
     creditStatus: 'ok',
+    productSource: 'dropship',
     grandTotal: 215675, // cents
     currencyCode: 'USD',
     itemCount: 2,
@@ -284,6 +286,7 @@ export const MOCK_SALES_ORDERS_LIST: SalesOrderListItem[] = [
     requestedDeliveryDate: '2024-01-24',
     status: 'draft',
     creditStatus: 'ok',
+    productSource: 'dropship',
     grandTotal: 158000, // cents
     currencyCode: 'USD',
     itemCount: 1,
@@ -298,6 +301,7 @@ export const MOCK_SALES_ORDERS_LIST: SalesOrderListItem[] = [
     requestedDeliveryDate: '2024-01-28',
     status: 'shipped',
     creditStatus: 'ok',
+    productSource: 'dropship',
     grandTotal: 542525, // cents
     currencyCode: 'USD',
     itemCount: 4,
@@ -312,6 +316,7 @@ export const MOCK_SALES_ORDERS_LIST: SalesOrderListItem[] = [
     requestedDeliveryDate: '2024-01-26',
     status: 'pending',
     creditStatus: 'hold',
+    productSource: 'dropship',
     grandTotal: 875000, // cents
     currencyCode: 'USD',
     itemCount: 5,
@@ -326,6 +331,7 @@ export const MOCK_SALES_ORDERS_LIST: SalesOrderListItem[] = [
     requestedDeliveryDate: '2024-01-30',
     status: 'delivered',
     creditStatus: 'ok',
+    productSource: 'dropship',
     grandTotal: 234000, // cents
     currencyCode: 'USD',
     itemCount: 2,
@@ -340,6 +346,7 @@ export const MOCK_SALES_ORDERS_LIST: SalesOrderListItem[] = [
     requestedDeliveryDate: '2024-02-01',
     status: 'cancelled',
     creditStatus: 'ok',
+    productSource: 'dropship',
     grandTotal: 125050, // cents
     currencyCode: 'USD',
     itemCount: 1,

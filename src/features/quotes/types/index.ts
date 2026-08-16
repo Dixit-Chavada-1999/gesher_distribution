@@ -227,7 +227,8 @@ export interface CreateQuoteDTO {
   salesRepId?: string | null;
   currencyCode?: string;
   status?: QuoteStatus;
-  productSource?: ProductSource;
+  // Nullable per migration 078: a quote may be created before a source is picked.
+  productSource?: ProductSource | null;
   billingAddress: AddressDTO;
   shippingAddress: AddressDTO;
   items: CreateQuoteItemDTO[];
@@ -244,7 +245,8 @@ export interface UpdateQuoteDTO {
   customerId?: string;
   salesRepId?: string | null;
   currencyCode?: string;
-  productSource?: ProductSource;
+  // Nullable per migration 078: a quote may be created before a source is picked.
+  productSource?: ProductSource | null;
   billingAddress?: AddressDTO;
   shippingAddress?: AddressDTO;
   customerNotes?: string | null;

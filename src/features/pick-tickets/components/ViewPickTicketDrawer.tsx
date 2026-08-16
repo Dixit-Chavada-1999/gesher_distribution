@@ -42,7 +42,8 @@ export function ViewPickTicketDrawer({
   onClose,
   pickTicketId,
   onEdit,
-  onStartPicking,
+  // onStartPicking is accepted for API compatibility but unused: this drawer
+  // starts picking through its own handleStartPicking below.
   onPackingListCreated,
 }: ViewPickTicketDrawerProps) {
   const { data: pickTicket, isLoading, refetch } = usePickTicket(open ? pickTicketId : null);

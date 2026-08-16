@@ -30,13 +30,16 @@ import {
   AlertDialogTitle,
 } from '@/shared/components/ui/alert-dialog';
 
+// Imported from their own paths rather than the feature barrel: the barrel
+// re-exports the service/repository layer, which reaches `next/headers` and so
+// cannot be pulled into a client component's bundle.
 import {
   PurchaseOrdersTable,
   ViewPurchaseOrderDrawer,
   CreatePurchaseOrderDrawer,
   EditPurchaseOrderDrawer,
-  usePurchaseOrders,
-} from '@/features/purchase-orders';
+} from '@/features/purchase-orders/components';
+import { usePurchaseOrders } from '@/features/purchase-orders/hooks';
 import { deletePurchaseOrder } from '@/features/purchase-orders/actions';
 import type { POListItem, POStatus, PurchaseOrderWithItems } from '@/features/purchase-orders/types';
 import { PO_STATUS_LABELS } from '@/features/purchase-orders/types';

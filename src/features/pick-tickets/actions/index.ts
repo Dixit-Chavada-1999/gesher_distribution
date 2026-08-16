@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Pick Tickets Server Actions
  *
  * Next.js server actions for Pick Tickets feature.
@@ -180,8 +180,8 @@ export async function pickItems(pickTicketId: string, items: PickItemDTO[]) {
  * Also auto-creates shipment with source='warehouse' for GDC1 Inventory
  *
  * Two fulfillment paths:
- * 1. Quick ship: picking/picked → shipped (via Complete Picking) - no packing list
- * 2. Full packing: picked → packing → packed → shipped (via Packing List flow)
+ * 1. Quick ship: picking/picked â†’ shipped (via Complete Picking) - no packing list
+ * 2. Full packing: picked â†’ packing â†’ packed â†’ shipped (via Packing List flow)
  */
 export async function completePicking(id: string) {
   const userId = await getCurrentUserId();
@@ -461,7 +461,7 @@ export async function createPickTicketFromSalesOrder(
     if (result.success && result.data) {
       // Note: Shipment will be auto-created when Pick Ticket is COMPLETED (not here)
       // Pick Ticket CREATE = items need to be picked from warehouse
-      // Pick Ticket COMPLETE = items picked, ready to ship → create shipment
+      // Pick Ticket COMPLETE = items picked, ready to ship â†’ create shipment
 
       revalidatePath('/pick-tickets');
       revalidatePath('/sales-orders');
@@ -586,98 +586,6 @@ async function createShipmentFromCompletedPickTicket(
   console.log(`[Pick Ticket COMPLETE] Auto-created shipment ${shipmentNumber} with source='warehouse' for PT ${pickTicket.pickTicketNumber}`);
 }
 
-/**
- * Helper: Auto-create shipment from Pick Ticket for GDC1 Inventory (source='warehouse')
- * @deprecated Use createShipmentFromCompletedPickTicket instead - shipment should be created on COMPLETE, not CREATE
- */
-async function createWarehouseShipment(
-  pickTicket: PickTicket,
-  salesOrder: { id: string; order_number: string; warehouse_id: string | null },
-  items: Array<{ salesOrderItemId: string; productId: string; sku: string; description: string | null; quantityToPick: number }>,
-  userId?: string
-): Promise<void> {
-  // Generate shipment number
-  const { data: shipmentNumber, error: numError } = await db.rpc('generate_shipment_number');
-  if (numError) {
-    throw new Error(`Failed to generate shipment number: ${numError.message}`);
-  }
-
-  // Get sales order shipping address
-  const { data: soAddress } = await db
-    .from('sales_orders')
-    .select(`
-      ship_to_address_street,
-      ship_to_address_city,
-      ship_to_address_state,
-      ship_to_address_postal_code,
-      ship_to_address_country,
-      ship_to_name,
-      customer_po_number,
-      requested_delivery_date
-    `)
-    .eq('id', salesOrder.id)
-    .single();
-
-  // Calculate total quantity
-  const totalQty = items.reduce((sum: number, item) => sum + item.quantityToPick, 0);
-
-  // Create shipment with source='warehouse'
-  const { data: shipment, error: shipmentError } = await db
-    .from('shipments')
-    .insert({
-      shipment_number: shipmentNumber,
-      shipment_date: new Date().toISOString().split('T')[0],
-      sales_order_id: salesOrder.id,
-      from_location_id: pickTicket.warehouseId,
-      source: 'warehouse',
-      load_status: 'open',
-      total_qty: totalQty,
-      outstanding_qty: totalQty,
-      ship_to_name: soAddress?.ship_to_name || null,
-      ship_to_address_street: soAddress?.ship_to_address_street || null,
-      ship_to_address_city: soAddress?.ship_to_address_city || null,
-      ship_to_address_state: soAddress?.ship_to_address_state || null,
-      ship_to_address_postal_code: soAddress?.ship_to_address_postal_code || null,
-      ship_to_address_country: soAddress?.ship_to_address_country || null,
-      customer_expected_delivery: soAddress?.requested_delivery_date || null,
-      status: 'pending',
-      created_by: userId || null,
-      updated_by: userId || null,
-    })
-    .select()
-    .single();
-
-  if (shipmentError) {
-    throw new Error(`Failed to create shipment: ${shipmentError.message}`);
-  }
-
-  // Create shipment items from pick ticket items
-  const shipmentItems = items.map((item, index: number) => ({
-    shipment_id: shipment.id,
-    product_id: item.productId,
-    sales_order_item_id: item.salesOrderItemId || null,
-    sku: item.sku,
-    description: item.description,
-    quantity_shipped: item.quantityToPick,
-    sort_order: index,
-    created_by: userId || null,
-    updated_by: userId || null,
-  }));
-
-  if (shipmentItems.length > 0) {
-    const { error: itemsError } = await db
-      .from('shipment_items')
-      .insert(shipmentItems);
-
-    if (itemsError) {
-      // Clean up shipment if items insertion fails
-      await db.from('shipments').delete().eq('id', shipment.id);
-      throw new Error(`Failed to create shipment items: ${itemsError.message}`);
-    }
-  }
-
-  console.log(`[Pick Ticket] Auto-created shipment ${shipmentNumber} with source='warehouse' for PT ${pickTicket.pickTicketNumber}`);
-}
 
 // ============================================
 // PACKING LIST ACTIONS

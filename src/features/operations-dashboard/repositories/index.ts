@@ -20,6 +20,24 @@ import type {
 } from '../types';
 
 // ============================================
+// HELPER: Unwrap an embedded to-one relation
+// ============================================
+
+/**
+ * Supabase types every embedded relation as an array, even where the foreign
+ * key makes it to-one and PostgREST returns a single object. Accepts either
+ * shape and narrows it to the single row.
+ */
+type ToOne<T> = T extends readonly (infer U)[] ? U : T;
+
+function toOne<T>(relation: T): ToOne<T> | null {
+  if (Array.isArray(relation)) {
+    return (relation[0] ?? null) as ToOne<T> | null;
+  }
+  return (relation ?? null) as ToOne<T> | null;
+}
+
+// ============================================
 // HELPER: Map DB load_status to ShipmentStatus
 // ============================================
 
@@ -159,7 +177,7 @@ export async function getSKUBreakdown(): Promise<SKUBreakdown[]> {
   items?.forEach((item) => {
     const sku = item.sku || 'Unknown';
     const qty = item.quantity_shipped || 0;
-    const shipment = item.shipment as { load_status: string } | null;
+    const shipment = toOne(item.shipment);
     const status = shipment?.load_status || 'open';
 
     if (!skuMap.has(sku)) {
@@ -253,8 +271,8 @@ export async function getCustomerCommitments(): Promise<CustomerCommitment[]> {
   }>();
 
   shipments?.forEach((s) => {
-    const salesOrderData = s.sales_orders as { id: string; customers: { id: string; name: string } | null } | null;
-    const customer = salesOrderData?.customers;
+    const salesOrderData = toOne(s.sales_orders);
+    const customer = toOne(salesOrderData?.customers);
     const customerName = customer?.name || 'Unknown';
     const customerId = customer?.id || 'unknown';
 
@@ -389,13 +407,7 @@ export async function getImmediateAttention(): Promise<ImmediateAttentionItem[]>
 
   shipments?.forEach((s) => {
     // Handle relationship data
-    const salesOrderData = s.sales_orders as {
-      id: string;
-      order_number: string | null;
-      customer_po_number: string | null;
-      requested_delivery_date: string | null;
-      customers: { id: string; name: string } | null;
-    } | null;
+    const salesOrderData = toOne(s.sales_orders);
 
     // Use eta_to_port or estimated_arrival as fallback
     const etaDate = s.eta_to_port || s.estimated_arrival;
@@ -423,7 +435,7 @@ export async function getImmediateAttention(): Promise<ImmediateAttentionItem[]>
       result.push({
         id: s.id,
         loadNumber,
-        customer: salesOrderData?.customers?.name || 'Unknown',
+        customer: toOne(salesOrderData?.customers)?.name || 'Unknown',
         po: poNumber,
         qty: s.total_qty || 0,
         etaPort: etaDate,
@@ -530,7 +542,7 @@ export async function getSupplierShipmentSchedule(): Promise<{ data: ShipmentSch
 
   items?.forEach((item) => {
     // Get product name: prefer products.name, fallback to description, then sku
-    const productData = item.products as { id: string; name: string } | null;
+    const productData = toOne(item.products);
     const productName = productData?.name || item.description || item.sku;
 
     // Store SKU info for column headers
@@ -552,12 +564,7 @@ export async function getSupplierShipmentSchedule(): Promise<{ data: ShipmentSch
 
   shipments?.forEach((s, index) => {
     // Handle relationship data - sales orders
-    const salesOrderData = s.sales_orders as {
-      id: string;
-      customer_po_number: string | null;
-      requested_delivery_date: string | null;
-      customers: { id: string; name: string } | null;
-    } | null;
+    const salesOrderData = toOne(s.sales_orders);
 
     // Get shipment items for this shipment
     const shipmentItems = itemsByShipment.get(s.id) || [];
@@ -588,7 +595,7 @@ export async function getSupplierShipmentSchedule(): Promise<{ data: ShipmentSch
       loadNumber,
       items: shipmentItems,
       totalQty: s.total_qty || 0,
-      customer: salesOrderData?.customers?.name || 'Unknown',
+      customer: toOne(salesOrderData?.customers)?.name || 'Unknown',
       po: poNumber,
       etaToUsPort: etaDate,
       deliveryAddress: addressParts.join(', '),
@@ -693,7 +700,7 @@ export async function getGDC1Inventory(): Promise<{ data: GDC1InventoryItem[]; u
 
   items?.forEach((item) => {
     // Get product name: prefer products.name, fallback to description, then sku
-    const productData = item.products as { id: string; name: string } | null;
+    const productData = toOne(item.products);
     const productName = productData?.name || item.description || item.sku;
 
     // Store SKU info for column headers
@@ -732,7 +739,7 @@ export async function getGDC1Inventory(): Promise<{ data: GDC1InventoryItem[]; u
 
   salesOrders?.forEach((so, index) => {
     // Handle relationship data - customers
-    const customerData = so.customers as { id: string; name: string } | null;
+    const customerData = toOne(so.customers);
 
     // Get sales order items
     const soItems = itemsBySalesOrder.get(so.id) || [];

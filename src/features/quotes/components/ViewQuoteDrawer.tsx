@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Loader2, MapPin, FileText, Calendar, User, Building2, ArrowRight, ExternalLink, Package, Pencil, Check, X } from 'lucide-react';
+import { Loader2, MapPin, FileText, Calendar, User, Building2, ArrowRight, ExternalLink, Package, Pencil, X } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { useAuthStore } from '@/shared/stores';
@@ -284,7 +284,7 @@ export function ViewQuoteDrawer({
   };
 
   const handleUpdateProductSource = async (value: 'dropship' | 'warehouse' | 'none') => {
-    if (!quote) return;
+    if (!quote) { return; }
 
     setIsUpdatingProductSource(true);
     try {
@@ -292,8 +292,9 @@ export function ViewQuoteDrawer({
       const productSource = value === 'none' ? null : value;
       const result = await updateQuoteProductSource(quote.id, productSource);
       if (result.success) {
-        // Update local state
-        setQuote({ ...quote, productSource });
+        // Update local state. The repository maps a null product_source back to
+        // 'dropship' on read, so mirror that here to match a refetch.
+        setQuote({ ...quote, productSource: productSource ?? 'dropship' });
         setIsEditingProductSource(false);
         toast.success('Product source updated');
       } else {

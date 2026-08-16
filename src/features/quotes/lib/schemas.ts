@@ -259,6 +259,7 @@ export function quoteToFormValues(quote: {
   customerNotes: string | null;
   internalNotes: string | null;
   termsAndConditions: string | null;
+  customerPoNumber?: string | null;
   quoteNumber: string;
   items?: Array<{
     id: string;
@@ -317,6 +318,7 @@ export function quoteToFormValues(quote: {
     customerNotes: quote.customerNotes || '',
     internalNotes: quote.internalNotes || '',
     termsAndConditions: quote.termsAndConditions || '',
+    customerPoNumber: quote.customerPoNumber || '',
   };
 }
 

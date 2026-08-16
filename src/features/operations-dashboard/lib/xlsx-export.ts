@@ -39,7 +39,7 @@ function getDateStr(): string {
  * Format items array for Excel cell
  */
 function formatItems(items: { sku: string; qty: number }[] | undefined): string {
-  if (!items || items.length === 0) return '';
+  if (!items || items.length === 0) { return ''; }
   return items.map(item => `${item.sku || ''}: ${item.qty}`).join(', ');
 }
 
@@ -58,8 +58,8 @@ function createWorksheet<T extends Record<string, unknown>>(
     headers.map(h => {
       const value = row[h.key];
       // Handle special cases
-      if (value === null || value === undefined) return '';
-      if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+      if (value === null || value === undefined) { return ''; }
+      if (typeof value === 'boolean') { return value ? 'Yes' : 'No'; }
       return value;
     })
   );
