@@ -132,11 +132,11 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
   const kpiHeight = 28;
 
   const kpis = [
-    { title: 'Available Inventory', value: formatNumber(data.stats.availableInventoryQty), subtitle: 'units', color: COLORS.teal500, icon: 'box' },
-    { title: 'Available Loads', value: formatNumber(data.stats.availableLoads), subtitle: 'loads', color: COLORS.emerald500, icon: 'truck' },
-    { title: 'Inventory Value', value: formatCurrency(data.stats.availableInventoryValue), subtitle: '', color: COLORS.violet500, icon: 'dollar' },
-    { title: 'Customer Committed', value: formatNumber(data.stats.committedCustomerQty), subtitle: 'units', color: COLORS.amber500, icon: 'users' },
-    { title: 'In Transit / Next 7 Days', value: formatNumber(data.stats.inTransitNext7Days), subtitle: 'loads', color: COLORS.red500, highlight: true, icon: 'alert' },
+    { title: 'Available Inventory', value: formatNumber(data.stats.availableInventoryQty), subtitle: 'units', color: COLORS.teal500 },
+    { title: 'Available Loads', value: formatNumber(data.stats.availableLoads), subtitle: 'loads', color: COLORS.emerald500 },
+    { title: 'Inventory Value', value: formatCurrency(data.stats.availableInventoryValue), subtitle: '', color: COLORS.violet500 },
+    { title: 'Customer Committed', value: formatNumber(data.stats.committedCustomerQty), subtitle: 'units', color: COLORS.amber500 },
+    { title: 'In Transit / Next 7 Days', value: formatNumber(data.stats.inTransitNext7Days), subtitle: 'loads', color: COLORS.red500, highlight: true },
   ];
 
   kpis.forEach((kpi, index) => {
@@ -154,48 +154,6 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
     doc.setDrawColor(...COLORS.gray200);
     doc.setLineWidth(0.3);
     doc.roundedRect(x, currentY, kpiWidth, kpiHeight, 2, 2, 'FD');
-
-    // Circular icon background
-    const iconX = x + kpiWidth - 8;
-    const iconY = currentY + 8;
-    doc.setFillColor(...kpi.color);
-    doc.circle(iconX, iconY, 5, 'F');
-
-    // Draw icon inside circle (white color)
-    doc.setFillColor(...COLORS.white);
-    doc.setDrawColor(...COLORS.white);
-    doc.setLineWidth(0.4);
-
-    if (kpi.icon === 'box') {
-      // Package/Box icon - simple cube
-      doc.rect(iconX - 2, iconY - 2, 4, 4, 'S');
-      doc.line(iconX - 2, iconY, iconX + 2, iconY);
-      doc.line(iconX, iconY - 2, iconX, iconY + 2);
-    } else if (kpi.icon === 'truck') {
-      // Truck icon
-      doc.rect(iconX - 2.5, iconY - 1, 3.5, 2.5, 'S');
-      doc.rect(iconX + 1, iconY - 0.5, 1.5, 2, 'S');
-      doc.circle(iconX - 1.5, iconY + 2, 0.6, 'F');
-      doc.circle(iconX + 1.5, iconY + 2, 0.6, 'F');
-    } else if (kpi.icon === 'dollar') {
-      // Dollar sign
-      doc.setFontSize(7);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...COLORS.white);
-      doc.text('$', iconX - 1.2, iconY + 2);
-    } else if (kpi.icon === 'users') {
-      // Users icon - two people
-      doc.circle(iconX - 1.5, iconY - 1.5, 1, 'F');
-      doc.ellipse(iconX - 1.5, iconY + 1, 1.5, 1, 'F');
-      doc.circle(iconX + 1.5, iconY - 1, 0.8, 'F');
-      doc.ellipse(iconX + 1.5, iconY + 1.5, 1.2, 0.8, 'F');
-    } else if (kpi.icon === 'alert') {
-      // Alert/Truck icon for in-transit
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...COLORS.white);
-      doc.text('!', iconX - 0.8, iconY + 2.5);
-    }
 
     // Title
     doc.setFontSize(7);
@@ -231,25 +189,17 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
   doc.setLineWidth(0.4);
   doc.roundedRect(margin, currentY, contentWidth, storyHeight, 2, 2, 'FD');
 
-  // Info icon
-  doc.setFillColor(...COLORS.blue600);
-  doc.circle(margin + 7, currentY + 8, 3, 'F');
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...COLORS.white);
-  doc.text('i', margin + 5.8, currentY + 9.5);
-
   // Title
   doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...COLORS.blue700);
-  doc.text('Story in Brief', margin + 14, currentY + 9);
+  doc.text('Story in Brief', margin + 5, currentY + 9);
 
   // Content
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...COLORS.blue600);
-  doc.text(storyLines, margin + 14, currentY + 15);
+  doc.text(storyLines, margin + 5, currentY + 15);
 
   currentY += storyHeight + 6;
 
@@ -258,22 +208,18 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
   const thisWeekCount = inTransitItems.filter(i => i.isThisWeek).length;
 
   if (inTransitItems.length > 0) {
-    // Red truck icon
-    doc.setFillColor(...COLORS.red500);
-    doc.circle(margin + 5, currentY + 5, 3, 'F');
-
     // Title
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...COLORS.gray900);
-    doc.text('Immediate Attention - In Transit / Next 7 Days', margin + 11, currentY + 6);
+    doc.text('Immediate Attention - In Transit / Next 7 Days', margin, currentY + 6);
 
     // Subtitle
     doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...COLORS.gray500);
     const subtitleText = `${inTransitItems.length} shipments requiring attention`;
-    doc.text(subtitleText, margin + 11, currentY + 11);
+    doc.text(subtitleText, margin, currentY + 11);
 
     if (thisWeekCount > 0) {
       const sw = doc.getTextWidth(subtitleText);
@@ -316,21 +262,17 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
   // === LEFT: SKU QUANTITY BREAKDOWN ===
   const skuTotal = data.skuBreakdown.reduce((sum, s) => sum + s.combinedQty, 0);
 
-  // Teal icon
-  doc.setFillColor(...COLORS.teal500);
-  doc.circle(margin + 5, currentY + 5, 3, 'F');
-
   // Title
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...COLORS.gray900);
-  doc.text('SKU Quantity Breakdown - Supplier + GDC1 Inventory', margin + 11, currentY + 6);
+  doc.text('SKU Quantity Breakdown - Supplier + GDC1 Inventory', margin, currentY + 6);
 
   // Subtitle + Total
   doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...COLORS.gray500);
-  doc.text('Combined inventory across locations', margin + 11, currentY + 11);
+  doc.text('Combined inventory across locations', margin, currentY + 11);
   doc.text('Total:', margin + leftColWidth - 22, currentY + 6);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...COLORS.gray900);
@@ -383,23 +325,17 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
   const totalLoads = statusData.reduce((sum, d) => sum + d.loads, 0);
   const maxQty = Math.max(...statusData.map(d => d.qty), 1);
 
-  // Bar chart icon (small)
-  doc.setFillColor(...COLORS.gray700);
-  doc.rect(rightColX + 3, twoColStartY + 3, 1.5, 5, 'F');
-  doc.rect(rightColX + 5.5, twoColStartY + 4.5, 1.5, 3.5, 'F');
-  doc.rect(rightColX + 8, twoColStartY + 2, 1.5, 6, 'F');
-
   // Title
   doc.setFontSize(7);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...COLORS.gray900);
-  doc.text('Shipment / Inventory Status Mix', rightColX + 12, twoColStartY + 5.5);
+  doc.text('Shipment / Inventory Status Mix', rightColX + 3, twoColStartY + 5.5);
 
   // Subtitle
   doc.setFontSize(6);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...COLORS.gray500);
-  doc.text(`${formatNumber(totalQty)} units across ${totalLoads} loads`, rightColX + 12, twoColStartY + 9.5);
+  doc.text(`${formatNumber(totalQty)} units across ${totalLoads} loads`, rightColX + 3, twoColStartY + 9.5);
 
   let chartY = twoColStartY + 13;
 
@@ -490,21 +426,17 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
   const totalInvoice = data.customerCommitments.reduce((sum, c) => sum + c.invoiceAmount, 0);
   const totalCustomerQty = data.customerCommitments.reduce((sum, c) => sum + c.outstandingQty, 0);
 
-  // Amber icon
-  doc.setFillColor(...COLORS.amber500);
-  doc.circle(margin + 5, currentY + 5, 3, 'F');
-
   // Title
   doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...COLORS.gray900);
-  doc.text('Customer Commitments / Outstanding', margin + 11, currentY + 6);
+  doc.text('Customer Commitments / Outstanding', margin, currentY + 6);
 
   // Subtitle + Total Value
   doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...COLORS.gray500);
-  doc.text(`${formatNumber(totalCustomerQty)} units committed across ${data.customerCommitments.length} customers`, margin + 11, currentY + 11);
+  doc.text(`${formatNumber(totalCustomerQty)} units committed across ${data.customerCommitments.length} customers`, margin, currentY + 11);
   doc.text('Total Value:', margin + contentWidth - 40, currentY + 6);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...COLORS.emerald600);
@@ -557,13 +489,10 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
   currentY = doc.lastAutoTable.finalY + 10;
 
   // === SUPPLIER SHIPMENT SCHEDULE (continues on same page if space available) ===
-  doc.setFillColor(...COLORS.teal500);
-  doc.circle(margin + 5, currentY + 5, 3, 'F');
-
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...COLORS.gray900);
-  doc.text('Supplier Shipment Schedule - Galileo Orders', margin + 11, currentY + 6);
+  doc.text('Supplier Shipment Schedule - Galileo Orders', margin, currentY + 6);
 
   // Calculate totals
   const supplierTotals = data.supplierShipmentSchedule.reduce(
@@ -581,7 +510,7 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
   doc.setTextColor(...COLORS.gray500);
   doc.text(
     `${data.supplierShipmentSchedule.length} shipments | Total: ${formatNumber(supplierTotals.total)} units | Outstanding: ${formatNumber(supplierTotals.outstanding)} | Invoice Total: ${formatCurrency(supplierTotals.invoiceTotal)}`,
-    margin + 11, currentY + 11
+    margin, currentY + 11
   );
 
   currentY += 15;
@@ -668,13 +597,10 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
   }
 
   // === GDC1 INVENTORY HEADER ===
-  doc.setFillColor(...COLORS.emerald500);
-  doc.circle(margin + 5, currentY + 5, 3, 'F');
-
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...COLORS.gray900);
-  doc.text('GDC1 Warehouse Inventory', margin + 11, currentY + 6);
+  doc.text('GDC1 Warehouse Inventory', margin, currentY + 6);
 
   // Calculate GDC1 totals
   const gdc1Totals = data.gdc1Inventory.reduce(
@@ -698,7 +624,7 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
   doc.setTextColor(...COLORS.gray500);
   doc.text(
     `${data.gdc1Inventory.length} loads | Total: ${formatNumber(gdc1Totals.total)} units | Available: ${gdc1StatusSummary['AVAILABLE'] || 0} | Sold: ${gdc1StatusSummary['SOLD'] || 0} | Invoice Total: ${formatCurrency(gdc1Totals.invoiceTotal)}`,
-    margin + 11, currentY + 11
+    margin, currentY + 11
   );
 
   currentY += 15;
