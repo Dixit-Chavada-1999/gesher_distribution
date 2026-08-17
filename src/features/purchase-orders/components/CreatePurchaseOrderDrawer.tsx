@@ -183,7 +183,7 @@ export function CreatePurchaseOrderDrawer({
           form.reset();
           setItems([]);
           setSelectedSupplier(null);
-          onSuccess?.();
+          await onSuccess?.();
           onClose();
         } else {
           toast.error(result.error || 'Failed to create Purchase Order');

@@ -310,14 +310,14 @@ export interface PurchaseOrdersTableProps {
 export interface CreatePurchaseOrderDrawerProps {
   open: boolean;
   onClose: () => void;
-  onSuccess?: () => void;
+  onSuccess?: () => void | Promise<void>;
 }
 
 export interface EditPurchaseOrderDrawerProps {
   open: boolean;
   onClose: () => void;
   poId: string;
-  onSuccess?: () => void;
+  onSuccess?: () => void | Promise<void>;
 }
 
 export interface ViewPurchaseOrderDrawerProps {

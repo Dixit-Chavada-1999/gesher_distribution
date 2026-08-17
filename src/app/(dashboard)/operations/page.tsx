@@ -13,6 +13,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
 import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 // Import components directly to avoid barrel export issues
 import { OperationsHeader, type ExportOption } from '@/features/operations-dashboard/components/OperationsHeader';
@@ -26,7 +27,7 @@ import { StoryInBrief } from '@/features/operations-dashboard/components/StoryIn
 import { ShipmentOverviewTable } from '@/features/operations-dashboard/components/ShipmentOverviewTable';
 import { SupplierShipmentScheduleTable } from '@/features/operations-dashboard/components/SupplierShipmentScheduleTable';
 import { GDC1InventoryTable } from '@/features/operations-dashboard/components/GDC1InventoryTable';
-import { EditShipmentDialog } from '@/features/operations-dashboard/components/EditShipmentDialog';
+import { EditShipmentDialog, type EditSource } from '@/features/operations-dashboard/components/EditShipmentDialog';
 
 // Server actions
 import { fetchOperationsData } from '@/features/operations-dashboard/actions';
@@ -83,6 +84,7 @@ const emptyData: OperationsData = {
 export default function OperationsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [data, setData] = useState<OperationsData>(emptyData);
   const [error, setError] = useState<string | null>(null);
@@ -90,6 +92,7 @@ export default function OperationsPage() {
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingShipment, setEditingShipment] = useState<EditableShipment | null>(null);
+  const [editSource, setEditSource] = useState<EditSource>('shipment');
 
   // Set initial date on client side only to avoid hydration mismatch
   useEffect(() => {
@@ -133,9 +136,35 @@ export default function OperationsPage() {
     loadData(true);
   };
 
-  const handleExport = (type: ExportOption = 'all') => {
-    // Export to XLSX
-    exportToXLSX(type as XLSXExportType, data);
+  const handleExport = async (type: ExportOption = 'all') => {
+    setIsExporting(true);
+    try {
+      if (type === 'pdf') {
+        // PDF export via API
+        const response = await fetch('/api/operations/export-pdf');
+        if (!response.ok) {
+          throw new Error('PDF export failed');
+        }
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        const dateStr = new Date().toISOString().split('T')[0];
+        link.download = `operations-dashboard-${dateStr}.pdf`;
+        link.click();
+        window.URL.revokeObjectURL(url);
+        toast.success('PDF export completed successfully');
+      } else {
+        // XLSX export
+        await exportToXLSX(type as XLSXExportType, data);
+        toast.success('Excel export completed successfully');
+      }
+    } catch (err) {
+      console.error('Export error:', err);
+      toast.error('Failed to export data');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   // Handle edit from Immediate Attention table
@@ -149,10 +178,11 @@ export default function OperationsPage() {
       confirmedEta: item.etaPort,
       totalQty: item.qty,
     });
+    setEditSource('shipment');
     setEditDialogOpen(true);
   };
 
-  // Handle edit from Supplier Schedule table
+  // Handle edit from Supplier Schedule table (Galileo Orders)
   const handleEditScheduleItem = (item: ShipmentScheduleItem) => {
     setEditingShipment({
       id: item.id,
@@ -165,6 +195,7 @@ export default function OperationsPage() {
       qtyDelivered: item.qtyDelivered,
       totalQty: item.totalQty,
     });
+    setEditSource('supplier');
     setEditDialogOpen(true);
   };
 
@@ -181,6 +212,7 @@ export default function OperationsPage() {
       qtyDelivered: item.qtyDelivered,
       totalQty: item.totalQty,
     });
+    setEditSource('gdc1');
     setEditDialogOpen(true);
   };
 
@@ -216,6 +248,7 @@ export default function OperationsPage() {
         onRefresh={handleRefresh}
         onExport={handleExport}
         isRefreshing={isRefreshing}
+        isExporting={isExporting}
       />
 
       {/* Tabbed Content */}
@@ -290,6 +323,7 @@ export default function OperationsPage() {
         onOpenChange={setEditDialogOpen}
         shipment={editingShipment}
         onSuccess={handleEditSuccess}
+        source={editSource}
       />
     </div>
   );

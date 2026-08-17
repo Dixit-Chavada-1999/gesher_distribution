@@ -48,15 +48,25 @@ export interface CustomerCommitment {
 
 // ============================================
 // SHIPMENT STATUS TYPES
+// Based on Jenny's Master Sheet dropdown options
 // ============================================
 
 export type ShipmentStatus =
+  // Common statuses
   | 'AVAILABLE'
-  | 'SOLD'
   | 'OPEN'
   | 'HOLD'
   | 'IN_TRANSIT'
+  | 'SOLD'
+  | 'CLOSED'
+  // Invoice/Payment statuses
   | 'INVOICED'
+  | 'NOT_INVOICED'
+  | 'PARTIALLY_PAID'
+  | 'PAID'
+  | 'DISPUTED'
+  // Other statuses
+  | 'PO_NEEDED'
   | 'DELIVERED';
 
 export interface ShipmentStatusMix {
@@ -91,6 +101,7 @@ export interface ShipmentItemDetail {
   sku: string;
   productName?: string;  // Product name for display (optional, fetched from database)
   qty: number;
+  unitPrice?: number;    // Price per unit for this product (in dollars)
 }
 
 // SKU info for column headers
@@ -115,7 +126,7 @@ export interface ShipmentScheduleItem {
   id: string;
   no: number;
   loadNumber: string;
-  items: ShipmentItemDetail[];
+  items: ShipmentItemDetail[];  // Includes qty and unitPrice per SKU
   totalQty: number;
   customer: string;
   po: string;
@@ -126,8 +137,14 @@ export interface ShipmentScheduleItem {
   actualDeliveryDate: string | null;
   qtyDelivered: number;
   outstandingQtyForPO: number;
+  invoiceNumber: string | null;
+  invoiceAmount: number;
+  // Prices are dynamic per product via items[].unitPrice
+  payment50PercentDate: string | null;
+  remaining50DueDate: string | null;
   status: ShipmentStatus;
   actionRequired: string;
+  ankurNotes: string;
 }
 
 // ============================================
@@ -138,19 +155,23 @@ export interface GDC1InventoryItem {
   id: string;
   no: number;
   loadNumber: string;
+  // SKU quantities
+  sku290Qty: number;  // 290/85R38 CW Qty
+  sku380Qty: number;  // 380/85R24 CW Qty
   items: ShipmentItemDetail[];
   totalQty: number;
   customer: string | null;
   po: string | null;
-  customerShipWindow: string | null;
-  deliveryAddress: string;
   etaToUsPort: string | null;
-  customerDueDate: string | null;
+  deliveryAddress: string;
+  confirmedEta: string | null;  // Confirmed ETA (shipping system)
+  customerExpectedDelivery: string | null;
   actualDelivery: string | null;
   qtyDelivered: number;
   outstandingPoQty: number;
   invoiceNumber: string | null;
   invoiceAmount: number;
+  // Prices are now dynamic per product via items[].unitPrice
   payment50PercentDate: string | null;
   remaining50DueDate: string | null;
   status: ShipmentStatus;

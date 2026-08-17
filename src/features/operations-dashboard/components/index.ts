@@ -11,3 +11,6 @@ export { ShipmentStatusMix } from './ShipmentStatusMix';
 export { RimInstallationRequired } from './RimInstallationRequired';
 export { StoryInBrief } from './StoryInBrief';
 export { SupplierShipmentScheduleTable } from './SupplierShipmentScheduleTable';
+export { ShipmentOverviewTable } from './ShipmentOverviewTable';
+export { GDC1InventoryTable } from './GDC1InventoryTable';
+export { EditShipmentDialog } from './EditShipmentDialog';

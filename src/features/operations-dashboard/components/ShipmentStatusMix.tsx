@@ -33,12 +33,21 @@ function formatNumber(num: number): string {
 
 function getStatusColor(status: ShipmentStatus): string {
   const colors: Record<ShipmentStatus, string> = {
+    // Common statuses
     AVAILABLE: 'bg-emerald-500',
-    SOLD: 'bg-blue-500',
     OPEN: 'bg-amber-500',
     HOLD: 'bg-red-500',
     IN_TRANSIT: 'bg-purple-500',
+    SOLD: 'bg-blue-500',
+    CLOSED: 'bg-gray-500',
+    // Invoice/Payment statuses
     INVOICED: 'bg-cyan-500',
+    NOT_INVOICED: 'bg-orange-500',
+    PARTIALLY_PAID: 'bg-sky-500',
+    PAID: 'bg-teal-500',
+    DISPUTED: 'bg-rose-500',
+    // Other statuses
+    PO_NEEDED: 'bg-pink-500',
     DELIVERED: 'bg-green-600',
   };
   return colors[status] || 'bg-gray-500';
@@ -53,24 +62,12 @@ function getStatusLabel(status: ShipmentStatus): string {
 // ============================================
 
 export function ShipmentStatusMix({ data }: ShipmentStatusMixProps) {
-  // Define all possible statuses to show (even with 0)
-  const allStatuses: ShipmentStatus[] = ['OPEN', 'IN_TRANSIT', 'SOLD', 'AVAILABLE', 'HOLD', 'INVOICED', 'DELIVERED'];
+  // Only show statuses that have records (loads > 0 or qty > 0)
+  const displayData: ShipmentStatusMixType[] = data.filter(item => item.loads > 0 || item.qty > 0);
 
-  // Create a map of existing data
-  const dataMap = new Map(data.map(item => [item.status, item]));
-
-  // Merge with all statuses, showing 0 for missing ones
-  const fullData: ShipmentStatusMixType[] = allStatuses.map(status => {
-    const existing = dataMap.get(status);
-    return existing || { status, loads: 0, qty: 0 };
-  });
-
-  // Show all statuses including those with 0 qty
-  const displayData = fullData;
-
-  const totalQty = data.reduce((sum, item) => sum + item.qty, 0);
-  const totalLoads = data.reduce((sum, item) => sum + item.loads, 0);
-  const maxQty = Math.max(...data.map(item => item.qty), 1);
+  const totalQty = displayData.reduce((sum, item) => sum + item.qty, 0);
+  const totalLoads = displayData.reduce((sum, item) => sum + item.loads, 0);
+  const maxQty = Math.max(...displayData.map(item => item.qty), 1);
 
   return (
     <Card>

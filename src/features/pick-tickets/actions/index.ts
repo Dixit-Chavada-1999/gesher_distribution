@@ -2,14 +2,18 @@
  * Pick Tickets Server Actions
  *
  * Next.js server actions for Pick Tickets feature.
+ *
+ * Every action authenticates the caller and checks the matching
+ * `pick_tickets.*` permission before touching the service layer.
  */
 
 'use server';
 
 import { revalidatePath } from 'next/cache';
 import { PickTicketService } from '../services';
-import { createClient } from '@/shared/lib/supabase/server';
 import { db } from '@/shared/lib/supabase/database';
+import { getCurrentUser, hasPermission, hasAnyPermission } from '@/shared/lib/auth';
+import type { AppUser } from '@/shared/stores/auth.store';
 import type {
   PickTicket,
   PickTicketWithItems,
@@ -21,30 +25,58 @@ import type {
 } from '../types';
 
 // ============================================
-// HELPER: Get current user ID
+// TYPES
 // ============================================
 
-async function getCurrentUserId(): Promise<string | undefined> {
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+interface ActionResult<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}
 
-    if (!user) {
-      return undefined;
-    }
+// ============================================
+// AUTHORIZATION HELPERS
+// ============================================
 
-    const { data } = await supabase
-      .from('users')
-      .select('id')
-      .eq('auth_user_id', user.id)
-      .single();
+type AuthorizeResult =
+  | { ok: true; user: AppUser }
+  | { ok: false; result: ActionResult<never> };
 
-    return data?.id;
-  } catch {
-    return undefined;
+/**
+ * Resolve the current application user and verify a permission.
+ */
+async function authorize(permission: string): Promise<AuthorizeResult> {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return { ok: false, result: { success: false, error: 'Authentication required' } };
   }
+
+  if (!hasPermission(user, permission)) {
+    return { ok: false, result: { success: false, error: `Permission denied: ${permission}` } };
+  }
+
+  return { ok: true, user };
+}
+
+/**
+ * Same as `authorize`, but any one of the permissions is enough.
+ */
+async function authorizeAny(permissions: string[]): Promise<AuthorizeResult> {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return { ok: false, result: { success: false, error: 'Authentication required' } };
+  }
+
+  if (!hasAnyPermission(user, permissions)) {
+    return {
+      ok: false,
+      result: { success: false, error: `Permission denied: requires one of [${permissions.join(', ')}]` },
+    };
+  }
+
+  return { ok: true, user };
 }
 
 // ============================================
@@ -52,6 +84,11 @@ async function getCurrentUserId(): Promise<string | undefined> {
 // ============================================
 
 export async function listPickTickets(params: PickTicketListParams = {}) {
+  const auth = await authorize('pick_tickets.view');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
   const result = await PickTicketService.getPickTickets(params);
   return result;
 }
@@ -61,6 +98,11 @@ export async function listPickTickets(params: PickTicketListParams = {}) {
 // ============================================
 
 export async function getPickTicket(id: string) {
+  const auth = await authorizeAny(['pick_tickets.view', 'pick_tickets.edit']);
+  if (!auth.ok) {
+    return auth.result;
+  }
+
   const result = await PickTicketService.getPickTicketById(id);
   return result;
 }
@@ -70,6 +112,11 @@ export async function getPickTicket(id: string) {
 // ============================================
 
 export async function getPickTicketsBySalesOrder(salesOrderId: string) {
+  const auth = await authorize('pick_tickets.view');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
   const result = await PickTicketService.getPickTicketsBySalesOrderId(salesOrderId);
   return result;
 }
@@ -79,8 +126,12 @@ export async function getPickTicketsBySalesOrder(salesOrderId: string) {
 // ============================================
 
 export async function createPickTicket(data: CreatePickTicketDTO) {
-  const userId = await getCurrentUserId();
-  const result = await PickTicketService.createPickTicket(data, userId);
+  const auth = await authorize('pick_tickets.create');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  const result = await PickTicketService.createPickTicket(data, auth.user.id);
 
   if (result.success) {
     revalidatePath('/pick-tickets');
@@ -95,8 +146,12 @@ export async function createPickTicket(data: CreatePickTicketDTO) {
 // ============================================
 
 export async function updatePickTicket(id: string, data: UpdatePickTicketDTO) {
-  const userId = await getCurrentUserId();
-  const result = await PickTicketService.updatePickTicket(id, data, userId);
+  const auth = await authorize('pick_tickets.edit');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  const result = await PickTicketService.updatePickTicket(id, data, auth.user.id);
 
   if (result.success) {
     revalidatePath('/pick-tickets');
@@ -111,8 +166,12 @@ export async function updatePickTicket(id: string, data: UpdatePickTicketDTO) {
 // ============================================
 
 export async function assignPickTicket(id: string, assignedTo: string) {
-  const userId = await getCurrentUserId();
-  const result = await PickTicketService.assignPickTicket(id, assignedTo, userId);
+  const auth = await authorize('pick_tickets.assign');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  const result = await PickTicketService.assignPickTicket(id, assignedTo, auth.user.id);
 
   if (result.success) {
     revalidatePath('/pick-tickets');
@@ -127,8 +186,12 @@ export async function assignPickTicket(id: string, assignedTo: string) {
 // ============================================
 
 export async function startPicking(id: string) {
-  const userId = await getCurrentUserId();
-  const result = await PickTicketService.startPicking(id, userId);
+  const auth = await authorize('pick_tickets.pick');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  const result = await PickTicketService.startPicking(id, auth.user.id);
 
   if (result.success) {
     revalidatePath('/pick-tickets');
@@ -143,8 +206,12 @@ export async function startPicking(id: string) {
 // ============================================
 
 export async function pickItem(pickTicketId: string, item: PickItemDTO) {
-  const userId = await getCurrentUserId();
-  const result = await PickTicketService.pickItem(pickTicketId, item, userId);
+  const auth = await authorize('pick_tickets.pick');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  const result = await PickTicketService.pickItem(pickTicketId, item, auth.user.id);
 
   if (result.success) {
     revalidatePath('/pick-tickets');
@@ -159,8 +226,12 @@ export async function pickItem(pickTicketId: string, item: PickItemDTO) {
 // ============================================
 
 export async function pickItems(pickTicketId: string, items: PickItemDTO[]) {
-  const userId = await getCurrentUserId();
-  const result = await PickTicketService.pickItems(pickTicketId, items, userId);
+  const auth = await authorize('pick_tickets.pick');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  const result = await PickTicketService.pickItems(pickTicketId, items, auth.user.id);
 
   if (result.success) {
     revalidatePath('/pick-tickets');
@@ -180,11 +251,14 @@ export async function pickItems(pickTicketId: string, items: PickItemDTO[]) {
  * Also auto-creates shipment with source='warehouse' for GDC1 Inventory
  *
  * Two fulfillment paths:
- * 1. Quick ship: picking/picked â†’ shipped (via Complete Picking) - no packing list
- * 2. Full packing: picked â†’ packing â†’ packed â†’ shipped (via Packing List flow)
+ * 1. Quick ship: picking/picked â†' shipped (via Complete Picking) - no packing list
+ * 2. Full packing: picked â†' packing â†' packed â†' shipped (via Packing List flow)
  */
 export async function completePicking(id: string) {
-  const userId = await getCurrentUserId();
+  const auth = await authorize('pick_tickets.pick');
+  if (!auth.ok) {
+    return auth.result;
+  }
 
   // Get pick ticket with items before completing
   const ptResult = await PickTicketService.getPickTicketById(id);
@@ -203,16 +277,16 @@ export async function completePicking(id: string) {
   }
 
   // Complete the picking first (status change to 'shipped')
-  const result = await PickTicketService.completePicking(id, userId);
+  const result = await PickTicketService.completePicking(id, auth.user.id);
 
   if (result.success) {
     // Ship inventory for each picked item
-    await shipInventoryForPickTicket(pickTicket, userId);
+    await shipInventoryForPickTicket(pickTicket, auth.user.id);
 
     // Auto-create shipment with source='warehouse' for GDC1 Inventory
     // Shipment is created when items are actually picked and ready to ship
     try {
-      await createShipmentFromCompletedPickTicket(pickTicket, userId);
+      await createShipmentFromCompletedPickTicket(pickTicket, auth.user.id);
     } catch (error) {
       console.error('[completePicking] Failed to create warehouse shipment:', error);
       // Don't fail the completion if shipment creation fails
@@ -275,8 +349,12 @@ async function shipInventoryForPickTicket(
 // ============================================
 
 export async function transitionPickTicketStatus(id: string, status: PickTicketStatus) {
-  const userId = await getCurrentUserId();
-  const result = await PickTicketService.transitionStatus(id, status, userId);
+  const auth = await authorize('pick_tickets.edit');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  const result = await PickTicketService.transitionStatus(id, status, auth.user.id);
 
   if (result.success) {
     revalidatePath('/pick-tickets');
@@ -291,8 +369,12 @@ export async function transitionPickTicketStatus(id: string, status: PickTicketS
 // ============================================
 
 export async function cancelPickTicket(id: string) {
-  const userId = await getCurrentUserId();
-  const result = await PickTicketService.cancelPickTicket(id, userId);
+  const auth = await authorize('pick_tickets.edit');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  const result = await PickTicketService.cancelPickTicket(id, auth.user.id);
 
   if (result.success) {
     revalidatePath('/pick-tickets');
@@ -307,8 +389,12 @@ export async function cancelPickTicket(id: string) {
 // ============================================
 
 export async function deletePickTicket(id: string) {
-  const userId = await getCurrentUserId();
-  const result = await PickTicketService.deletePickTicket(id, userId);
+  const auth = await authorize('pick_tickets.delete');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  const result = await PickTicketService.deletePickTicket(id, auth.user.id);
 
   if (result.success) {
     revalidatePath('/pick-tickets');
@@ -331,7 +417,12 @@ export async function createPickTicketFromSalesOrder(
   salesOrderId: string,
   warehouseId: string
 ): Promise<CreateFromSOResult> {
-  const userId = await getCurrentUserId();
+  const auth = await authorize('pick_tickets.create');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  const userId = auth.user.id;
 
   try {
     // Fetch sales order with items

@@ -125,9 +125,10 @@ export function exportGDC1Inventory(data: GDC1InventoryItem[]): void {
     { key: 'totalQty', label: 'Total Qty' },
     { key: 'customer', label: 'Customer' },
     { key: 'po', label: 'PO' },
-    { key: 'customerShipWindow', label: 'Ship Window' },
     { key: 'etaToUsPort', label: 'ETA to US Port' },
-    { key: 'customerDueDate', label: 'Customer Due Date' },
+    { key: 'deliveryAddress', label: 'Delivery Address' },
+    { key: 'confirmedEta', label: 'Confirmed ETA' },
+    { key: 'customerExpectedDelivery', label: 'Customer Expected Delivery' },
     { key: 'actualDelivery', label: 'Actual Delivery' },
     { key: 'qtyDelivered', label: 'Qty Delivered' },
     { key: 'outstandingPoQty', label: 'Outstanding Qty' },
@@ -135,10 +136,9 @@ export function exportGDC1Inventory(data: GDC1InventoryItem[]): void {
     { key: 'invoiceAmount', label: 'Invoice Amount' },
     { key: 'payment50PercentDate', label: '50% Payment Date' },
     { key: 'remaining50DueDate', label: 'Remaining 50% Due' },
-    { key: 'deliveryAddress', label: 'Delivery Address' },
     { key: 'status', label: 'Status' },
     { key: 'actionRequired', label: 'Action Required' },
-    { key: 'ankurNotes', label: 'Notes' },
+    { key: 'ankurNotes', label: 'Ankur Comments' },
   ];
 
   const csv = toCSV(transformedData, headers);

@@ -255,7 +255,7 @@ export function ViewPurchaseOrderDrawer({
             {/* Actions */}
             <Separator />
             <div className="flex gap-2">
-              {onEdit && po.status === 'draft' && (
+              {onEdit && ['draft', 'sent'].includes(po.status) && (
                 <Button
                   variant="outline"
                   onClick={handleEditClick}

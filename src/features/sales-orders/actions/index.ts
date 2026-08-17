@@ -3,6 +3,9 @@
  *
  * Server actions for the Sales Orders module.
  * Can be called directly from Server Components or via useFormState.
+ *
+ * Every action authenticates the caller and checks the matching
+ * `orders.*` permission before touching the service layer.
  */
 
 'use server';
@@ -21,9 +24,9 @@ import type {
   OrderStatus,
   CreateSalesOrderItemDTO,
 } from '../types';
-import { createClient } from '@/shared/lib/supabase/server';
 import { db } from '@/shared/lib/supabase/database';
-import { getAppUserByAuthId } from '@/shared/lib/auth';
+import { getCurrentUser, hasPermission, hasAnyPermission } from '@/shared/lib/auth';
+import type { AppUser } from '@/shared/stores/auth.store';
 
 // ============================================
 // TYPES
@@ -34,6 +37,51 @@ export interface ActionResult<T = unknown> {
   data?: T;
   error?: string;
   errors?: Record<string, string[]>;
+}
+
+// ============================================
+// AUTHORIZATION HELPERS
+// ============================================
+
+type AuthorizeResult =
+  | { ok: true; user: AppUser }
+  | { ok: false; result: ActionResult<never> };
+
+/**
+ * Resolve the current application user and verify a permission.
+ */
+async function authorize(permission: string): Promise<AuthorizeResult> {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return { ok: false, result: { success: false, error: 'Authentication required' } };
+  }
+
+  if (!hasPermission(user, permission)) {
+    return { ok: false, result: { success: false, error: `Permission denied: ${permission}` } };
+  }
+
+  return { ok: true, user };
+}
+
+/**
+ * Same as `authorize`, but any one of the permissions is enough.
+ */
+async function authorizeAny(permissions: string[]): Promise<AuthorizeResult> {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return { ok: false, result: { success: false, error: 'Authentication required' } };
+  }
+
+  if (!hasAnyPermission(user, permissions)) {
+    return {
+      ok: false,
+      result: { success: false, error: `Permission denied: requires one of [${permissions.join(', ')}]` },
+    };
+  }
+
+  return { ok: true, user };
 }
 
 // ============================================
@@ -56,11 +104,9 @@ export async function getSalesOrders(
     hasPreviousPage: boolean;
   };
 }>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('orders.view_module');
+  if (!auth.ok) {
+    return auth.result;
   }
 
   const result = await salesOrderService.list(params);
@@ -71,11 +117,9 @@ export async function getSalesOrders(
  * Get a single sales order by ID
  */
 export async function getSalesOrder(id: string): Promise<ActionResult<SalesOrderWithItems>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorizeAny(['orders.view_detail', 'orders.edit']);
+  if (!auth.ok) {
+    return auth.result;
   }
 
   return salesOrderService.getById(id);
@@ -87,11 +131,9 @@ export async function getSalesOrder(id: string): Promise<ActionResult<SalesOrder
 export async function getSalesOrderByNumber(
   orderNumber: string
 ): Promise<ActionResult<SalesOrderWithItems>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorizeAny(['orders.view_detail', 'orders.edit']);
+  if (!auth.ok) {
+    return auth.result;
   }
 
   return salesOrderService.getByOrderNumber(orderNumber);
@@ -105,18 +147,12 @@ export async function getSalesOrderByNumber(
  * Create a new sales order from form data
  */
 export async function createSalesOrder(formData: FormData): Promise<ActionResult<SalesOrderWithItems>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('orders.create');
+  if (!auth.ok) {
+    return auth.result;
   }
 
-  // Get app user ID (public.users.id) from auth user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
-  }
+  const appUser = auth.user;
 
   // Parse form data
   const rawData = {
@@ -174,18 +210,12 @@ export async function createSalesOrder(formData: FormData): Promise<ActionResult
 export async function createSalesOrderFromData(
   data: unknown
 ): Promise<ActionResult<SalesOrderWithItems>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('orders.create');
+  if (!auth.ok) {
+    return auth.result;
   }
 
-  // Get app user ID (public.users.id) from auth user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
-  }
+  const appUser = auth.user;
 
   // Validate first
   const formValidation = salesOrderFormSchema.safeParse(data);
@@ -214,18 +244,12 @@ export async function updateSalesOrder(
   id: string,
   formData: FormData
 ): Promise<ActionResult<SalesOrder>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('orders.edit');
+  if (!auth.ok) {
+    return auth.result;
   }
 
-  // Get app user ID (public.users.id) from auth user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
-  }
+  const appUser = auth.user;
 
   // Parse form data
   const rawData: Record<string, unknown> = {};
@@ -300,18 +324,12 @@ export async function updateSalesOrderFromData(
   id: string,
   data: unknown
 ): Promise<ActionResult<SalesOrder>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('orders.edit');
+  if (!auth.ok) {
+    return auth.result;
   }
 
-  // Get app user ID (public.users.id) from auth user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
-  }
+  const appUser = auth.user;
 
   // Validate
   const validation = updateSalesOrderSchema.safeParse(data);
@@ -341,20 +359,12 @@ export async function updateSalesOrderItems(
   orderId: string,
   items: CreateSalesOrderItemDTO[]
 ): Promise<ActionResult<SalesOrderWithItems>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('orders.edit');
+  if (!auth.ok) {
+    return auth.result;
   }
 
-  // Get app user ID (public.users.id) from auth user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
-  }
-
-  const result = await salesOrderService.updateItems(orderId, items, appUser.id);
+  const result = await salesOrderService.updateItems(orderId, items, auth.user.id);
 
   if (result.success) {
     revalidatePath('/sales-orders');
@@ -369,20 +379,12 @@ export async function updateSalesOrderItems(
  * Soft delete a sales order
  */
 export async function deleteSalesOrder(id: string): Promise<ActionResult<SalesOrder>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('orders.delete');
+  if (!auth.ok) {
+    return auth.result;
   }
 
-  // Get app user ID (public.users.id) from auth user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
-  }
-
-  const result = await salesOrderService.delete(id, appUser.id);
+  const result = await salesOrderService.delete(id, auth.user.id);
 
   if (result.success) {
     revalidatePath('/sales-orders');
@@ -400,20 +402,12 @@ export async function deleteSalesOrder(id: string): Promise<ActionResult<SalesOr
  * Submit a draft order (draft -> pending)
  */
 export async function submitSalesOrder(id: string): Promise<ActionResult<SalesOrder>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('orders.edit');
+  if (!auth.ok) {
+    return auth.result;
   }
 
-  // Get app user ID (public.users.id) from auth user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
-  }
-
-  const result = await salesOrderService.submit(id, appUser.id);
+  const result = await salesOrderService.submit(id, auth.user.id);
 
   if (result.success) {
     revalidatePath('/sales-orders');
@@ -429,25 +423,17 @@ export async function submitSalesOrder(id: string): Promise<ActionResult<SalesOr
  * Note: Inventory allocation happens when Pick Ticket is created (not here)
  */
 export async function confirmSalesOrder(id: string): Promise<ActionResult<SalesOrder>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('orders.approve');
+  if (!auth.ok) {
+    return auth.result;
   }
 
-  // Get app user ID (public.users.id) from auth user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
-  }
-
-  const result = await salesOrderService.confirm(id, appUser.id);
+  const result = await salesOrderService.confirm(id, auth.user.id);
 
   if (result.success) {
     // Auto-create Purchase Order from confirmed Sales Order
     try {
-      await createPurchaseOrderFromSalesOrder(id, appUser.id);
+      await createPurchaseOrderFromSalesOrder(id, auth.user.id);
     } catch (error) {
       console.error('Failed to auto-create PO:', error);
       // Don't fail the confirmation if PO creation fails
@@ -627,20 +613,12 @@ async function createPurchaseOrderFromSalesOrder(
  * Start processing an order (confirmed -> processing)
  */
 export async function processSalesOrder(id: string): Promise<ActionResult<SalesOrder>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('orders.edit');
+  if (!auth.ok) {
+    return auth.result;
   }
 
-  // Get app user ID (public.users.id) from auth user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
-  }
-
-  const result = await salesOrderService.process(id, appUser.id);
+  const result = await salesOrderService.process(id, auth.user.id);
 
   if (result.success) {
     revalidatePath('/sales-orders');
@@ -654,20 +632,12 @@ export async function processSalesOrder(id: string): Promise<ActionResult<SalesO
  * Ship an order (processing -> shipped)
  */
 export async function shipSalesOrder(id: string): Promise<ActionResult<SalesOrder>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('orders.edit');
+  if (!auth.ok) {
+    return auth.result;
   }
 
-  // Get app user ID (public.users.id) from auth user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
-  }
-
-  const result = await salesOrderService.ship(id, appUser.id);
+  const result = await salesOrderService.ship(id, auth.user.id);
 
   if (result.success) {
     revalidatePath('/sales-orders');
@@ -681,20 +651,12 @@ export async function shipSalesOrder(id: string): Promise<ActionResult<SalesOrde
  * Deliver an order (shipped -> delivered)
  */
 export async function deliverSalesOrder(id: string): Promise<ActionResult<SalesOrder>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('orders.edit');
+  if (!auth.ok) {
+    return auth.result;
   }
 
-  // Get app user ID (public.users.id) from auth user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
-  }
-
-  const result = await salesOrderService.deliver(id, appUser.id);
+  const result = await salesOrderService.deliver(id, auth.user.id);
 
   if (result.success) {
     revalidatePath('/sales-orders');
@@ -712,17 +674,9 @@ export async function cancelSalesOrder(
   id: string,
   reason?: string
 ): Promise<ActionResult<SalesOrder>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
-
-  // Get app user ID (public.users.id) from auth user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
+  const auth = await authorize('orders.delete');
+  if (!auth.ok) {
+    return auth.result;
   }
 
   // Get the SO first to check if we need to deallocate
@@ -735,10 +689,10 @@ export async function cancelSalesOrder(
 
   // Only deallocate if order was confirmed and has warehouse
   if (salesOrder.status === 'confirmed' && salesOrder.warehouseId) {
-    await deallocateInventoryForSalesOrder(salesOrder, appUser.id);
+    await deallocateInventoryForSalesOrder(salesOrder, auth.user.id);
   }
 
-  const result = await salesOrderService.cancel(id, reason, appUser.id);
+  const result = await salesOrderService.cancel(id, reason, auth.user.id);
 
   if (result.success) {
     revalidatePath('/sales-orders');
@@ -792,11 +746,9 @@ async function deallocateInventoryForSalesOrder(
  * Get order counts by status
  */
 export async function getSalesOrderStatusCounts(): Promise<ActionResult<Record<OrderStatus, number>>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('orders.view_module');
+  if (!auth.ok) {
+    return auth.result;
   }
 
   return salesOrderService.getStatusCounts();
@@ -806,11 +758,9 @@ export async function getSalesOrderStatusCounts(): Promise<ActionResult<Record<O
  * Get the next order number
  */
 export async function getNextOrderNumber(): Promise<ActionResult<string>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('orders.view_module');
+  if (!auth.ok) {
+    return auth.result;
   }
 
   return salesOrderService.getNextOrderNumber();
@@ -836,11 +786,9 @@ export async function getCustomerAddresses(customerId: string): Promise<ActionRe
     country: string | null;
   };
 }>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('orders.view_module');
+  if (!auth.ok) {
+    return auth.result;
   }
 
   // Import customer service to fetch addresses
@@ -866,11 +814,9 @@ export async function getProductPrice(
   unitPrice: number;
   priceSource: 'matrix' | 'base';
 }>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('orders.view_module');
+  if (!auth.ok) {
+    return auth.result;
   }
 
   try {
@@ -967,11 +913,9 @@ export async function getSalesOrderMasterData(): Promise<ActionResult<{
     email: string;
   }>;
 }>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('orders.view_module');
+  if (!auth.ok) {
+    return auth.result;
   }
 
   try {
@@ -1055,23 +999,9 @@ export async function releaseSalesOrderHold(
   orderId: string,
   note?: string
 ): Promise<ActionResult<SalesOrder>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
-
-  // Get app user
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
-  }
-
-  // Check permission
-  const { hasPermission } = await import('@/shared/lib/auth');
-  if (!hasPermission(appUser, 'sales_orders.release_hold')) {
-    return { success: false, error: 'Permission denied. Finance approval required.' };
+  const auth = await authorize('sales_orders.release_hold');
+  if (!auth.ok) {
+    return auth.result;
   }
 
   try {
@@ -1096,7 +1026,7 @@ export async function releaseSalesOrderHold(
       .from('sales_orders')
       .update({
         credit_status: 'ok',
-        updated_by: appUser.id,
+        updated_by: auth.user.id,
         updated_at: new Date().toISOString(),
       })
       .eq('id', orderId)
@@ -1112,7 +1042,7 @@ export async function releaseSalesOrderHold(
       .from('approval_events')
       .update({
         status: 'approved',
-        decided_by: appUser.id,
+        decided_by: auth.user.id,
         decided_at: new Date().toISOString(),
         note: note || 'Credit hold released by finance',
       })
@@ -1141,11 +1071,9 @@ export async function releaseSalesOrderHold(
  * Get sales orders on credit hold
  */
 export async function getSalesOrdersOnHold(): Promise<ActionResult<SalesOrderListItem[]>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('orders.view_module');
+  if (!auth.ok) {
+    return auth.result;
   }
 
   try {

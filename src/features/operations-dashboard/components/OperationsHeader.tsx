@@ -6,9 +6,15 @@
  * Page header for the operations dashboard with refresh and export actions.
  */
 
-import { RefreshCw, Calendar } from 'lucide-react';
+import { RefreshCw, Calendar, Download, FileText, ChevronDown } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/shared/components/ui/dropdown-menu';
 
 // ============================================
 // TYPES
@@ -19,13 +25,15 @@ export type ExportOption =
   | 'shipment-overview'
   | 'supplier-schedule'
   | 'gdc1-inventory'
-  | 'all';
+  | 'all'
+  | 'pdf';
 
 interface OperationsHeaderProps {
   lastUpdated?: Date | null;
   onRefresh?: () => void;
   onExport?: (type: ExportOption) => void;
   isRefreshing?: boolean;
+  isExporting?: boolean;
 }
 
 // ============================================
@@ -35,8 +43,9 @@ interface OperationsHeaderProps {
 export function OperationsHeader({
   lastUpdated,
   onRefresh,
-  onExport: _onExport,
+  onExport,
   isRefreshing = false,
+  isExporting = false,
 }: OperationsHeaderProps) {
   const formatDate = (date: Date) => {
     return date.toLocaleString('en-US', {
@@ -75,40 +84,50 @@ export function OperationsHeader({
           <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
           Refresh
         </Button>
-        {/* Export button hidden for now - can be re-enabled later
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm">
-              <Download className="h-4 w-4 mr-2" />
-              Export
+            <Button variant="outline" size="sm" disabled={isExporting}>
+              {isExporting ? (
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4 mr-2" />
+              )}
+              {isExporting ? 'Exporting...' : 'Export'}
               <ChevronDown className="h-4 w-4 ml-1" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuItem onClick={() => onExport?.('pdf')}>
+              <FileText className="h-4 w-4 mr-2 text-red-600" />
+              Download PDF Report
+            </DropdownMenuItem>
+            {/* Excel export options hidden for now
+            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => onExport?.('executive-summary')}>
               <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />
-              Executive Summary
+              Executive Summary (Excel)
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onExport?.('shipment-overview')}>
               <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />
-              Shipment Overview
+              Shipment Overview (Excel)
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onExport?.('supplier-schedule')}>
               <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />
-              Supplier Schedule
+              Supplier Schedule (Excel)
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onExport?.('gdc1-inventory')}>
               <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />
-              GDC1 Inventory
+              GDC1 Inventory (Excel)
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => onExport?.('all')}>
-              <Download className="h-4 w-4 mr-2" />
-              Export All (Full Report)
+              <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />
+              Full Report (Excel)
             </DropdownMenuItem>
+            */}
           </DropdownMenuContent>
         </DropdownMenu>
-        */}
       </div>
     </div>
   );

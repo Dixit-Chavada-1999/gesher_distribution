@@ -124,9 +124,9 @@ export function EditPurchaseOrderDrawer({
     try {
       const result = await getPurchaseOrder(poId);
       if (result.success && result.data) {
-        // Check if PO can be edited
-        if (result.data.status !== 'draft') {
-          setError(`Cannot edit PO in "${result.data.status}" status. Only draft POs can be edited.`);
+        // Check if PO can be edited (allow draft and sent, block after supplier confirms)
+        if (!['draft', 'sent'].includes(result.data.status)) {
+          setError(`Cannot edit PO in "${result.data.status}" status. Only draft and sent POs can be edited before supplier confirmation.`);
           setPO(null);
         } else {
           setPO(result.data);
@@ -281,7 +281,7 @@ export function EditPurchaseOrderDrawer({
 
         if (result.success) {
           toast.success(`Purchase Order ${po.poNumber} updated successfully`);
-          onSuccess?.();
+          await onSuccess?.();
           onClose();
         } else {
           toast.error(result.error || 'Failed to update Purchase Order');

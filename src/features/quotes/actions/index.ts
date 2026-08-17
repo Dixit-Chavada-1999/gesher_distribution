@@ -24,7 +24,8 @@ import type {
 } from '../types';
 import { createClient } from '@/shared/lib/supabase/server';
 import { db } from '@/shared/lib/supabase/database';
-import { getAppUserByAuthId } from '@/shared/lib/auth';
+import { getCurrentUser, hasPermission, hasAnyPermission } from '@/shared/lib/auth';
+import type { AppUser } from '@/shared/stores/auth.store';
 
 // ============================================
 // TYPES
@@ -35,6 +36,51 @@ export interface ActionResult<T = unknown> {
   data?: T;
   error?: string;
   errors?: Record<string, string[]>;
+}
+
+// ============================================
+// AUTHORIZATION HELPERS
+// ============================================
+
+type AuthorizeResult =
+  | { ok: true; user: AppUser }
+  | { ok: false; result: ActionResult<never> };
+
+/**
+ * Resolve the current application user and verify a permission.
+ */
+async function authorize(permission: string): Promise<AuthorizeResult> {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return { ok: false, result: { success: false, error: 'Authentication required' } };
+  }
+
+  if (!hasPermission(user, permission)) {
+    return { ok: false, result: { success: false, error: `Permission denied: ${permission}` } };
+  }
+
+  return { ok: true, user };
+}
+
+/**
+ * Same as `authorize`, but any one of the permissions is enough.
+ */
+async function authorizeAny(permissions: string[]): Promise<AuthorizeResult> {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return { ok: false, result: { success: false, error: 'Authentication required' } };
+  }
+
+  if (!hasAnyPermission(user, permissions)) {
+    return {
+      ok: false,
+      result: { success: false, error: `Permission denied: requires one of [${permissions.join(', ')}]` },
+    };
+  }
+
+  return { ok: true, user };
 }
 
 // ============================================
@@ -57,11 +103,9 @@ export async function getQuotes(
     hasPreviousPage: boolean;
   };
 }>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('quotes.view_module');
+  if (!auth.ok) {
+    return auth.result;
   }
 
   const result = await quoteService.list(params);
@@ -72,11 +116,9 @@ export async function getQuotes(
  * Get a single quote by ID
  */
 export async function getQuote(id: string): Promise<ActionResult<QuoteWithItems>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorizeAny(['quotes.view_detail', 'quotes.edit']);
+  if (!auth.ok) {
+    return auth.result;
   }
 
   return quoteService.getById(id);
@@ -88,11 +130,9 @@ export async function getQuote(id: string): Promise<ActionResult<QuoteWithItems>
 export async function getQuoteByNumber(
   quoteNumber: string
 ): Promise<ActionResult<QuoteWithItems>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorizeAny(['quotes.view_detail', 'quotes.edit']);
+  if (!auth.ok) {
+    return auth.result;
   }
 
   return quoteService.getByQuoteNumber(quoteNumber);
@@ -106,17 +146,9 @@ export async function getQuoteByNumber(
  * Create a new quote from form data
  */
 export async function createQuote(formData: FormData): Promise<ActionResult<QuoteWithItems>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
-
-  // Get app user ID (public.users.id) from auth user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
+  const auth = await authorize('quotes.create');
+  if (!auth.ok) {
+    return auth.result;
   }
 
   // Parse form data
@@ -157,7 +189,7 @@ export async function createQuote(formData: FormData): Promise<ActionResult<Quot
     };
   }
 
-  const result = await quoteService.createFromForm(formValidation.data, appUser.id);
+  const result = await quoteService.createFromForm(formValidation.data, auth.user.id);
 
   if (result.success) {
     revalidatePath('/quotes');
@@ -173,17 +205,9 @@ export async function createQuote(formData: FormData): Promise<ActionResult<Quot
 export async function createQuoteFromData(
   data: unknown
 ): Promise<ActionResult<QuoteWithItems>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
-
-  // Get app user ID (public.users.id) from auth user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
+  const auth = await authorize('quotes.create');
+  if (!auth.ok) {
+    return auth.result;
   }
 
   // Validate with createQuoteSchema (expects Date objects from formToCreateDTO)
@@ -212,7 +236,7 @@ export async function createQuoteFromData(
     };
   }
 
-  const result = await quoteService.create(validation.data, appUser.id);
+  const result = await quoteService.create(validation.data, auth.user.id);
 
   if (result.success) {
     revalidatePath('/quotes');
@@ -229,17 +253,9 @@ export async function updateQuote(
   id: string,
   formData: FormData
 ): Promise<ActionResult<Quote>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
-
-  // Get app user ID (public.users.id) from auth user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
+  const auth = await authorize('quotes.edit');
+  if (!auth.ok) {
+    return auth.result;
   }
 
   // Parse form data
@@ -296,7 +312,7 @@ export async function updateQuote(
     };
   }
 
-  const result = await quoteService.update(id, validation.data, appUser.id);
+  const result = await quoteService.update(id, validation.data, auth.user.id);
 
   if (result.success) {
     revalidatePath('/quotes');
@@ -314,17 +330,9 @@ export async function updateQuoteFromData(
   id: string,
   data: unknown
 ): Promise<ActionResult<Quote>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
-
-  // Get app user ID (public.users.id) from auth user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
+  const auth = await authorize('quotes.edit');
+  if (!auth.ok) {
+    return auth.result;
   }
 
   // Validate
@@ -342,7 +350,7 @@ export async function updateQuoteFromData(
 
   console.log('[updateQuoteFromData] Validated data:', JSON.stringify(validation.data, null, 2));
 
-  const result = await quoteService.update(id, validation.data, appUser.id);
+  const result = await quoteService.update(id, validation.data, auth.user.id);
 
   console.log('[updateQuoteFromData] Update result:', result.success, result.data?.productSource);
 
@@ -362,20 +370,12 @@ export async function updateQuoteItems(
   quoteId: string,
   items: CreateQuoteItemDTO[]
 ): Promise<ActionResult<QuoteWithItems>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('quotes.edit');
+  if (!auth.ok) {
+    return auth.result;
   }
 
-  // Get app user ID (public.users.id) from auth user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
-  }
-
-  const result = await quoteService.updateItems(quoteId, items, appUser.id);
+  const result = await quoteService.updateItems(quoteId, items, auth.user.id);
 
   if (result.success) {
     revalidatePath('/quotes');
@@ -390,20 +390,12 @@ export async function updateQuoteItems(
  * Soft delete a quote
  */
 export async function deleteQuote(id: string): Promise<ActionResult<Quote>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('quotes.delete');
+  if (!auth.ok) {
+    return auth.result;
   }
 
-  // Get app user ID (public.users.id) from auth user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
-  }
-
-  const result = await quoteService.delete(id, appUser.id);
+  const result = await quoteService.delete(id, auth.user.id);
 
   if (result.success) {
     revalidatePath('/quotes');
@@ -422,15 +414,12 @@ export async function deleteQuote(id: string): Promise<ActionResult<Quote>> {
  * Requires quotes.submit_for_approval permission
  */
 export async function submitQuoteForApproval(id: string): Promise<ActionResult<Quote>> {
-  // Check for quotes.submit_for_approval permission
-  const { checkPermission } = await import('@/shared/lib/auth/check-permission');
-  const { hasAccess, user: appUser, error } = await checkPermission('quotes.submit_for_approval');
-
-  if (!hasAccess || !appUser) {
-    return { success: false, error: error || 'Permission denied' };
+  const auth = await authorize('quotes.submit_for_approval');
+  if (!auth.ok) {
+    return auth.result;
   }
 
-  const result = await quoteService.submitForApproval(id, appUser.id);
+  const result = await quoteService.submitForApproval(id, auth.user.id);
 
   if (result.success) {
     revalidatePath('/quotes');
@@ -448,15 +437,12 @@ export async function approveQuote(
   id: string,
   approvalNote: string | null = null
 ): Promise<ActionResult<Quote>> {
-  // Check for quotes.approve permission
-  const { checkPermission } = await import('@/shared/lib/auth/check-permission');
-  const { hasAccess, user: appUser, error } = await checkPermission('quotes.approve');
-
-  if (!hasAccess || !appUser) {
-    return { success: false, error: error || 'Permission denied' };
+  const auth = await authorize('quotes.approve');
+  if (!auth.ok) {
+    return auth.result;
   }
 
-  const result = await quoteService.approveQuote(id, approvalNote, appUser.id);
+  const result = await quoteService.approveQuote(id, approvalNote, auth.user.id);
 
   if (result.success) {
     revalidatePath('/quotes');
@@ -474,15 +460,12 @@ export async function rejectQuoteApproval(
   id: string,
   rejectionNote: string | null = null
 ): Promise<ActionResult<Quote>> {
-  // Check for quotes.approve permission
-  const { checkPermission } = await import('@/shared/lib/auth/check-permission');
-  const { hasAccess, user: appUser, error } = await checkPermission('quotes.approve');
-
-  if (!hasAccess || !appUser) {
-    return { success: false, error: error || 'Permission denied' };
+  const auth = await authorize('quotes.approve');
+  if (!auth.ok) {
+    return auth.result;
   }
 
-  const result = await quoteService.rejectQuoteApproval(id, rejectionNote, appUser.id);
+  const result = await quoteService.rejectQuoteApproval(id, rejectionNote, auth.user.id);
 
   if (result.success) {
     revalidatePath('/quotes');
@@ -496,20 +479,12 @@ export async function rejectQuoteApproval(
  * Mark a sent quote as expired (sent -> expired)
  */
 export async function expireQuote(id: string): Promise<ActionResult<Quote>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('quotes.edit');
+  if (!auth.ok) {
+    return auth.result;
   }
 
-  // Get app user ID (public.users.id) from auth user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
-  }
-
-  const result = await quoteService.expire(id, appUser.id);
+  const result = await quoteService.expire(id, auth.user.id);
 
   if (result.success) {
     revalidatePath('/quotes');
@@ -526,15 +501,12 @@ export async function expireQuote(id: string): Promise<ActionResult<Quote>> {
 export async function convertQuoteToSalesOrder(
   id: string
 ): Promise<ActionResult<{ quote: Quote; salesOrderId: string }>> {
-  // Check for quotes.convert_to_order permission
-  const { checkPermission } = await import('@/shared/lib/auth/check-permission');
-  const { hasAccess, user: appUser, error } = await checkPermission('quotes.convert_to_order');
-
-  if (!hasAccess || !appUser) {
-    return { success: false, error: error || 'Permission denied' };
+  const auth = await authorize('quotes.convert_to_order');
+  if (!auth.ok) {
+    return auth.result;
   }
 
-  const result = await quoteService.convertToSalesOrder(id, appUser.id);
+  const result = await quoteService.convertToSalesOrder(id, auth.user.id);
 
   if (result.success) {
     revalidatePath('/quotes');
@@ -555,11 +527,9 @@ export async function convertQuoteToSalesOrder(
  * Get quote counts by status
  */
 export async function getQuoteStatusCounts(): Promise<ActionResult<Record<QuoteStatus, number>>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('quotes.view_module');
+  if (!auth.ok) {
+    return auth.result;
   }
 
   return quoteService.getStatusCounts();
@@ -569,11 +539,9 @@ export async function getQuoteStatusCounts(): Promise<ActionResult<Record<QuoteS
  * Get the next quote number
  */
 export async function getNextQuoteNumber(): Promise<ActionResult<string>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('quotes.view_module');
+  if (!auth.ok) {
+    return auth.result;
   }
 
   return quoteService.getNextQuoteNumber();
@@ -598,11 +566,9 @@ export async function getCustomerAddresses(customerId: string): Promise<ActionRe
     country: string | null;
   };
 }>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('quotes.view_module');
+  if (!auth.ok) {
+    return auth.result;
   }
 
   // Import customer service to fetch addresses
@@ -622,17 +588,9 @@ export async function findOrCreateCustomerFromPO(
   customerState?: string | null,
   customerZip?: string | null
 ): Promise<ActionResult<{ customerId: string; customerName: string; created: boolean }>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
-
-  // Get app user ID (public.users.id) from auth user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
+  const auth = await authorize('quotes.create');
+  if (!auth.ok) {
+    return auth.result;
   }
 
   try {
@@ -765,7 +723,7 @@ export async function findOrCreateCustomerFromPO(
       defaultPaymentMethod: '',
       status: 'active',
       internalNotes: 'Auto-created from PO upload',
-    }, appUser.id);
+    }, auth.user.id);
 
     if (createResult.success && createResult.data) {
       return {
@@ -809,17 +767,9 @@ export async function findOrCreateProductFromPO(
   unitPrice: number; // in cents
   created: boolean;
 }>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
-
-  // Get app user ID (public.users.id) from auth user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
+  const auth = await authorize('quotes.create');
+  if (!auth.ok) {
+    return auth.result;
   }
 
   try {
@@ -952,7 +902,7 @@ export async function findOrCreateProductFromPO(
           base_price: Math.round(unitPrice * 100), // Update with new price
           base_cost: baseCost !== null ? Math.round(baseCost * 100) : deletedProduct.base_price,
           updated_at: new Date().toISOString(),
-          updated_by: appUser.id,
+          updated_by: auth.user.id,
         })
         .eq('id', deletedProduct.id);
 
@@ -1024,7 +974,7 @@ export async function findOrCreateProductFromPO(
       status: 'active',
       itemType: 'inventory',
       isSellable: true,
-    }, appUser.id);
+    }, auth.user.id);
 
     if (createResult.success && createResult.data) {
       return {
@@ -1070,11 +1020,9 @@ export async function getProductPrice(
   unitPrice: number;
   priceSource: 'matrix' | 'base';
 }>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('quotes.view_module');
+  if (!auth.ok) {
+    return auth.result;
   }
 
   try {
@@ -1165,11 +1113,9 @@ export async function getQuoteMasterData(): Promise<ActionResult<{
     email: string;
   }>;
 }>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('quotes.view_module');
+  if (!auth.ok) {
+    return auth.result;
   }
 
   try {
@@ -1241,11 +1187,9 @@ export async function getQuoteMasterData(): Promise<ActionResult<{
 export async function getPODocumentSignedUrl(
   storagePath: string
 ): Promise<ActionResult<{ url: string }>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('quotes.view_module');
+  if (!auth.ok) {
+    return auth.result;
   }
 
   // If it's already a full URL (legacy), return it as-is
@@ -1256,6 +1200,7 @@ export async function getPODocumentSignedUrl(
   // Generate a signed URL from the storage path
   // All PO documents are stored in the 'po-documents' bucket
   // Path format: "inbound/{email_id}/{filename}"
+  const supabase = await createClient();
   const { data: signedUrlData, error: signedUrlError } = await supabase.storage
     .from('po-documents')
     .createSignedUrl(storagePath, 60 * 60); // 1 hour expiry
@@ -1319,16 +1264,9 @@ export async function savePOExtraction(data: {
   }>;
   rawJson?: Record<string, unknown>; // Complete original extraction data
 }): Promise<ActionResult<{ extractionId: string }>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
-
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
+  const auth = await authorize('quotes.create');
+  if (!auth.ok) {
+    return auth.result;
   }
 
   try {
@@ -1361,7 +1299,7 @@ export async function savePOExtraction(data: {
         total_items: data.lineItems.length,
         matched_items: matchedCount,
         unmatched_items: unmatchedCount,
-        created_by: appUser.id,
+        created_by: auth.user.id,
       })
       .select('id')
       .single();
@@ -1394,11 +1332,9 @@ export async function linkExtractionToQuote(
   extractionId: string,
   quoteId: string
 ): Promise<ActionResult<void>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
+  const auth = await authorize('quotes.edit');
+  if (!auth.ok) {
+    return auth.result;
   }
 
   try {
@@ -1437,17 +1373,9 @@ export async function updateQuoteProductSource(
   quoteId: string,
   productSource: 'dropship' | 'warehouse' | null
 ): Promise<ActionResult<Quote>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
-
-  // Get app user ID
-  const appUser = await getAppUserByAuthId(user.id);
-  if (!appUser) {
-    return { success: false, error: 'User profile not found' };
+  const auth = await authorize('quotes.edit');
+  if (!auth.ok) {
+    return auth.result;
   }
 
   try {
@@ -1473,7 +1401,7 @@ export async function updateQuoteProductSource(
       .from('quotes')
       .update({
         product_source: productSource,
-        updated_by: appUser.id,
+        updated_by: auth.user.id,
         updated_at: new Date().toISOString(),
       })
       .eq('id', quoteId)

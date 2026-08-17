@@ -43,12 +43,22 @@ function toOne<T>(relation: T): ToOne<T> | null {
 
 function mapLoadStatus(dbStatus: string | null): ShipmentStatus {
   const statusMap: Record<string, ShipmentStatus> = {
+    // Common statuses
     available: 'AVAILABLE',
-    sold: 'SOLD',
     open: 'OPEN',
     hold: 'HOLD',
     in_transit: 'IN_TRANSIT',
+    sold: 'SOLD',
+    closed: 'CLOSED',
+    // Invoice/Payment statuses
     invoiced: 'INVOICED',
+    not_invoiced: 'NOT_INVOICED',
+    partially_paid: 'PARTIALLY_PAID',
+    paid: 'PAID',
+    disputed: 'DISPUTED',
+    // Other statuses
+    po_needed: 'PO_NEEDED',
+    delivered: 'DELIVERED',
   };
   return statusMap[dbStatus || 'open'] || 'OPEN';
 }
@@ -60,70 +70,109 @@ function mapLoadStatus(dbStatus: string | null): ShipmentStatus {
 export async function getOperationsStats(): Promise<OperationsStats> {
   const supabase = await createClient();
 
-  // Get all active shipments
-  const { data: shipments, error } = await supabase
+  const now = new Date();
+  const next7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  // Get ACTUAL inventory from inventory table (same source as Inventory module)
+  const { data: inventory, error: invError } = await supabase
+    .from('inventory')
+    .select('on_hand, allocated');
+
+  if (invError) {
+    console.error('Error fetching inventory:', invError);
+    throw invError;
+  }
+
+  // Calculate available inventory: sum(on_hand - allocated) across all locations
+  let availableInventoryQty = 0;
+
+  inventory?.forEach((inv) => {
+    const onHand = inv.on_hand || 0;
+    const allocated = inv.allocated || 0;
+    availableInventoryQty += Math.max(0, onHand - allocated);
+  });
+
+  // Count warehouse locations with inventory as "loads"
+  const availableLoads = inventory?.filter(inv => (inv.on_hand || 0) > 0).length || 0;
+
+  // Get sales orders for other stats
+  const { data: salesOrders, error: soError } = await supabase
+    .from('sales_orders')
+    .select(`
+      id,
+      status,
+      product_source,
+      grand_total,
+      requested_delivery_date,
+      sales_order_items(quantity)
+    `)
+    .is('deleted_at', null)
+    .neq('status', 'cancelled');
+
+  if (soError) {
+    console.error('Error fetching sales orders for stats:', soError);
+    throw soError;
+  }
+
+  // Also get shipments for in-transit tracking
+  const { data: shipments, error: shipError } = await supabase
     .from('shipments')
     .select(`
       id,
       load_status,
-      total_qty,
-      qty_delivered,
-      outstanding_qty,
-      supplier_invoice_amount,
       eta_to_port,
-      estimated_arrival,
-      is_delayed
+      estimated_arrival
     `)
     .is('deleted_at', null);
 
-  if (error) {
-    console.error('Error fetching operations stats:', error);
-    throw error;
+  if (shipError) {
+    console.error('Error fetching shipments for stats:', shipError);
+    throw shipError;
   }
 
-  const now = new Date();
-  const next7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-
-  let availableInventoryQty = 0;
-  let availableLoads = 0;
-  let availableInventoryValue = 0;
+  const availableInventoryValue = 0;
   let committedCustomerQty = 0;
   let inTransitNext7Days = 0;
   let openLoads = 0;
   let outstandingQty = 0;
   let invoiceAmount = 0;
 
-  shipments?.forEach((s) => {
-    // Default to 'open' if load_status is null
-    const status = (s.load_status as string) || 'open';
-    const qty = s.total_qty || 0;
-    const outstanding = s.outstanding_qty || 0;
-    const invoiceAmt = s.supplier_invoice_amount || 0;
+  // Process sales orders
+  salesOrders?.forEach((so) => {
+    const items = so.sales_order_items || [];
+    const totalQty = items.reduce((sum: number, item: { quantity: number }) => sum + (item.quantity || 0), 0);
+    const invoiceAmt = so.grand_total ? so.grand_total / 100 : 0;
+    const isDropship = so.product_source === 'dropship';
 
-    // Available inventory
-    if (status === 'available') {
-      availableInventoryQty += qty;
-      availableLoads += 1;
-      availableInventoryValue += invoiceAmt;
+    // Committed = confirmed/processing orders (customer has committed to buy)
+    if (so.status === 'confirmed' || so.status === 'processing') {
+      committedCustomerQty += totalQty;
     }
 
-    // Committed (sold)
-    if (status === 'sold') {
-      committedCustomerQty += qty;
+    // Outstanding = dropship orders not yet delivered
+    if (isDropship && (so.status === 'pending' || so.status === 'confirmed' || so.status === 'processing')) {
+      outstandingQty += totalQty;
     }
 
-    // Open loads (also count shipments without load_status as open)
-    if (status === 'open' || !s.load_status) {
+    // Open loads = dropship orders that are pending
+    if (isDropship && (so.status === 'draft' || so.status === 'pending')) {
       openLoads += 1;
     }
-
-    // Outstanding qty
-    outstandingQty += outstanding;
 
     // Total invoice amount
     invoiceAmount += invoiceAmt;
 
-    // In transit next 7 days - use eta_to_port or estimated_arrival
+    // Check delivery due in next 7 days
+    if (so.requested_delivery_date) {
+      const deliveryDate = new Date(so.requested_delivery_date);
+      if (deliveryDate >= now && deliveryDate <= next7Days) {
+        inTransitNext7Days += 1;
+      }
+    }
+  });
+
+  // Count in-transit shipments arriving in next 7 days
+  shipments?.forEach((s) => {
     const etaDate = s.eta_to_port || s.estimated_arrival;
     if (etaDate) {
       const eta = new Date(etaDate);
@@ -248,35 +297,32 @@ export async function getSKUBreakdown(): Promise<SKUBreakdown[]> {
 export async function getCustomerCommitments(): Promise<CustomerCommitment[]> {
   const supabase = await createClient();
 
-  // Get shipments with sales order and customer info
-  const { data: shipments, error } = await supabase
-    .from('shipments')
+  const now = new Date();
+  const next7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  // Get sales orders with customer info and items for qty calculation
+  const { data: salesOrders, error } = await supabase
+    .from('sales_orders')
     .select(`
       id,
-      sales_order_id,
-      total_qty,
-      outstanding_qty,
-      supplier_invoice_amount,
-      eta_to_port,
-      estimated_arrival,
-      load_status,
-      sales_orders(
+      status,
+      grand_total,
+      requested_delivery_date,
+      customers(
         id,
-        customers(
-          id,
-          name
-        )
+        name
+      ),
+      sales_order_items(
+        quantity
       )
     `)
-    .is('deleted_at', null);
+    .is('deleted_at', null)
+    .neq('status', 'cancelled');
 
   if (error) {
     console.error('Error fetching customer commitments:', error);
     throw error;
   }
-
-  const now = new Date();
-  const next7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
   // Aggregate by customer
   const customerMap = new Map<string, {
@@ -288,11 +334,17 @@ export async function getCustomerCommitments(): Promise<CustomerCommitment[]> {
     inTransitNext7Days: number;
   }>();
 
-  shipments?.forEach((s) => {
-    const salesOrderData = toOne(s.sales_orders);
-    const customer = toOne(salesOrderData?.customers);
+  salesOrders?.forEach((so) => {
+    const customer = toOne(so.customers);
     const customerName = customer?.name || 'Unknown';
     const customerId = customer?.id || 'unknown';
+
+    // Calculate total qty from items
+    const items = so.sales_order_items || [];
+    const totalQty = items.reduce((sum: number, item: { quantity: number }) => sum + (item.quantity || 0), 0);
+
+    // Invoice amount from grand_total (stored in cents)
+    const invoiceAmount = so.grand_total ? so.grand_total / 100 : 0;
 
     if (!customerMap.has(customerId)) {
       customerMap.set(customerId, {
@@ -307,14 +359,13 @@ export async function getCustomerCommitments(): Promise<CustomerCommitment[]> {
 
     const current = customerMap.get(customerId)!;
     current.loads += 1;
-    current.outstandingQty += s.outstanding_qty || 0;
-    current.invoiceAmount += s.supplier_invoice_amount || 0;
+    current.outstandingQty += totalQty;
+    current.invoiceAmount += invoiceAmount;
 
-    // Check if in transit next 7 days - use eta_to_port or estimated_arrival
-    const etaDate = s.eta_to_port || s.estimated_arrival;
-    if (etaDate) {
-      const eta = new Date(etaDate);
-      if (eta >= now && eta <= next7Days) {
+    // Check if delivery due in next 7 days
+    if (so.requested_delivery_date) {
+      const deliveryDate = new Date(so.requested_delivery_date);
+      if (deliveryDate >= now && deliveryDate <= next7Days) {
         current.inTransitNext7Days += 1;
       }
     }
@@ -339,6 +390,7 @@ export async function getCustomerCommitments(): Promise<CustomerCommitment[]> {
 export async function getShipmentStatusMix(): Promise<ShipmentStatusMix[]> {
   const supabase = await createClient();
 
+  // Get shipments for status breakdown
   const { data: shipments, error } = await supabase
     .from('shipments')
     .select('load_status, total_qty')
@@ -349,7 +401,27 @@ export async function getShipmentStatusMix(): Promise<ShipmentStatusMix[]> {
     throw error;
   }
 
-  // Aggregate by status
+  // Get actual inventory for AVAILABLE status
+  const { data: inventory, error: invError } = await supabase
+    .from('inventory')
+    .select('on_hand, allocated');
+
+  if (invError) {
+    console.error('Error fetching inventory for status mix:', invError);
+  }
+
+  // Calculate available inventory from inventory table
+  let availableQty = 0;
+  let availableLoads = 0;
+  inventory?.forEach((inv) => {
+    const available = Math.max(0, (inv.on_hand || 0) - (inv.allocated || 0));
+    if (available > 0) {
+      availableQty += available;
+      availableLoads += 1;
+    }
+  });
+
+  // Aggregate shipments by status
   const statusMap = new Map<string, { loads: number; qty: number }>();
 
   shipments?.forEach((s) => {
@@ -373,6 +445,20 @@ export async function getShipmentStatusMix(): Promise<ShipmentStatusMix[]> {
       qty: val.qty,
     });
   });
+
+  // Add AVAILABLE from actual inventory (warehouse stock)
+  // Override any existing AVAILABLE from shipments
+  const existingAvailable = result.find(r => r.status === 'AVAILABLE');
+  if (existingAvailable) {
+    existingAvailable.loads = availableLoads;
+    existingAvailable.qty = availableQty;
+  } else {
+    result.push({
+      status: 'AVAILABLE',
+      loads: availableLoads,
+      qty: availableQty,
+    });
+  }
 
   return result;
 }
@@ -563,13 +649,16 @@ export async function getSupplierShipmentSchedule(): Promise<{ data: ShipmentSch
     .eq('products.item_type', 'inventory');
 
   // Group items by sales order and build SKU info map
-  const itemsBySalesOrder = new Map<string, { sku: string; productName: string; qty: number }[]>();
+  // Also track prices per SKU per order for price columns
+  const itemsBySalesOrder = new Map<string, { sku: string; productName: string; qty: number; unitPrice: number }[]>();
   const skuInfoMap = new Map<string, string>(); // sku -> productName
 
   items?.forEach((item) => {
     // Get product name: prefer products.name, fallback to description, then sku
     const productData = toOne(item.products);
     const productName = productData?.name || item.description || item.sku;
+    // unit_price is stored in cents, convert to dollars
+    const unitPrice = item.unit_price ? item.unit_price / 100 : 0;
 
     // Store SKU info for column headers
     if (!skuInfoMap.has(item.sku)) {
@@ -583,6 +672,7 @@ export async function getSupplierShipmentSchedule(): Promise<{ data: ShipmentSch
       sku: item.sku,
       productName,
       qty: item.quantity,
+      unitPrice,
     });
   });
 
@@ -645,8 +735,14 @@ export async function getSupplierShipmentSchedule(): Promise<{ data: ShipmentSch
       actualDeliveryDate: null, // Will be updated when delivered
       qtyDelivered: 0,          // Will be updated when delivered
       outstandingQtyForPO: totalQty, // All qty is outstanding until delivered
+      invoiceNumber: null,  // Invoice #
+      invoiceAmount: so.grand_total ? so.grand_total / 100 : 0,  // Invoice Amount (cents to dollars)
+      // Prices are dynamic per product via items[].unitPrice
+      payment50PercentDate: null,  // 50% Payment Date
+      remaining50DueDate: null,    // Remaining 50% Due Date
       status: mapSalesOrderStatusToSupplier(so.status),
-      actionRequired: '',
+      actionRequired: so.internal_notes || '',  // Action Required / Notes (from internal_notes)
+      ankurNotes: '',  // Ankur Comments (separate field - TODO: add to DB if needed)
     });
   });
 
@@ -719,7 +815,7 @@ export async function getGDC1Inventory(): Promise<{ data: GDC1InventoryItem[]; u
     throw error;
   }
 
-  // Get sales order items for SKU breakdown with product names - only inventory products
+  // Get sales order items for SKU breakdown with product names and prices - only inventory products
   const salesOrderIds = salesOrders?.map((s) => s.id) || [];
 
   const { data: items } = await supabase
@@ -737,13 +833,16 @@ export async function getGDC1Inventory(): Promise<{ data: GDC1InventoryItem[]; u
     .eq('products.item_type', 'inventory');
 
   // Group items by sales order and build SKU info map
-  const itemsBySalesOrder = new Map<string, { sku: string; productName: string; qty: number }[]>();
+  // Also track prices per SKU per order for price columns
+  const itemsBySalesOrder = new Map<string, { sku: string; productName: string; qty: number; unitPrice: number }[]>();
   const skuInfoMap = new Map<string, string>(); // sku -> productName
 
   items?.forEach((item) => {
     // Get product name: prefer products.name, fallback to description, then sku
     const productData = toOne(item.products);
     const productName = productData?.name || item.description || item.sku;
+    // unit_price is stored in cents, convert to dollars
+    const unitPrice = item.unit_price ? item.unit_price / 100 : 0;
 
     // Store SKU info for column headers
     if (!skuInfoMap.has(item.sku)) {
@@ -757,6 +856,7 @@ export async function getGDC1Inventory(): Promise<{ data: GDC1InventoryItem[]; u
       sku: item.sku,
       productName,
       qty: item.quantity,
+      unitPrice,
     });
   });
 
@@ -786,8 +886,31 @@ export async function getGDC1Inventory(): Promise<{ data: GDC1InventoryItem[]; u
     // Get sales order items
     const soItems = itemsBySalesOrder.get(so.id) || [];
 
-    // Calculate total quantity
+    // Calculate total quantity and per-SKU quantities and prices
     const totalQty = soItems.reduce((sum, item) => sum + item.qty, 0);
+
+    // Calculate specific SKU quantities and extract prices (for 290/85R38 and 380/85R24)
+    let sku290Qty = 0;
+    let sku380Qty = 0;
+    let price38: number | null = null;  // Price for 38" tire (290/85R38)
+    let price24: number | null = null;  // Price for 24" tire (380/85R24)
+
+    soItems.forEach((item) => {
+      const skuLower = item.sku.toLowerCase();
+      if (skuLower.includes('290/85r38') || skuLower.includes('290-85r38') || skuLower.includes('38')) {
+        sku290Qty += item.qty;
+        // Get price for 38" tire (use first price found)
+        if (price38 === null && item.unitPrice > 0) {
+          price38 = item.unitPrice;
+        }
+      } else if (skuLower.includes('380/85r24') || skuLower.includes('380-85r24') || skuLower.includes('24')) {
+        sku380Qty += item.qty;
+        // Get price for 24" tire (use first price found)
+        if (price24 === null && item.unitPrice > 0) {
+          price24 = item.unitPrice;
+        }
+      }
+    });
 
     // Build address
     const addressParts = [
@@ -797,35 +920,31 @@ export async function getGDC1Inventory(): Promise<{ data: GDC1InventoryItem[]; u
       so.shipping_address_postal_code,
     ].filter(Boolean);
 
-    // Build ship window from requested_delivery_date (single date for now)
-    let shipWindow: string | null = null;
-    if (so.requested_delivery_date) {
-      const date = new Date(so.requested_delivery_date);
-      shipWindow = `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
-    }
-
     result.push({
       id: so.id,
       no: index + 1,
       loadNumber: so.order_number,
+      sku290Qty,   // 290/85R38 CW Qty
+      sku380Qty,   // 380/85R24 CW Qty
       items: soItems,
       totalQty: totalQty,
       customer: customerData?.name || null,
       po: so.customer_po_number || null,
-      customerShipWindow: shipWindow,
+      etaToUsPort: null,  // ETA to US Port (from shipping info)
       deliveryAddress: addressParts.join(', '),
-      etaToUsPort: null,  // Not applicable for warehouse orders
-      customerDueDate: so.requested_delivery_date,
-      actualDelivery: null,  // Will be updated when shipped
-      qtyDelivered: 0,       // Will be updated when shipped
-      outstandingPoQty: totalQty,  // All qty is outstanding until shipped
-      invoiceNumber: null,   // Will be updated when invoiced
-      invoiceAmount: so.grand_total ? so.grand_total / 100 : 0,  // Convert cents to dollars
-      payment50PercentDate: null,
-      remaining50DueDate: null,
+      confirmedEta: null,  // Confirmed ETA from shipping system
+      customerExpectedDelivery: so.requested_delivery_date,  // Customer Expected Delivery
+      actualDelivery: null,  // Actual Delivery Date
+      qtyDelivered: 0,       // Qty Delivered
+      outstandingPoQty: totalQty,  // Outstanding Qty for PO
+      invoiceNumber: null,   // Invoice #
+      invoiceAmount: so.grand_total ? so.grand_total / 100 : 0,  // Invoice Amount (cents to dollars)
+      // Prices are dynamic per product via items[].unitPrice
+      payment50PercentDate: null,  // 50% Payment Date
+      remaining50DueDate: null,    // Remaining 50% Due Date
       status: mapSalesOrderStatus(so.status),
-      actionRequired: '',
-      ankurNotes: so.internal_notes || '',
+      actionRequired: so.internal_notes || '',  // Action Required / Notes (from internal_notes)
+      ankurNotes: '',  // Ankur Comments (separate field - TODO: add to DB if needed)
     });
   });
 

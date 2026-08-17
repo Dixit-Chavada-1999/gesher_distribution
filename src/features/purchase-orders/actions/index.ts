@@ -2,6 +2,9 @@
  * Purchase Orders Server Actions
  *
  * Next.js server actions for Purchase Orders feature.
+ *
+ * Every action authenticates the caller and checks the matching
+ * `purchase_orders.*` permission before touching the service layer.
  */
 
 'use server';
@@ -9,6 +12,8 @@
 import { revalidatePath } from 'next/cache';
 import { purchaseOrderService } from '../services/purchase-order.service';
 import { createClient } from '@/shared/lib/supabase/server';
+import { getCurrentUser, hasPermission, hasAnyPermission } from '@/shared/lib/auth';
+import type { AppUser } from '@/shared/stores/auth.store';
 import type { POListParams, SupplierSummary } from '../types';
 import type {
   CreatePOInput,
@@ -16,28 +21,58 @@ import type {
 } from '../lib/schemas';
 
 // ============================================
-// HELPER: Get current user ID
+// TYPES
 // ============================================
 
-async function getCurrentUserId(): Promise<string | undefined> {
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+interface ActionResult<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}
 
-    if (!user) {return undefined;}
+// ============================================
+// AUTHORIZATION HELPERS
+// ============================================
 
-    const { data } = await supabase
-      .from('users')
-      .select('id')
-      .eq('auth_user_id', user.id)
-      .single();
+type AuthorizeResult =
+  | { ok: true; user: AppUser }
+  | { ok: false; result: ActionResult<never> };
 
-    return data?.id;
-  } catch {
-    return undefined;
+/**
+ * Resolve the current application user and verify a permission.
+ */
+async function authorize(permission: string): Promise<AuthorizeResult> {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return { ok: false, result: { success: false, error: 'Authentication required' } };
   }
+
+  if (!hasPermission(user, permission)) {
+    return { ok: false, result: { success: false, error: `Permission denied: ${permission}` } };
+  }
+
+  return { ok: true, user };
+}
+
+/**
+ * Same as `authorize`, but any one of the permissions is enough.
+ */
+async function authorizeAny(permissions: string[]): Promise<AuthorizeResult> {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return { ok: false, result: { success: false, error: 'Authentication required' } };
+  }
+
+  if (!hasAnyPermission(user, permissions)) {
+    return {
+      ok: false,
+      result: { success: false, error: `Permission denied: requires one of [${permissions.join(', ')}]` },
+    };
+  }
+
+  return { ok: true, user };
 }
 
 // ============================================
@@ -45,6 +80,11 @@ async function getCurrentUserId(): Promise<string | undefined> {
 // ============================================
 
 export async function listPurchaseOrders(params: POListParams = {}) {
+  const auth = await authorize('purchase_orders.view_module');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
   const result = await purchaseOrderService.list(params);
   return result;
 }
@@ -54,6 +94,11 @@ export async function listPurchaseOrders(params: POListParams = {}) {
 // ============================================
 
 export async function getPurchaseOrder(id: string) {
+  const auth = await authorizeAny(['purchase_orders.view_detail', 'purchase_orders.edit']);
+  if (!auth.ok) {
+    return auth.result;
+  }
+
   const result = await purchaseOrderService.getById(id);
   return result;
 }
@@ -63,8 +108,12 @@ export async function getPurchaseOrder(id: string) {
 // ============================================
 
 export async function createPurchaseOrder(data: CreatePOInput) {
-  const userId = await getCurrentUserId();
-  const result = await purchaseOrderService.create(data, userId);
+  const auth = await authorize('purchase_orders.create');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  const result = await purchaseOrderService.create(data, auth.user.id);
 
   if (result.success) {
     revalidatePath('/purchase-orders');
@@ -78,8 +127,12 @@ export async function createPurchaseOrder(data: CreatePOInput) {
 // ============================================
 
 export async function updatePurchaseOrder(id: string, data: UpdatePOInput) {
-  const userId = await getCurrentUserId();
-  const result = await purchaseOrderService.update(id, data, userId);
+  const auth = await authorize('purchase_orders.edit');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  const result = await purchaseOrderService.update(id, data, auth.user.id);
 
   if (result.success) {
     revalidatePath('/purchase-orders');
@@ -94,8 +147,12 @@ export async function updatePurchaseOrder(id: string, data: UpdatePOInput) {
 // ============================================
 
 export async function deletePurchaseOrder(id: string) {
-  const userId = await getCurrentUserId();
-  const result = await purchaseOrderService.delete(id, userId);
+  const auth = await authorize('purchase_orders.delete');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  const result = await purchaseOrderService.delete(id, auth.user.id);
 
   if (result.success) {
     revalidatePath('/purchase-orders');
@@ -109,8 +166,12 @@ export async function deletePurchaseOrder(id: string) {
 // ============================================
 
 export async function sendPurchaseOrder(id: string) {
-  const userId = await getCurrentUserId();
-  const result = await purchaseOrderService.send(id, userId);
+  const auth = await authorize('purchase_orders.send');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  const result = await purchaseOrderService.send(id, auth.user.id);
 
   if (result.success) {
     revalidatePath('/purchase-orders');
@@ -121,8 +182,12 @@ export async function sendPurchaseOrder(id: string) {
 }
 
 export async function confirmPurchaseOrder(id: string) {
-  const userId = await getCurrentUserId();
-  const result = await purchaseOrderService.confirm(id, userId);
+  const auth = await authorize('purchase_orders.confirm');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  const result = await purchaseOrderService.confirm(id, auth.user.id);
 
   if (result.success) {
     revalidatePath('/purchase-orders');
@@ -133,8 +198,12 @@ export async function confirmPurchaseOrder(id: string) {
 }
 
 export async function markPurchaseOrderPartial(id: string) {
-  const userId = await getCurrentUserId();
-  const result = await purchaseOrderService.markPartial(id, userId);
+  const auth = await authorize('purchase_orders.receive');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  const result = await purchaseOrderService.markPartial(id, auth.user.id);
 
   if (result.success) {
     revalidatePath('/purchase-orders');
@@ -145,8 +214,12 @@ export async function markPurchaseOrderPartial(id: string) {
 }
 
 export async function markPurchaseOrderReceived(id: string) {
-  const userId = await getCurrentUserId();
-  const result = await purchaseOrderService.markReceived(id, userId);
+  const auth = await authorize('purchase_orders.receive');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  const result = await purchaseOrderService.markReceived(id, auth.user.id);
 
   if (result.success) {
     revalidatePath('/purchase-orders');
@@ -157,8 +230,12 @@ export async function markPurchaseOrderReceived(id: string) {
 }
 
 export async function cancelPurchaseOrder(id: string) {
-  const userId = await getCurrentUserId();
-  const result = await purchaseOrderService.cancel(id, userId);
+  const auth = await authorize('purchase_orders.cancel');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  const result = await purchaseOrderService.cancel(id, auth.user.id);
 
   if (result.success) {
     revalidatePath('/purchase-orders');
@@ -173,6 +250,11 @@ export async function cancelPurchaseOrder(id: string) {
 // ============================================
 
 export async function getSuppliersForDropdown(): Promise<SupplierSummary[]> {
+  const auth = await authorize('purchase_orders.view_module');
+  if (!auth.ok) {
+    return [];
+  }
+
   try {
     const supabase = await createClient();
     const { data, error } = await supabase

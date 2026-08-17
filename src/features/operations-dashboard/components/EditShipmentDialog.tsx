@@ -3,7 +3,8 @@
 /**
  * Edit Shipment Dialog
  *
- * Dialog for Jenny to update shipment status and notes.
+ * Simple dialog for Jenny to update status and notes.
+ * Works with both Shipments and Sales Orders.
  */
 
 import { useState, useEffect, useTransition } from 'react';
@@ -31,7 +32,7 @@ import {
 import { Badge } from '@/shared/components/ui/badge';
 import { toast } from 'sonner';
 
-import { updateShipmentStatus } from '../actions';
+import { updateShipmentOrOrder } from '../actions';
 import type { ShipmentStatus } from '../types';
 
 // ============================================
@@ -50,25 +51,55 @@ interface ShipmentData {
   totalQty?: number;
 }
 
+export type EditSource = 'supplier' | 'gdc1' | 'shipment';
+
 interface EditShipmentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   shipment: ShipmentData | null;
   onSuccess?: () => void;
+  source?: EditSource; // Which table the edit is from
 }
 
 // ============================================
-// STATUS OPTIONS
+// STATUS OPTIONS (Based on Jenny's Master Sheet)
 // ============================================
 
-const STATUS_OPTIONS: { value: ShipmentStatus; label: string; color: string }[] = [
+// Galileo/Supplier Orders statuses
+const SUPPLIER_STATUS_OPTIONS: { value: ShipmentStatus; label: string; color: string }[] = [
+  { value: 'OPEN', label: 'Open', color: 'bg-blue-100 text-blue-800' },
+  { value: 'IN_TRANSIT', label: 'In Transit', color: 'bg-yellow-100 text-yellow-800' },
+  { value: 'AVAILABLE', label: 'Available', color: 'bg-green-100 text-green-800' },
+  { value: 'HOLD', label: 'Hold', color: 'bg-orange-100 text-orange-800' },
+  { value: 'INVOICED', label: 'Invoiced', color: 'bg-emerald-100 text-emerald-800' },
+  { value: 'NOT_INVOICED', label: 'Not Invoiced', color: 'bg-amber-100 text-amber-800' },
+  { value: 'CLOSED', label: 'Closed', color: 'bg-gray-100 text-gray-800' },
+];
+
+// GDC1 Inventory statuses
+const GDC1_STATUS_OPTIONS: { value: ShipmentStatus; label: string; color: string }[] = [
+  { value: 'AVAILABLE', label: 'Available', color: 'bg-green-100 text-green-800' },
+  { value: 'OPEN', label: 'Open', color: 'bg-blue-100 text-blue-800' },
+  { value: 'IN_TRANSIT', label: 'In Transit', color: 'bg-yellow-100 text-yellow-800' },
+  { value: 'SOLD', label: 'Sold', color: 'bg-purple-100 text-purple-800' },
+  { value: 'HOLD', label: 'Hold', color: 'bg-orange-100 text-orange-800' },
+  { value: 'NOT_INVOICED', label: 'Not Invoiced', color: 'bg-amber-100 text-amber-800' },
+  { value: 'PARTIALLY_PAID', label: 'Partially Paid', color: 'bg-cyan-100 text-cyan-800' },
+  { value: 'PAID', label: 'Paid', color: 'bg-teal-100 text-teal-800' },
+  { value: 'DISPUTED', label: 'Disputed', color: 'bg-red-100 text-red-800' },
+  { value: 'PO_NEEDED', label: 'PO Needed', color: 'bg-pink-100 text-pink-800' },
+  { value: 'CLOSED', label: 'Closed', color: 'bg-gray-100 text-gray-800' },
+];
+
+// Default statuses (for Immediate Attention / Shipments)
+const DEFAULT_STATUS_OPTIONS: { value: ShipmentStatus; label: string; color: string }[] = [
   { value: 'OPEN', label: 'Open', color: 'bg-blue-100 text-blue-800' },
   { value: 'IN_TRANSIT', label: 'In Transit', color: 'bg-yellow-100 text-yellow-800' },
   { value: 'AVAILABLE', label: 'Available', color: 'bg-green-100 text-green-800' },
   { value: 'SOLD', label: 'Sold', color: 'bg-purple-100 text-purple-800' },
   { value: 'HOLD', label: 'Hold', color: 'bg-orange-100 text-orange-800' },
   { value: 'INVOICED', label: 'Invoiced', color: 'bg-emerald-100 text-emerald-800' },
-  { value: 'DELIVERED', label: 'Delivered', color: 'bg-gray-100 text-gray-800' },
+  { value: 'DELIVERED', label: 'Delivered', color: 'bg-slate-100 text-slate-800' },
 ];
 
 // ============================================
@@ -80,15 +111,29 @@ export function EditShipmentDialog({
   onOpenChange,
   shipment,
   onSuccess,
+  source = 'shipment',
 }: EditShipmentDialogProps) {
   const [isPending, startTransition] = useTransition();
+
+  // Get status options based on source
+  const getStatusOptions = () => {
+    switch (source) {
+      case 'supplier':
+        return SUPPLIER_STATUS_OPTIONS;
+      case 'gdc1':
+        return GDC1_STATUS_OPTIONS;
+      default:
+        return DEFAULT_STATUS_OPTIONS;
+    }
+  };
+
+  const statusOptions = getStatusOptions();
 
   // Form state
   const [status, setStatus] = useState<ShipmentStatus>(shipment?.status || 'OPEN');
   const [actionRequired, setActionRequired] = useState(shipment?.actionRequired || '');
   const [confirmedEta, setConfirmedEta] = useState(shipment?.confirmedEta || '');
   const [actualDeliveryDate, setActualDeliveryDate] = useState(shipment?.actualDeliveryDate || '');
-  const [qtyDelivered, setQtyDelivered] = useState(shipment?.qtyDelivered?.toString() || '0');
 
   // Reset form when shipment changes
   useEffect(() => {
@@ -97,7 +142,6 @@ export function EditShipmentDialog({
       setActionRequired(shipment.actionRequired || '');
       setConfirmedEta(shipment.confirmedEta || '');
       setActualDeliveryDate(shipment.actualDeliveryDate || '');
-      setQtyDelivered(shipment.qtyDelivered?.toString() || '0');
     }
   }, [shipment]);
 
@@ -107,24 +151,23 @@ export function EditShipmentDialog({
     }
 
     startTransition(async () => {
-      const result = await updateShipmentStatus({
-        shipmentId: shipment.id,
-        loadStatus: status,
-        actionRequired,
-        confirmedEta: confirmedEta || null,
-        actualDeliveryDate: actualDeliveryDate || null,
-        qtyDelivered: parseInt(qtyDelivered, 10) || 0,
+      const result = await updateShipmentOrOrder({
+        id: shipment.id,
+        status: status,
+        etaToPort: confirmedEta || null,
+        customerExpectedDelivery: actualDeliveryDate || null,
+        actionRequired: actionRequired || null,
       });
 
       if (result.success) {
-        toast.success('Shipment Updated', {
-          description: `${shipment.loadNumber} status updated to ${status}`,
+        toast.success('Status Updated', {
+          description: `${shipment.loadNumber} updated successfully`,
         });
         onOpenChange(false);
         onSuccess?.();
       } else {
         toast.error('Error', {
-          description: result.error || 'Failed to update shipment',
+          description: result.error || 'Failed to update',
         });
       }
     });
@@ -136,14 +179,14 @@ export function EditShipmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Truck className="h-5 w-5" />
-            Edit Shipment
+            Edit Status
           </DialogTitle>
           <DialogDescription>
-            Update status and details for{' '}
+            Update status for{' '}
             <span className="font-semibold">{shipment.loadNumber}</span>
             {shipment.customer && (
               <>
@@ -158,8 +201,8 @@ export function EditShipmentDialog({
           {/* Current Status Badge */}
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Current:</span>
-            <Badge variant="outline" className={STATUS_OPTIONS.find(s => s.value === shipment.status)?.color}>
-              {shipment.status}
+            <Badge variant="outline" className={statusOptions.find(s => s.value === shipment.status)?.color || 'bg-gray-100 text-gray-800'}>
+              {shipment.status.replace('_', ' ')}
             </Badge>
           </div>
 
@@ -168,7 +211,7 @@ export function EditShipmentDialog({
             <Label htmlFor="status">
               <span className="flex items-center gap-2">
                 <Package className="h-4 w-4" />
-                Load Status
+                New Status
               </span>
             </Label>
             <Select value={status} onValueChange={(v) => setStatus(v as ShipmentStatus)}>
@@ -176,7 +219,7 @@ export function EditShipmentDialog({
                 <SelectValue placeholder="Select status" />
               </SelectTrigger>
               <SelectContent>
-                {STATUS_OPTIONS.map((option) => (
+                {statusOptions.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     <div className="flex items-center gap-2">
                       <div className={`w-2 h-2 rounded-full ${option.color.split(' ')[0]}`} />
@@ -188,12 +231,12 @@ export function EditShipmentDialog({
             </Select>
           </div>
 
-          {/* Confirmed ETA */}
+          {/* ETA to Port */}
           <div className="space-y-2">
             <Label htmlFor="confirmedEta">
               <span className="flex items-center gap-2">
                 <Calendar className="h-4 w-4" />
-                Confirmed ETA
+                ETA to Port
               </span>
             </Label>
             <Input
@@ -204,12 +247,12 @@ export function EditShipmentDialog({
             />
           </div>
 
-          {/* Actual Delivery Date */}
+          {/* Customer Expected Delivery */}
           <div className="space-y-2">
             <Label htmlFor="actualDeliveryDate">
               <span className="flex items-center gap-2">
                 <Calendar className="h-4 w-4" />
-                Actual Delivery Date
+                Customer Expected Delivery
               </span>
             </Label>
             <Input
@@ -217,25 +260,6 @@ export function EditShipmentDialog({
               type="date"
               value={actualDeliveryDate}
               onChange={(e) => setActualDeliveryDate(e.target.value)}
-            />
-          </div>
-
-          {/* Qty Delivered */}
-          <div className="space-y-2">
-            <Label htmlFor="qtyDelivered">
-              Qty Delivered
-              {shipment.totalQty && (
-                <span className="text-muted-foreground ml-1">
-                  (of {shipment.totalQty})
-                </span>
-              )}
-            </Label>
-            <Input
-              id="qtyDelivered"
-              type="number"
-              min="0"
-              value={qtyDelivered}
-              onChange={(e) => setQtyDelivered(e.target.value)}
             />
           </div>
 
@@ -254,9 +278,6 @@ export function EditShipmentDialog({
               placeholder="Add notes or action items..."
               rows={3}
             />
-            <p className="text-xs text-muted-foreground">
-              Use | to separate multiple action items
-            </p>
           </div>
         </div>
 

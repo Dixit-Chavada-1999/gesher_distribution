@@ -87,8 +87,8 @@ export default function PurchaseOrdersPage() {
     setIsCreateDrawerOpen(false);
   };
 
-  const handleCreateSuccess = () => {
-    refetchPOs();
+  const handleCreateSuccess = async () => {
+    await refetchPOs();
   };
 
   const handleView = useCallback((po: POListItem) => {
@@ -110,11 +110,10 @@ export default function PurchaseOrdersPage() {
   const handleEditDrawerClose = useCallback(() => {
     setIsEditDrawerOpen(false);
     setSelectedPOId(null);
-    refetchPOs();
-  }, [refetchPOs]);
+  }, []);
 
-  const handleEditSuccess = useCallback(() => {
-    refetchPOs();
+  const handleEditSuccess = useCallback(async () => {
+    await refetchPOs();
   }, [refetchPOs]);
 
   const handleDeleteClick = useCallback((po: POListItem) => {
