@@ -990,6 +990,7 @@ export async function getSalesOrderMasterData(): Promise<ActionResult<{
       db.from('locations')
         .select('id, location_code, name')
         .eq('is_active', true)
+        .eq('location_type', 'warehouse')  // Only show actual warehouses, not drop_ship
         .is('deleted_at', null)
         .order('name'),
       db.from('users')

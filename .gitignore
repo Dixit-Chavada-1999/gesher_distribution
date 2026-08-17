@@ -19,6 +19,7 @@
 .DS_Store
 *.pem
 Thumbs.db
+CLAUDE.md
 
 # Debug
 npm-debug.log*
