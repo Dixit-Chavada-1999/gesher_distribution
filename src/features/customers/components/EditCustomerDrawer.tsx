@@ -164,7 +164,7 @@ export function EditCustomerDrawer({
 
   return (
     <Dialog open={open} onOpenChange={handleCancel}>
-      <DialogContent className="flex max-h-[90vh] w-full max-w-4xl flex-col p-0">
+      <DialogContent className="flex max-h-[90vh] h-[90vh] w-full max-w-4xl flex-col overflow-hidden p-0">
         {/* Header */}
         <DialogHeader className="flex-shrink-0 border-b px-6 py-4">
           <DialogTitle className="text-xl font-semibold">
@@ -176,7 +176,7 @@ export function EditCustomerDrawer({
         </DialogHeader>
 
         {/* Content */}
-        <ScrollArea className="flex-1 overflow-auto">
+        <ScrollArea className="flex-1 h-0 min-h-0">
           <div className="px-6 py-4">
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
