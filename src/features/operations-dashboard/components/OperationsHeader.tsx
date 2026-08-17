@@ -6,16 +6,9 @@
  * Page header for the operations dashboard with refresh and export actions.
  */
 
-import { RefreshCw, Download, Calendar, ChevronDown, FileSpreadsheet } from 'lucide-react';
+import { RefreshCw, Calendar } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/shared/components/ui/dropdown-menu';
 
 // ============================================
 // TYPES
@@ -42,7 +35,7 @@ interface OperationsHeaderProps {
 export function OperationsHeader({
   lastUpdated,
   onRefresh,
-  onExport,
+  onExport: _onExport,
   isRefreshing = false,
 }: OperationsHeaderProps) {
   const formatDate = (date: Date) => {
@@ -82,6 +75,7 @@ export function OperationsHeader({
           <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
           Refresh
         </Button>
+        {/* Export button hidden for now - can be re-enabled later
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm">
@@ -114,6 +108,7 @@ export function OperationsHeader({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        */}
       </div>
     </div>
   );

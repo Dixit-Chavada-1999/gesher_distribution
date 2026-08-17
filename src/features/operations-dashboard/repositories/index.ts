@@ -149,50 +149,68 @@ export async function getOperationsStats(): Promise<OperationsStats> {
 // GET SKU BREAKDOWN
 // ============================================
 
+/**
+ * SKU Breakdown - Combined inventory across Supplier and GDC1
+ *
+ * Fetches from sales_order_items based on product_source:
+ * - Supplier Outstanding: sales_orders where product_source = 'dropship'
+ * - GDC1 Available: sales_orders where product_source = 'warehouse'
+ * - Only includes inventory-type products (excludes non_inventory and service)
+ */
 export async function getSKUBreakdown(): Promise<SKUBreakdown[]> {
   const supabase = await createClient();
 
-  // Get shipment items with SKU info
+  // Get sales order items with product_source info - only inventory products
   const { data: items, error } = await supabase
-    .from('shipment_items')
+    .from('sales_order_items')
     .select(`
       sku,
-      quantity_shipped,
-      shipment:shipments!inner(
+      quantity,
+      product:products!inner(
         id,
-        load_status,
+        name,
+        item_type
+      ),
+      sales_order:sales_orders!inner(
+        id,
+        product_source,
+        status,
         deleted_at
       )
     `)
-    .is('shipment.deleted_at', null);
+    .is('sales_order.deleted_at', null)
+    .neq('sales_order.status', 'cancelled')
+    .eq('product.item_type', 'inventory');
 
   if (error) {
     console.error('Error fetching SKU breakdown:', error);
     throw error;
   }
 
-  // Aggregate by SKU
-  const skuMap = new Map<string, { supplier: number; gdc1: number }>();
+  // Aggregate by SKU - also track product name
+  const skuMap = new Map<string, { supplier: number; gdc1: number; productName: string }>();
 
   items?.forEach((item) => {
     const sku = item.sku || 'Unknown';
-    const qty = item.quantity_shipped || 0;
-    const shipment = toOne(item.shipment);
-    const status = shipment?.load_status || 'open';
+    const qty = item.quantity || 0;
+    const salesOrder = toOne(item.sales_order);
+    const product = toOne(item.product);
+    const productSource = salesOrder?.product_source || 'dropship';
+    const productName = product?.name || sku;
 
     if (!skuMap.has(sku)) {
-      skuMap.set(sku, { supplier: 0, gdc1: 0 });
+      skuMap.set(sku, { supplier: 0, gdc1: 0, productName });
     }
 
     const current = skuMap.get(sku)!;
 
-    // Supplier outstanding = open, in_transit
-    if (status === 'open' || status === 'in_transit') {
+    // Supplier outstanding = dropship orders
+    if (productSource === 'dropship') {
       current.supplier += qty;
     }
 
-    // GDC1 available = available
-    if (status === 'available') {
+    // GDC1 available = warehouse orders
+    if (productSource === 'warehouse') {
       current.gdc1 += qty;
     }
   });
@@ -209,7 +227,7 @@ export async function getSKUBreakdown(): Promise<SKUBreakdown[]> {
     const combined = val.supplier + val.gdc1;
     result.push({
       sku,
-      skuName: sku,
+      skuName: val.productName,  // Use product name instead of SKU
       supplierOutstandingQty: val.supplier,
       gdc1AvailableInventory: val.gdc1,
       combinedQty: combined,
@@ -477,44 +495,49 @@ export async function getUniqueSKUs(): Promise<string[]> {
 // GET SUPPLIER SHIPMENT SCHEDULE (Galileo)
 // ============================================
 
+/**
+ * Supplier Shipment Schedule - Sales Orders fulfilled via Dropship
+ *
+ * Shows Sales Orders where product_source = 'dropship'
+ * These are orders that ship directly from supplier (Galileo) to customer
+ * Status mapping:
+ *   - draft, pending → OPEN (order placed, not yet confirmed)
+ *   - confirmed, processing → SOLD (committed to customer)
+ *   - shipped → IN_TRANSIT
+ *   - delivered → DELIVERED
+ *   - cancelled → excluded
+ */
 export async function getSupplierShipmentSchedule(): Promise<{ data: ShipmentScheduleItem[]; uniqueSkus: SKUColumnInfo[] }> {
   const supabase = await createClient();
 
-  // Get shipments from SUPPLIER (Dropship) - source = 'supplier'
-  const { data: shipments, error } = await supabase
-    .from('shipments')
+  // Get Sales Orders where product_source = 'dropship' (Supplier/Galileo)
+  const { data: salesOrders, error } = await supabase
+    .from('sales_orders')
     .select(`
       id,
-      shipment_number,
-      supplier_reference_number,
-      total_qty,
-      qty_delivered,
-      outstanding_qty,
-      eta_to_port,
-      confirmed_eta,
-      customer_expected_delivery,
-      actual_arrival,
-      estimated_arrival,
-      load_status,
-      action_required,
-      ship_to_address_street,
-      ship_to_address_city,
-      ship_to_address_state,
-      ship_to_address_postal_code,
-      sales_order_id,
-      source,
-      sales_orders(
+      order_number,
+      order_date,
+      customer_id,
+      customer_po_number,
+      requested_delivery_date,
+      status,
+      product_source,
+      shipping_address_street,
+      shipping_address_city,
+      shipping_address_state,
+      shipping_address_postal_code,
+      subtotal,
+      grand_total,
+      internal_notes,
+      created_at,
+      customers(
         id,
-        customer_po_number,
-        requested_delivery_date,
-        customers(
-          id,
-          name
-        )
+        name
       )
     `)
     .is('deleted_at', null)
-    .eq('source', 'supplier')
+    .eq('product_source', 'dropship')
+    .neq('status', 'cancelled')
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -522,22 +545,25 @@ export async function getSupplierShipmentSchedule(): Promise<{ data: ShipmentSch
     throw error;
   }
 
-  // Get shipment items for SKU breakdown with product names
-  const shipmentIds = shipments?.map((s) => s.id) || [];
+  // Get sales order items for SKU breakdown with product names - only inventory products
+  const salesOrderIds = salesOrders?.map((s) => s.id) || [];
 
   const { data: items } = await supabase
-    .from('shipment_items')
+    .from('sales_order_items')
     .select(`
-      shipment_id,
+      sales_order_id,
       sku,
       description,
-      quantity_shipped,
-      products(id, name)
+      quantity,
+      unit_price,
+      line_total,
+      products!inner(id, name, item_type)
     `)
-    .in('shipment_id', shipmentIds);
+    .in('sales_order_id', salesOrderIds)
+    .eq('products.item_type', 'inventory');
 
-  // Group items by shipment and build SKU info map
-  const itemsByShipment = new Map<string, { sku: string; productName: string; qty: number }[]>();
+  // Group items by sales order and build SKU info map
+  const itemsBySalesOrder = new Map<string, { sku: string; productName: string; qty: number }[]>();
   const skuInfoMap = new Map<string, string>(); // sku -> productName
 
   items?.forEach((item) => {
@@ -550,62 +576,77 @@ export async function getSupplierShipmentSchedule(): Promise<{ data: ShipmentSch
       skuInfoMap.set(item.sku, productName);
     }
 
-    if (!itemsByShipment.has(item.shipment_id)) {
-      itemsByShipment.set(item.shipment_id, []);
+    if (!itemsBySalesOrder.has(item.sales_order_id)) {
+      itemsBySalesOrder.set(item.sales_order_id, []);
     }
-    itemsByShipment.get(item.shipment_id)!.push({
+    itemsBySalesOrder.get(item.sales_order_id)!.push({
       sku: item.sku,
       productName,
-      qty: item.quantity_shipped,
+      qty: item.quantity,
     });
   });
 
+  // Map Sales Order status to ShipmentStatus for Supplier Schedule
+  const mapSalesOrderStatusToSupplier = (status: string): ShipmentStatus => {
+    switch (status) {
+      case 'draft':
+      case 'pending':
+        return 'OPEN';       // Order placed, not yet confirmed
+      case 'confirmed':
+      case 'processing':
+        return 'SOLD';       // Committed to customer
+      case 'shipped':
+        return 'IN_TRANSIT'; // On the way
+      case 'delivered':
+        return 'DELIVERED';  // Delivered to customer
+      default:
+        return 'OPEN';
+    }
+  };
+
   const result: ShipmentScheduleItem[] = [];
 
-  shipments?.forEach((s, index) => {
-    // Handle relationship data - sales orders
-    const salesOrderData = toOne(s.sales_orders);
+  salesOrders?.forEach((so, index) => {
+    // Handle relationship data - customers
+    const customerData = toOne(so.customers);
 
-    // Get shipment items for this shipment
-    const shipmentItems = itemsByShipment.get(s.id) || [];
+    // Get sales order items
+    const soItems = itemsBySalesOrder.get(so.id) || [];
+
+    // Calculate total quantity
+    const totalQty = soItems.reduce((sum, item) => sum + item.qty, 0);
 
     // Build address
     const addressParts = [
-      s.ship_to_address_street,
-      s.ship_to_address_city,
-      s.ship_to_address_state,
-      s.ship_to_address_postal_code,
+      so.shipping_address_street,
+      so.shipping_address_city,
+      so.shipping_address_state,
+      so.shipping_address_postal_code,
     ].filter(Boolean);
 
-    // Load # priority: shipment_number > supplier_reference_number > N/A
-    const loadNumber = s.shipment_number || s.supplier_reference_number || 'N/A';
+    // For dropship orders, use order_number as load number
+    const loadNumber = so.order_number || 'N/A';
 
-    // PO # from sales order
-    const poNumber = salesOrderData?.customer_po_number || 'N/A';
-
-    // Use eta_to_port or estimated_arrival as fallback
-    const etaDate = s.eta_to_port || s.estimated_arrival;
-
-    // Use customer_expected_delivery or requested_delivery_date from SO as fallback
-    const customerDueDate = s.customer_expected_delivery || salesOrderData?.requested_delivery_date;
+    // PO # from customer_po_number
+    const poNumber = so.customer_po_number || 'N/A';
 
     result.push({
-      id: s.id,
+      id: so.id,
       no: index + 1,
       loadNumber,
-      items: shipmentItems,
-      totalQty: s.total_qty || 0,
-      customer: toOne(salesOrderData?.customers)?.name || 'Unknown',
+      items: soItems,
+      totalQty: totalQty,
+      customer: customerData?.name || 'Unknown',
       po: poNumber,
-      etaToUsPort: etaDate,
+      etaToUsPort: null,  // Will be updated when shipment info is available
       deliveryAddress: addressParts.join(', '),
-      confirmedEta: s.confirmed_eta,
-      customerExpectedDelivery: customerDueDate,
-      actualDeliveryDate: s.actual_arrival,
-      qtyDelivered: s.qty_delivered || 0,
-      outstandingQtyForPO: s.outstanding_qty || 0,
-      status: mapLoadStatus(s.load_status),
-      actionRequired: s.action_required || '',
+      confirmedEta: null, // Will be updated when shipment info is available
+      customerExpectedDelivery: so.requested_delivery_date,
+      actualDeliveryDate: null, // Will be updated when delivered
+      qtyDelivered: 0,          // Will be updated when delivered
+      outstandingQtyForPO: totalQty, // All qty is outstanding until delivered
+      status: mapSalesOrderStatusToSupplier(so.status),
+      actionRequired: '',
     });
   });
 
@@ -678,7 +719,7 @@ export async function getGDC1Inventory(): Promise<{ data: GDC1InventoryItem[]; u
     throw error;
   }
 
-  // Get sales order items for SKU breakdown with product names
+  // Get sales order items for SKU breakdown with product names - only inventory products
   const salesOrderIds = salesOrders?.map((s) => s.id) || [];
 
   const { data: items } = await supabase
@@ -690,9 +731,10 @@ export async function getGDC1Inventory(): Promise<{ data: GDC1InventoryItem[]; u
       quantity,
       unit_price,
       line_total,
-      products(id, name)
+      products!inner(id, name, item_type)
     `)
-    .in('sales_order_id', salesOrderIds);
+    .in('sales_order_id', salesOrderIds)
+    .eq('products.item_type', 'inventory');
 
   // Group items by sales order and build SKU info map
   const itemsBySalesOrder = new Map<string, { sku: string; productName: string; qty: number }[]>();

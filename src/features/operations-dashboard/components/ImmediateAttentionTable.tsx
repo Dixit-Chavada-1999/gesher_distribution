@@ -9,7 +9,7 @@
  * - Overdue items highlighted in red
  */
 
-import { AlertTriangle, Truck, Eye, MessageSquare, Pencil } from 'lucide-react';
+import { AlertTriangle, Truck, Pencil } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Badge } from '@/shared/components/ui/badge';
@@ -87,8 +87,8 @@ function getStatusBadge(status: ShipmentStatus, isOverdue: boolean) {
 
 export function ImmediateAttentionTable({
   items,
-  onViewDetails,
-  onAddNote,
+  onViewDetails: _onViewDetails,
+  onAddNote: _onAddNote,
   onEdit,
 }: ImmediateAttentionTableProps) {
   // Sort by overdue first, then by this week, then by date
@@ -186,6 +186,7 @@ export function ImmediateAttentionTable({
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
+                        {/* View and Note icons hidden for now
                         <Button
                           variant="ghost"
                           size="icon"
@@ -204,6 +205,7 @@ export function ImmediateAttentionTable({
                         >
                           <MessageSquare className="h-3.5 w-3.5" />
                         </Button>
+                        */}
                       </div>
                     </TableCell>
                   </TableRow>

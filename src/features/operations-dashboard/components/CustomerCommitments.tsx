@@ -11,11 +11,10 @@
  * - In Transit / Next 7 Days count
  */
 
-import { Users, ExternalLink } from 'lucide-react';
+import { Users } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Badge } from '@/shared/components/ui/badge';
-import { Button } from '@/shared/components/ui/button';
 import {
   Table,
   TableBody,
@@ -57,7 +56,7 @@ function formatNumber(num: number): string {
 // MAIN COMPONENT
 // ============================================
 
-export function CustomerCommitments({ data, onViewCustomer }: CustomerCommitmentsProps) {
+export function CustomerCommitments({ data, onViewCustomer: _onViewCustomer }: CustomerCommitmentsProps) {
   const totalLoads = data.reduce((sum, item) => sum + item.loads, 0);
   const totalQty = data.reduce((sum, item) => sum + item.outstandingQty, 0);
   const totalInvoice = data.reduce((sum, item) => sum + item.invoiceAmount, 0);
@@ -115,6 +114,7 @@ export function CustomerCommitments({ data, onViewCustomer }: CustomerCommitment
                   )}
                 </TableCell>
                 <TableCell className="text-right">
+                  {/* Action icon hidden for now
                   <Button
                     variant="ghost"
                     size="icon"
@@ -123,6 +123,7 @@ export function CustomerCommitments({ data, onViewCustomer }: CustomerCommitment
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
                   </Button>
+                  */}
                 </TableCell>
               </TableRow>
             ))}

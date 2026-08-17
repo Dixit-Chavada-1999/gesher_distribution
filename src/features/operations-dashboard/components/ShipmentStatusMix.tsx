@@ -53,9 +53,24 @@ function getStatusLabel(status: ShipmentStatus): string {
 // ============================================
 
 export function ShipmentStatusMix({ data }: ShipmentStatusMixProps) {
+  // Define all possible statuses to show (even with 0)
+  const allStatuses: ShipmentStatus[] = ['OPEN', 'IN_TRANSIT', 'SOLD', 'AVAILABLE', 'HOLD', 'INVOICED', 'DELIVERED'];
+
+  // Create a map of existing data
+  const dataMap = new Map(data.map(item => [item.status, item]));
+
+  // Merge with all statuses, showing 0 for missing ones
+  const fullData: ShipmentStatusMixType[] = allStatuses.map(status => {
+    const existing = dataMap.get(status);
+    return existing || { status, loads: 0, qty: 0 };
+  });
+
+  // Show all statuses including those with 0 qty
+  const displayData = fullData;
+
   const totalQty = data.reduce((sum, item) => sum + item.qty, 0);
   const totalLoads = data.reduce((sum, item) => sum + item.loads, 0);
-  const maxQty = Math.max(...data.map(item => item.qty));
+  const maxQty = Math.max(...data.map(item => item.qty), 1);
 
   return (
     <Card>
@@ -74,7 +89,7 @@ export function ShipmentStatusMix({ data }: ShipmentStatusMixProps) {
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
-          {data.map((item) => {
+          {displayData.map((item) => {
             const percentage = totalQty > 0 ? (item.qty / totalQty) * 100 : 0;
             const barWidth = maxQty > 0 ? (item.qty / maxQty) * 100 : 0;
 
@@ -105,9 +120,9 @@ export function ShipmentStatusMix({ data }: ShipmentStatusMixProps) {
           })}
         </div>
 
-        {/* Legend */}
+        {/* Legend - only show statuses with data */}
         <div className="mt-4 pt-4 border-t flex flex-wrap gap-4">
-          {data.filter(item => item.qty > 0).map((item) => (
+          {displayData.filter(item => item.qty > 0).map((item) => (
             <div key={item.status} className="flex items-center gap-1.5 text-xs">
               <div className={`w-3 h-3 rounded ${getStatusColor(item.status)}`} />
               <span className="text-muted-foreground">{getStatusLabel(item.status)}</span>

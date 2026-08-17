@@ -61,10 +61,9 @@ export function SupplierShipmentScheduleTable({
     });
   };
 
-  // Get quantity for a specific SKU from items array
+  // Get quantity for a specific SKU from items array (sum all matching items)
   const getSkuQty = (items: { sku: string; qty: number }[], sku: string): number => {
-    const item = items?.find((i) => i.sku === sku);
-    return item?.qty || 0;
+    return items?.filter((i) => i.sku === sku).reduce((sum, i) => sum + i.qty, 0) || 0;
   };
 
   // Calculate totals including per-SKU totals
@@ -101,7 +100,7 @@ export function SupplierShipmentScheduleTable({
                 <TableHead className="min-w-[140px] whitespace-nowrap">Load #</TableHead>
                 {/* Dynamic SKU columns - shows full product name */}
                 {uniqueSkus.map((skuInfo) => (
-                  <TableHead key={skuInfo.sku} className="text-right text-xs whitespace-nowrap min-w-[150px]" title={skuInfo.sku}>
+                  <TableHead key={skuInfo.sku} className="text-center text-xs whitespace-nowrap min-w-[150px]" title={skuInfo.sku}>
                     {skuInfo.productName}
                   </TableHead>
                 ))}
@@ -138,7 +137,7 @@ export function SupplierShipmentScheduleTable({
                   {uniqueSkus.map((skuInfo) => {
                     const qty = getSkuQty(item.items, skuInfo.sku);
                     return (
-                      <TableCell key={skuInfo.sku} className="text-right">
+                      <TableCell key={skuInfo.sku} className="text-center">
                         {qty > 0 ? qty : '-'}
                       </TableCell>
                     );
@@ -186,7 +185,7 @@ export function SupplierShipmentScheduleTable({
                 <TableCell>TOTAL</TableCell>
                 {/* Dynamic SKU totals */}
                 {uniqueSkus.map((skuInfo) => (
-                  <TableCell key={skuInfo.sku} className="text-right">
+                  <TableCell key={skuInfo.sku} className="text-center">
                     {totals.skuTotals[skuInfo.sku] || 0}
                   </TableCell>
                 ))}

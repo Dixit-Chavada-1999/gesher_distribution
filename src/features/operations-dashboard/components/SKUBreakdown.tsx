@@ -73,7 +73,7 @@ export function SKUBreakdown({ data }: SKUBreakdownProps) {
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50">
-              <TableHead>SKU</TableHead>
+              <TableHead>Product/SKU</TableHead>
               <TableHead className="text-right">Supplier Outstanding</TableHead>
               <TableHead className="text-right">GDC1 Available</TableHead>
               <TableHead className="text-right">Combined Qty</TableHead>
