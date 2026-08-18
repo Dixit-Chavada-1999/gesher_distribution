@@ -134,8 +134,8 @@ export async function fetchGDC1Inventory(): Promise<ActionResult<{ data: GDC1Inv
  */
 export async function fetchRimInstallation(): Promise<ActionResult<RimInstallationItem[]>> {
   try {
-    const data = await getRimItems();
-    return { success: true, data };
+    const result = await getRimItems();
+    return { success: true, data: result.data };
   } catch (error) {
     console.error('Error fetching rim installation items:', error);
     return {

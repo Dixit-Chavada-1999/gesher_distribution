@@ -44,6 +44,7 @@ export interface CustomerCommitment {
   outstandingQty: number;
   invoiceAmount: number;
   inTransitNext7Days: number;
+  productSource?: 'dropship' | 'warehouse';  // For filtering Shipment Overview
 }
 
 // ============================================
@@ -91,6 +92,7 @@ export interface ImmediateAttentionItem {
   actionRequired: string;
   isOverdue: boolean;
   isThisWeek: boolean;
+  productSource?: 'dropship' | 'warehouse';  // For filtering Shipment Overview
 }
 
 // ============================================
@@ -187,8 +189,7 @@ export interface RimInstallationItem {
   id: string;
   gdc1No: number;
   loadNumber: string;
-  sku290_85R38Qty: number;
-  beadLockQty: number;
+  items: { sku: string; productName: string; qty: number }[];  // Dynamic SKU items
   totalQty: number;
   status: ShipmentStatus;
   actionRequired: string;
@@ -210,5 +211,6 @@ export interface OperationsData {
   gdc1Inventory: GDC1InventoryItem[];
   gdc1InventorySkus: SKUColumnInfo[];  // Dynamic SKU column headers with product names
   rimInstallationRequired: RimInstallationItem[];
+  rimInstallationSkus: SKUColumnInfo[];  // Dynamic SKU column headers for rim installation
   storyInBrief: string;
 }

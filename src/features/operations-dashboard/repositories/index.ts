@@ -65,6 +65,9 @@ function mapLoadStatus(dbStatus: string | null): ShipmentStatus {
 
 // ============================================
 // GET OPERATIONS STATS (KPIs)
+// Based on Jenny's Excel Master Sheet logic:
+// - Available Inventory = GDC1 where status = AVAILABLE
+// - Committed Customer = Supplier Schedule (with Load#) + GDC1 (status = SOLD)
 // ============================================
 
 export async function getOperationsStats(): Promise<OperationsStats> {
@@ -73,33 +76,12 @@ export async function getOperationsStats(): Promise<OperationsStats> {
   const now = new Date();
   const next7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-  // Get ACTUAL inventory from inventory table (same source as Inventory module)
-  const { data: inventory, error: invError } = await supabase
-    .from('inventory')
-    .select('on_hand, allocated');
-
-  if (invError) {
-    console.error('Error fetching inventory:', invError);
-    throw invError;
-  }
-
-  // Calculate available inventory: sum(on_hand - allocated) across all locations
-  let availableInventoryQty = 0;
-
-  inventory?.forEach((inv) => {
-    const onHand = inv.on_hand || 0;
-    const allocated = inv.allocated || 0;
-    availableInventoryQty += Math.max(0, onHand - allocated);
-  });
-
-  // Count warehouse locations with inventory as "loads"
-  const availableLoads = inventory?.filter(inv => (inv.on_hand || 0) > 0).length || 0;
-
-  // Get sales orders for other stats
+  // Get ALL sales orders with items for KPI calculation
   const { data: salesOrders, error: soError } = await supabase
     .from('sales_orders')
     .select(`
       id,
+      order_number,
       status,
       product_source,
       grand_total,
@@ -130,36 +112,67 @@ export async function getOperationsStats(): Promise<OperationsStats> {
     throw shipError;
   }
 
-  const availableInventoryValue = 0;
+  // Initialize KPI values
+  let availableInventoryQty = 0;
+  let availableLoads = 0;
+  let availableInventoryValue = 0;
   let committedCustomerQty = 0;
   let inTransitNext7Days = 0;
   let openLoads = 0;
   let outstandingQty = 0;
   let invoiceAmount = 0;
 
-  // Process sales orders
+  // Process sales orders based on Jenny's Excel logic
   salesOrders?.forEach((so) => {
     const items = so.sales_order_items || [];
     const totalQty = items.reduce((sum: number, item: { quantity: number }) => sum + (item.quantity || 0), 0);
     const invoiceAmt = so.grand_total ? so.grand_total / 100 : 0;
-    const isDropship = so.product_source === 'dropship';
+    const isWarehouse = so.product_source === 'warehouse';  // GDC1 Inventory
+    const isDropship = so.product_source === 'dropship';    // Supplier Schedule (Galileo)
+    const hasLoadNumber = !!so.order_number;  // Load # not null
 
-    // Committed = confirmed/processing orders (customer has committed to buy)
-    if (so.status === 'confirmed' || so.status === 'processing') {
-      committedCustomerQty += totalQty;
+    // Status mapping: draft/pending = AVAILABLE, confirmed/processing = SOLD
+    const isAvailable = so.status === 'draft' || so.status === 'pending';
+    const isSold = so.status === 'confirmed' || so.status === 'processing';
+
+    // ============================================
+    // GDC1 INVENTORY CALCULATIONS (warehouse orders)
+    // ============================================
+    if (isWarehouse) {
+      // Available Inventory Qty: GDC1 where status = AVAILABLE → sum total qty
+      if (isAvailable) {
+        availableInventoryQty += totalQty;
+        availableLoads += 1;  // Count of AVAILABLE records
+        availableInventoryValue += invoiceAmt;  // Sum of invoice amounts
+      }
+
+      // Committed Customer Qty from GDC1: status = SOLD → outstanding qty
+      if (isSold && hasLoadNumber) {
+        committedCustomerQty += totalQty;  // Outstanding qty = total qty for active orders
+      }
     }
 
-    // Outstanding = dropship orders not yet delivered
-    if (isDropship && (so.status === 'pending' || so.status === 'confirmed' || so.status === 'processing')) {
-      outstandingQty += totalQty;
+    // ============================================
+    // SUPPLIER SCHEDULE CALCULATIONS (dropship/Galileo orders)
+    // ============================================
+    if (isDropship) {
+      // Committed Customer Qty from Supplier Schedule: Load # not null → outstanding qty
+      if (hasLoadNumber) {
+        committedCustomerQty += totalQty;
+      }
+
+      // Outstanding = all dropship orders not yet delivered
+      if (so.status === 'pending' || so.status === 'confirmed' || so.status === 'processing') {
+        outstandingQty += totalQty;
+      }
+
+      // Open loads = dropship orders that are pending
+      if (so.status === 'draft' || so.status === 'pending') {
+        openLoads += 1;
+      }
     }
 
-    // Open loads = dropship orders that are pending
-    if (isDropship && (so.status === 'draft' || so.status === 'pending')) {
-      openLoads += 1;
-    }
-
-    // Total invoice amount
+    // Total invoice amount (all orders)
     invoiceAmount += invoiceAmt;
 
     // Check delivery due in next 7 days
@@ -292,22 +305,24 @@ export async function getSKUBreakdown(): Promise<SKUBreakdown[]> {
 
 // ============================================
 // GET CUSTOMER COMMITMENTS
+// Optional productSource filter: 'dropship' for Shipment Overview, 'warehouse' for GDC1
 // ============================================
 
-export async function getCustomerCommitments(): Promise<CustomerCommitment[]> {
+export async function getCustomerCommitments(productSource?: 'dropship' | 'warehouse'): Promise<CustomerCommitment[]> {
   const supabase = await createClient();
 
   const now = new Date();
   const next7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
   // Get sales orders with customer info and items for qty calculation
-  const { data: salesOrders, error } = await supabase
+  let query = supabase
     .from('sales_orders')
     .select(`
       id,
       status,
       grand_total,
       requested_delivery_date,
+      product_source,
       customers(
         id,
         name
@@ -318,6 +333,13 @@ export async function getCustomerCommitments(): Promise<CustomerCommitment[]> {
     `)
     .is('deleted_at', null)
     .neq('status', 'cancelled');
+
+  // Filter by product_source if specified
+  if (productSource) {
+    query = query.eq('product_source', productSource);
+  }
+
+  const { data: salesOrders, error } = await query;
 
   if (error) {
     console.error('Error fetching customer commitments:', error);
@@ -385,86 +407,131 @@ export async function getCustomerCommitments(): Promise<CustomerCommitment[]> {
 
 // ============================================
 // GET SHIPMENT STATUS MIX
+// Based on Jenny's Excel logic - same as KPI calculations:
+// - AVAILABLE: GDC1 (warehouse) where status = draft/pending
+// - SOLD: GDC1 (warehouse) where status = confirmed/processing
+// - OPEN: Supplier Schedule (dropship) where status = draft/pending
+// - IN_TRANSIT: Any order where status = shipped
+// - HOLD: From shipments table
 // ============================================
 
 export async function getShipmentStatusMix(): Promise<ShipmentStatusMix[]> {
   const supabase = await createClient();
 
-  // Get shipments for status breakdown
-  const { data: shipments, error } = await supabase
+  // Get sales orders with items for status breakdown - same logic as KPIs
+  const { data: salesOrders, error: soError } = await supabase
+    .from('sales_orders')
+    .select(`
+      id,
+      status,
+      product_source,
+      sales_order_items(quantity)
+    `)
+    .is('deleted_at', null)
+    .neq('status', 'cancelled');
+
+  if (soError) {
+    console.error('Error fetching sales orders for status mix:', soError);
+    throw soError;
+  }
+
+  // Get shipments for additional statuses (HOLD, etc.)
+  const { data: shipments, error: shipError } = await supabase
     .from('shipments')
     .select('load_status, total_qty')
     .is('deleted_at', null);
 
-  if (error) {
-    console.error('Error fetching shipment status mix:', error);
-    throw error;
+  if (shipError) {
+    console.error('Error fetching shipments for status mix:', shipError);
   }
 
-  // Get actual inventory for AVAILABLE status
-  const { data: inventory, error: invError } = await supabase
-    .from('inventory')
-    .select('on_hand, allocated');
+  // Initialize status counters
+  const statusMap = new Map<ShipmentStatus, { loads: number; qty: number }>();
 
-  if (invError) {
-    console.error('Error fetching inventory for status mix:', invError);
-  }
+  // Process sales orders - same logic as getOperationsStats()
+  salesOrders?.forEach((so) => {
+    const items = so.sales_order_items || [];
+    const totalQty = items.reduce((sum: number, item: { quantity: number }) => sum + (item.quantity || 0), 0);
+    const isWarehouse = so.product_source === 'warehouse';
+    const isDropship = so.product_source === 'dropship';
 
-  // Calculate available inventory from inventory table
-  let availableQty = 0;
-  let availableLoads = 0;
-  inventory?.forEach((inv) => {
-    const available = Math.max(0, (inv.on_hand || 0) - (inv.allocated || 0));
-    if (available > 0) {
-      availableQty += available;
-      availableLoads += 1;
+    let displayStatus: ShipmentStatus;
+
+    // Map SO status to display status based on product source
+    if (isWarehouse) {
+      // GDC1 Inventory
+      if (so.status === 'draft' || so.status === 'pending') {
+        displayStatus = 'AVAILABLE';
+      } else if (so.status === 'confirmed' || so.status === 'processing') {
+        displayStatus = 'SOLD';
+      } else if (so.status === 'shipped') {
+        displayStatus = 'IN_TRANSIT';
+      } else if (so.status === 'delivered') {
+        displayStatus = 'DELIVERED';
+      } else {
+        displayStatus = 'OPEN';
+      }
+    } else if (isDropship) {
+      // Supplier Schedule (Galileo)
+      if (so.status === 'draft' || so.status === 'pending') {
+        displayStatus = 'OPEN';
+      } else if (so.status === 'confirmed' || so.status === 'processing') {
+        displayStatus = 'SOLD';
+      } else if (so.status === 'shipped') {
+        displayStatus = 'IN_TRANSIT';
+      } else if (so.status === 'delivered') {
+        displayStatus = 'DELIVERED';
+      } else {
+        displayStatus = 'OPEN';
+      }
+    } else {
+      displayStatus = 'OPEN';
     }
-  });
 
-  // Aggregate shipments by status
-  const statusMap = new Map<string, { loads: number; qty: number }>();
-
-  shipments?.forEach((s) => {
-    const status = s.load_status || 'open';
-
-    if (!statusMap.has(status)) {
-      statusMap.set(status, { loads: 0, qty: 0 });
+    if (!statusMap.has(displayStatus)) {
+      statusMap.set(displayStatus, { loads: 0, qty: 0 });
     }
 
-    const current = statusMap.get(status)!;
+    const current = statusMap.get(displayStatus)!;
     current.loads += 1;
-    current.qty += s.total_qty || 0;
+    current.qty += totalQty;
   });
 
-  // Convert to array with proper status mapping
+  // Add HOLD status from shipments table if any
+  shipments?.forEach((s) => {
+    if (s.load_status === 'hold') {
+      if (!statusMap.has('HOLD')) {
+        statusMap.set('HOLD', { loads: 0, qty: 0 });
+      }
+      const current = statusMap.get('HOLD')!;
+      current.loads += 1;
+      current.qty += s.total_qty || 0;
+    }
+  });
+
+  // Convert to array
   const result: ShipmentStatusMix[] = [];
   statusMap.forEach((val, status) => {
     result.push({
-      status: mapLoadStatus(status),
+      status,
       loads: val.loads,
       qty: val.qty,
     });
   });
 
-  // Add AVAILABLE from actual inventory (warehouse stock)
-  // Override any existing AVAILABLE from shipments
-  const existingAvailable = result.find(r => r.status === 'AVAILABLE');
-  if (existingAvailable) {
-    existingAvailable.loads = availableLoads;
-    existingAvailable.qty = availableQty;
-  } else {
-    result.push({
-      status: 'AVAILABLE',
-      loads: availableLoads,
-      qty: availableQty,
-    });
-  }
+  // Sort by qty descending
+  result.sort((a, b) => b.qty - a.qty);
 
   return result;
 }
 
 // ============================================
 // GET IMMEDIATE ATTENTION ITEMS
+// Based on Jenny's workflow: Show items that need immediate attention
+// - In Transit shipments arriving in next 7 days
+// - Overdue orders
+// - Orders with delivery due in next 7 days
+// Now pulls from BOTH shipments table AND sales_orders table
 // ============================================
 
 export async function getImmediateAttention(): Promise<ImmediateAttentionItem[]> {
@@ -473,8 +540,12 @@ export async function getImmediateAttention(): Promise<ImmediateAttentionItem[]>
   const now = new Date();
   const next7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-  // Get ALL shipments that are open or in_transit (show all for now, filter logic below)
-  const { data: shipments, error } = await supabase
+  const result: ImmediateAttentionItem[] = [];
+
+  // ============================================
+  // 1. Get from SHIPMENTS table (traditional flow)
+  // ============================================
+  const { data: shipments, error: shipError } = await supabase
     .from('shipments')
     .select(`
       id,
@@ -493,54 +564,42 @@ export async function getImmediateAttention(): Promise<ImmediateAttentionItem[]>
         order_number,
         customer_po_number,
         requested_delivery_date,
-        customers(
-          id,
-          name
-        )
+        product_source,
+        customers(id, name)
       )
     `)
     .is('deleted_at', null)
     .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error('Error fetching immediate attention:', error);
-    throw error;
+  if (shipError) {
+    console.error('Error fetching shipments for immediate attention:', shipError);
   }
 
-  const result: ImmediateAttentionItem[] = [];
-
   shipments?.forEach((s) => {
-    // Handle relationship data
     const salesOrderData = toOne(s.sales_orders);
 
-    // Use eta_to_port or estimated_arrival as fallback
+    // Only include DROPSHIP shipments - warehouse orders shown in GDC1 Inventory
+    const productSource = salesOrderData?.product_source as 'dropship' | 'warehouse';
+    if (productSource === 'warehouse') {
+      return; // Skip warehouse shipments
+    }
+
     const etaDate = s.eta_to_port || s.estimated_arrival;
     const etaPort = etaDate ? new Date(etaDate) : null;
-
-    // Use customer_expected_delivery or requested_delivery_date from SO as fallback
     const customerDueDate = s.customer_expected_delivery || salesOrderData?.requested_delivery_date;
     const customerDue = customerDueDate ? new Date(customerDueDate) : null;
 
-    // Check if this week or overdue
     const isThisWeek = etaPort ? (etaPort >= now && etaPort <= next7Days) : false;
     const isOverdue = s.is_delayed || (customerDue ? customerDue < now : false);
-
-    // Include ALL shipments with open/in_transit status, or if this week/overdue/delayed
     const status = s.load_status as string;
     const isActive = status === 'open' || status === 'in_transit' || !status;
 
     if (isActive || isThisWeek || isOverdue || s.is_delayed) {
-      // Load # priority: shipment_number > supplier_reference_number > N/A
-      const loadNumber = s.shipment_number || s.supplier_reference_number || 'N/A';
-
-      // PO # from sales order customer_po_number
-      const poNumber = salesOrderData?.customer_po_number || 'N/A';
-
       result.push({
         id: s.id,
-        loadNumber,
+        loadNumber: s.shipment_number || s.supplier_reference_number || 'N/A',
         customer: toOne(salesOrderData?.customers)?.name || 'Unknown',
-        po: poNumber,
+        po: salesOrderData?.customer_po_number || 'N/A',
         qty: s.total_qty || 0,
         etaPort: etaDate,
         customerEtaDue: customerDueDate,
@@ -548,8 +607,91 @@ export async function getImmediateAttention(): Promise<ImmediateAttentionItem[]>
         actionRequired: s.action_required || '',
         isOverdue,
         isThisWeek,
+        productSource: productSource || 'dropship',
       });
     }
+  });
+
+  // ============================================
+  // 2. Get from SALES_ORDERS table (for orders without shipments)
+  // Only DROPSHIP orders - warehouse orders shown in GDC1 Inventory tab
+  // ============================================
+  const { data: salesOrders, error: soError } = await supabase
+    .from('sales_orders')
+    .select(`
+      id,
+      order_number,
+      customer_po_number,
+      status,
+      product_source,
+      requested_delivery_date,
+      internal_notes,
+      customers(id, name),
+      sales_order_items(quantity)
+    `)
+    .is('deleted_at', null)
+    .eq('product_source', 'dropship')  // Only DROPSHIP orders
+    .in('status', ['pending', 'confirmed', 'processing', 'shipped'])
+    .order('requested_delivery_date', { ascending: true });
+
+  if (soError) {
+    console.error('Error fetching sales orders for immediate attention:', soError);
+  }
+
+  // Track IDs we've already added from shipments
+  const addedIds = new Set(result.map(r => r.id));
+
+  salesOrders?.forEach((so) => {
+    // Skip if already added from shipments
+    if (addedIds.has(so.id)) { return; }
+
+    const customerData = toOne(so.customers);
+    const deliveryDate = so.requested_delivery_date ? new Date(so.requested_delivery_date) : null;
+
+    // Check if delivery due in next 7 days or overdue
+    const isThisWeek = deliveryDate ? (deliveryDate >= now && deliveryDate <= next7Days) : false;
+    const isOverdue = deliveryDate ? deliveryDate < now : false;
+
+    // Include if due this week, overdue, or in active status
+    const isActive = so.status === 'pending' || so.status === 'confirmed' || so.status === 'processing';
+
+    if (isThisWeek || isOverdue || isActive) {
+      // Calculate total qty from items
+      const items = so.sales_order_items || [];
+      const totalQty = items.reduce((sum: number, item: { quantity: number }) => sum + (item.quantity || 0), 0);
+
+      // Map SO status to display status
+      let displayStatus: ShipmentStatus = 'OPEN';
+      if (so.status === 'confirmed' || so.status === 'processing') {
+        displayStatus = 'SOLD';
+      } else if (so.status === 'shipped') {
+        displayStatus = 'IN_TRANSIT';
+      }
+
+      result.push({
+        id: so.id,
+        loadNumber: so.order_number || 'N/A',
+        customer: customerData?.name || 'Unknown',
+        po: so.customer_po_number || 'N/A',
+        qty: totalQty,
+        etaPort: null,
+        customerEtaDue: so.requested_delivery_date,
+        status: displayStatus,
+        actionRequired: so.internal_notes || '',
+        isOverdue,
+        isThisWeek,
+        productSource: so.product_source as 'dropship' | 'warehouse',
+      });
+    }
+  });
+
+  // Sort by: overdue first, then this week, then by date
+  result.sort((a, b) => {
+    if (a.isOverdue && !b.isOverdue) { return -1; }
+    if (!a.isOverdue && b.isOverdue) { return 1; }
+    if (a.isThisWeek && !b.isThisWeek) { return -1; }
+    if (!a.isThisWeek && b.isThisWeek) { return 1; }
+    return 0;
   });
 
   return result;
@@ -967,13 +1109,21 @@ export async function getGDC1Inventory(): Promise<{ data: GDC1InventoryItem[]; u
 
 // ============================================
 // GET RIM INSTALLATION REQUIRED
+// Checks BOTH shipments.action_required AND sales_orders.internal_notes
+// for items that need rim installation
+// Returns dynamic SKU columns like other tables
 // ============================================
 
-export async function getRimInstallationRequired(): Promise<RimInstallationItem[]> {
+export async function getRimInstallationRequired(): Promise<{ data: RimInstallationItem[]; uniqueSkus: SKUColumnInfo[] }> {
   const supabase = await createClient();
+  const result: RimInstallationItem[] = [];
+  const skuInfoMap = new Map<string, string>(); // sku -> productName
+  let gdc1Counter = 1;
 
-  // Get shipments that need rim installation (based on action_required)
-  const { data: shipments, error } = await supabase
+  // ============================================
+  // 1. Check SHIPMENTS table for rim installation
+  // ============================================
+  const { data: shipments, error: shipError } = await supabase
     .from('shipments')
     .select(`
       id,
@@ -987,62 +1137,148 @@ export async function getRimInstallationRequired(): Promise<RimInstallationItem[
     .ilike('action_required', '%rim%installation%')
     .order('supplier_reference_number', { ascending: true });
 
-  if (error) {
-    console.error('Error fetching rim installation items:', error);
-    throw error;
+  if (shipError) {
+    console.error('Error fetching shipments for rim installation:', shipError);
   }
 
-  // Get shipment items for SKU breakdown
+  // Get shipment items for SKU breakdown with product names
   const shipmentIds = shipments?.map((s) => s.id) || [];
 
-  const { data: items } = await supabase
-    .from('shipment_items')
-    .select('shipment_id, sku, quantity_shipped')
-    .in('shipment_id', shipmentIds);
+  if (shipmentIds.length > 0) {
+    const { data: shipmentItems } = await supabase
+      .from('shipment_items')
+      .select(`
+        shipment_id,
+        sku,
+        quantity_shipped,
+        products(id, name)
+      `)
+      .in('shipment_id', shipmentIds);
 
-  // Group items by shipment
-  const itemsByShipment = new Map<string, { sku: string; qty: number }[]>();
-  items?.forEach((item) => {
-    if (!itemsByShipment.has(item.shipment_id)) {
-      itemsByShipment.set(item.shipment_id, []);
-    }
-    itemsByShipment.get(item.shipment_id)!.push({
-      sku: item.sku,
-      qty: item.quantity_shipped,
-    });
-  });
+    // Group items by shipment
+    const itemsByShipment = new Map<string, { sku: string; productName: string; qty: number }[]>();
+    shipmentItems?.forEach((item) => {
+      const productData = toOne(item.products);
+      const productName = productData?.name || item.sku;
 
-  const result: RimInstallationItem[] = [];
-
-  shipments?.forEach((s, index) => {
-    // Calculate SKU quantities
-    const shipmentItems = itemsByShipment.get(s.id) || [];
-    let sku290 = 0;
-    let skuBead = 0;
-
-    shipmentItems.forEach((item) => {
-      const skuLower = item.sku.toLowerCase();
-      if (skuLower.includes('290/85r38') && !skuLower.includes('bead')) {
-        sku290 += item.qty;
-      } else if (skuLower.includes('bead')) {
-        skuBead += item.qty;
+      // Store SKU info for column headers
+      if (!skuInfoMap.has(item.sku)) {
+        skuInfoMap.set(item.sku, productName);
       }
+
+      if (!itemsByShipment.has(item.shipment_id)) {
+        itemsByShipment.set(item.shipment_id, []);
+      }
+      itemsByShipment.get(item.shipment_id)!.push({
+        sku: item.sku,
+        productName,
+        qty: item.quantity_shipped,
+      });
     });
+
+    shipments?.forEach((s) => {
+      const items = itemsByShipment.get(s.id) || [];
+      const totalQty = items.reduce((sum, item) => sum + item.qty, 0);
+
+      result.push({
+        id: s.id,
+        gdc1No: gdc1Counter++,
+        loadNumber: s.supplier_reference_number || 'N/A',
+        items,
+        totalQty: s.total_qty || totalQty,
+        status: mapLoadStatus(s.load_status),
+        actionRequired: s.action_required || '',
+        executiveNote: s.executive_notes || '',
+      });
+    });
+  }
+
+  // ============================================
+  // 2. Check SALES_ORDERS table for rim installation
+  // ============================================
+  const { data: salesOrders, error: soError } = await supabase
+    .from('sales_orders')
+    .select(`
+      id,
+      order_number,
+      status,
+      internal_notes,
+      sales_order_items(
+        sku,
+        quantity,
+        products(id, name)
+      )
+    `)
+    .is('deleted_at', null)
+    .neq('status', 'cancelled')
+    .ilike('internal_notes', '%rim%installation%')
+    .order('order_number', { ascending: true });
+
+  if (soError) {
+    console.error('Error fetching sales orders for rim installation:', soError);
+  }
+
+  // Track IDs we've already added
+  const addedIds = new Set(result.map(r => r.id));
+
+  salesOrders?.forEach((so) => {
+    // Skip if already added from shipments
+    if (addedIds.has(so.id)) { return; }
+
+    const soItems = so.sales_order_items || [];
+    const items: { sku: string; productName: string; qty: number }[] = [];
+    let totalQty = 0;
+
+    soItems.forEach((item: { sku: string; quantity: number; products: unknown }) => {
+      const productData = toOne(item.products) as { name?: string } | null;
+      const productName = productData?.name || item.sku || 'Unknown';
+      const qty = item.quantity || 0;
+      totalQty += qty;
+
+      // Store SKU info for column headers
+      if (item.sku && !skuInfoMap.has(item.sku)) {
+        skuInfoMap.set(item.sku, productName);
+      }
+
+      items.push({
+        sku: item.sku || 'Unknown',
+        productName,
+        qty,
+      });
+    });
+
+    // Map SO status to display status
+    let displayStatus: ShipmentStatus = 'OPEN';
+    if (so.status === 'confirmed' || so.status === 'processing') {
+      displayStatus = 'SOLD';
+    } else if (so.status === 'shipped') {
+      displayStatus = 'IN_TRANSIT';
+    } else if (so.status === 'delivered') {
+      displayStatus = 'DELIVERED';
+    }
 
     result.push({
-      id: s.id,
-      gdc1No: index + 18, // Starting from 18 based on Jenny's sheet
-      loadNumber: s.supplier_reference_number || 'N/A',
-      sku290_85R38Qty: sku290,
-      beadLockQty: skuBead,
-      totalQty: s.total_qty || 0,
-      status: mapLoadStatus(s.load_status),
-      actionRequired: s.action_required || '',
-      executiveNote: s.executive_notes || '',
+      id: so.id,
+      gdc1No: gdc1Counter++,
+      loadNumber: so.order_number || 'N/A',
+      items,
+      totalQty,
+      status: displayStatus,
+      actionRequired: so.internal_notes || '',
+      executiveNote: '',
     });
   });
 
-  return result;
+  // Build unique SKUs with product names for column headers
+  const uniqueSkus: SKUColumnInfo[] = [];
+  skuInfoMap.forEach((productName, sku) => {
+    uniqueSkus.push({ sku, productName });
+  });
+
+  // Sort by SKU
+  uniqueSkus.sort((a, b) => a.sku.localeCompare(b.sku));
+
+  return { data: result, uniqueSkus };
 }
 
 // ============================================

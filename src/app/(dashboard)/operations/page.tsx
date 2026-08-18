@@ -78,6 +78,7 @@ const emptyData: OperationsData = {
   gdc1Inventory: [],
   gdc1InventorySkus: [],
   rimInstallationRequired: [],
+  rimInstallationSkus: [],
   storyInBrief: '',
 };
 
@@ -287,7 +288,7 @@ export default function OperationsPage() {
           <CustomerCommitments data={data.customerCommitments} />
 
           {/* Rim Installation Required - Action Items */}
-          <RimInstallationRequired data={data.rimInstallationRequired} />
+          <RimInstallationRequired data={data.rimInstallationRequired} uniqueSkus={data.rimInstallationSkus || []} />
         </TabsContent>
 
         {/* Tab 2: Shipment Overview */}

@@ -257,7 +257,14 @@ export function SupplierShipmentScheduleTable({
                   </TableCell>
                 ))}
                 <TableCell className="text-right">{totals.total}</TableCell>
-                <TableCell colSpan={5}></TableCell>
+                {/* Empty cells: Customer, PO, ETA to US Port, Delivery Address, Confirmed ETA, Customer Expected, Actual Delivery */}
+                <TableCell></TableCell>
+                <TableCell></TableCell>
+                <TableCell></TableCell>
+                <TableCell></TableCell>
+                <TableCell></TableCell>
+                <TableCell></TableCell>
+                <TableCell></TableCell>
                 <TableCell className="text-right">{totals.delivered > 0 ? totals.delivered : '-'}</TableCell>
                 <TableCell className="text-right text-orange-600">{totals.outstanding}</TableCell>
                 <TableCell></TableCell>
@@ -266,7 +273,13 @@ export function SupplierShipmentScheduleTable({
                 {uniqueSkus.map((skuInfo) => (
                   <TableCell key={`total-price-${skuInfo.sku}`}></TableCell>
                 ))}
-                <TableCell colSpan={5}></TableCell>
+                {/* Empty cells: 50% Payment, 50% Due, Status, Action/Notes, Ankur Comments, Edit */}
+                <TableCell></TableCell>
+                <TableCell></TableCell>
+                <TableCell></TableCell>
+                <TableCell></TableCell>
+                <TableCell></TableCell>
+                <TableCell></TableCell>
               </TableRow>
             </TableBody>
           </Table>

@@ -204,10 +204,11 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
   currentY += storyHeight + 6;
 
   // === IMMEDIATE ATTENTION ===
-  const inTransitItems = data.immediateAttention.filter(item => item.status === 'IN_TRANSIT' || item.isThisWeek);
-  const thisWeekCount = inTransitItems.filter(i => i.isThisWeek).length;
+  // Show ALL immediate attention items (same as UI and XLSX export)
+  const immediateAttentionItems = data.immediateAttention || [];
+  const thisWeekCount = immediateAttentionItems.filter(i => i.isThisWeek).length;
 
-  if (inTransitItems.length > 0) {
+  if (immediateAttentionItems.length > 0) {
     // Title
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
@@ -218,7 +219,7 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
     doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...COLORS.gray500);
-    const subtitleText = `${inTransitItems.length} shipments requiring attention`;
+    const subtitleText = `${immediateAttentionItems.length} shipments requiring attention`;
     doc.text(subtitleText, margin, currentY + 11);
 
     if (thisWeekCount > 0) {
@@ -229,24 +230,38 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
 
     currentY += 13;
 
-    // Table - compact
+    // Table - show ALL items (no .slice() limit)
     autoTable(doc, {
       startY: currentY,
-      head: [['Load #', 'Customer', 'PO', 'Qty', 'ETA Port', 'Status', 'Action Required']],
-      body: inTransitItems.slice(0, 3).map(item => [
+      head: [['Load #', 'Customer', 'PO', 'Qty', 'ETA Port', 'Customer Due', 'Status', 'Action Required']],
+      body: immediateAttentionItems.map(item => [
         item.loadNumber,
         item.customer,
         item.po || 'N/A',
         item.qty.toString(),
         formatDate(item.etaPort),
+        formatDate(item.customerEtaDue),
         item.status.replace('_', ' '),
-        (item.actionRequired || '-').substring(0, 35),
+        (item.actionRequired || '-').substring(0, 30),
       ]),
       margin: { left: margin, right: margin },
       styles: { fontSize: 6.5, cellPadding: 1.5, textColor: COLORS.gray700 },
-      headStyles: { fillColor: COLORS.gray50, textColor: COLORS.gray500, fontStyle: 'bold', fontSize: 6.5 },
+      headStyles: { fillColor: COLORS.red500, textColor: COLORS.white, fontStyle: 'bold', fontSize: 6.5 },
       bodyStyles: { fillColor: COLORS.white },
-      columnStyles: { 6: { cellWidth: 45 } },
+      alternateRowStyles: { fillColor: COLORS.gray50 },
+      columnStyles: { 7: { cellWidth: 40 } },
+      // Highlight overdue and this week rows
+      didParseCell: (hookData) => {
+        if (hookData.section === 'body') {
+          const rowIndex = hookData.row.index;
+          const item = immediateAttentionItems[rowIndex];
+          if (item?.isOverdue) {
+            hookData.cell.styles.fillColor = [254, 226, 226]; // red-100
+          } else if (item?.isThisWeek) {
+            hookData.cell.styles.fillColor = [254, 243, 199]; // amber-100
+          }
+        }
+      },
     });
 
     // @ts-expect-error - autoTable adds lastAutoTable
@@ -254,6 +269,15 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
   }
 
   // === TWO COLUMN LAYOUT ===
+  // Check if we need a new page for two-column section (need at least 70mm)
+  const twoColHeight = 70; // Estimated height for two-column section
+  if (currentY + twoColHeight > pageHeight - 15) {
+    doc.addPage();
+    doc.setFillColor(...COLORS.white);
+    doc.rect(0, 0, pageWidth, pageHeight, 'F');
+    currentY = margin;
+  }
+
   const leftColWidth = contentWidth * 0.54;
   const rightColWidth = contentWidth * 0.44;
   const rightColX = margin + leftColWidth + 4;
@@ -262,27 +286,30 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
   // === LEFT: SKU QUANTITY BREAKDOWN ===
   const skuTotal = data.skuBreakdown.reduce((sum, s) => sum + s.combinedQty, 0);
 
+  // Draw border box for SKU section
+  doc.setDrawColor(...COLORS.blue600);
+  doc.setLineWidth(0.5);
+  doc.roundedRect(margin, currentY, leftColWidth, 55, 2, 2, 'S');
+
   // Title
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...COLORS.gray900);
-  doc.text('SKU Quantity Breakdown - Supplier + GDC1 Inventory', margin, currentY + 6);
+  doc.text('SKU Quantity Breakdown - Supplier + GDC1 Inventory', margin + 5, currentY + 8);
 
   // Subtitle + Total
   doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...COLORS.gray500);
-  doc.text('Combined inventory across locations', margin, currentY + 11);
-  doc.text('Total:', margin + leftColWidth - 22, currentY + 6);
+  doc.text('Combined inventory across locations', margin + 5, currentY + 13);
+  doc.text('Total:', margin + leftColWidth - 30, currentY + 8);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...COLORS.gray900);
-  doc.text(formatNumber(skuTotal), margin + leftColWidth - 8, currentY + 6);
+  doc.text(formatNumber(skuTotal), margin + leftColWidth - 12, currentY + 8);
 
-  currentY += 13;
-
-  // SKU Table with progress bars - NO page break
+  // SKU Table - inside the box
   autoTable(doc, {
-    startY: currentY,
+    startY: currentY + 16,
     head: [['Product/SKU', 'Supplier', 'GDC1', 'Combined', 'Share']],
     body: [
       ...data.skuBreakdown.map(sku => [
@@ -300,10 +327,10 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
         '100%',
       ],
     ],
-    margin: { left: margin },
-    tableWidth: leftColWidth - 2,
+    margin: { left: margin + 3, right: pageWidth - margin - leftColWidth + 5 },
+    tableWidth: leftColWidth - 10,
     styles: { fontSize: 6.5, cellPadding: 1.5, textColor: COLORS.gray700 },
-    headStyles: { fillColor: COLORS.gray50, textColor: COLORS.gray500, fontStyle: 'bold', fontSize: 6.5 },
+    headStyles: { fillColor: COLORS.gray100, textColor: COLORS.gray500, fontStyle: 'bold', fontSize: 6.5 },
     bodyStyles: { fillColor: COLORS.white },
     showHead: 'firstPage',
     pageBreak: 'avoid',
@@ -313,87 +340,87 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
         if (hookData.column.index === 2) { hookData.cell.styles.textColor = COLORS.teal600; }
         if (hookData.row.index === data.skuBreakdown.length) {
           hookData.cell.styles.fontStyle = 'bold';
-          hookData.cell.styles.fillColor = COLORS.gray50;
+          hookData.cell.styles.fillColor = COLORS.gray100;
         }
       }
     },
   });
 
-  // === RIGHT: STATUS CHART (compact, matching SKU table height) ===
+  // === RIGHT: STATUS CHART ===
   const statusData = data.shipmentStatusMix;
   const totalQty = statusData.reduce((sum, d) => sum + d.qty, 0);
   const totalLoads = statusData.reduce((sum, d) => sum + d.loads, 0);
   const maxQty = Math.max(...statusData.map(d => d.qty), 1);
 
   // Title
-  doc.setFontSize(7);
+  doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...COLORS.gray900);
-  doc.text('Shipment / Inventory Status Mix', rightColX + 3, twoColStartY + 5.5);
+  doc.text('Shipment / Inventory Status Mix', rightColX + 3, twoColStartY + 8);
 
   // Subtitle
-  doc.setFontSize(6);
+  doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...COLORS.gray500);
-  doc.text(`${formatNumber(totalQty)} units across ${totalLoads} loads`, rightColX + 3, twoColStartY + 9.5);
+  doc.text(`${formatNumber(totalQty)} units across ${totalLoads} loads`, rightColX + 3, twoColStartY + 13);
 
-  let chartY = twoColStartY + 13;
+  let chartY = twoColStartY + 18;
 
   const statusColors: Record<string, [number, number, number]> = {
+    'SOLD': COLORS.gray500,
     'OPEN': COLORS.orange400,
     'HOLD': COLORS.red400,
     'IN_TRANSIT': COLORS.purple500,
+    'DELIVERED': COLORS.gray300,
     'AVAILABLE': COLORS.green400,
   };
 
-  // Draw status rows (compact)
+  // Draw status rows
   statusData.forEach((item) => {
     const color = statusColors[item.status] || COLORS.gray300;
     const percent = totalQty > 0 ? (item.qty / totalQty * 100).toFixed(1) : '0.0';
-    const barFillWidth = (item.qty / maxQty) * 38;
+    const barFillWidth = (item.qty / maxQty) * 45;
 
     // Status name
-    doc.setFontSize(6);
+    doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...COLORS.gray700);
-    doc.text(item.status.replace('_', ' '), rightColX + 3, chartY + 3);
+    doc.text(item.status.replace('_', ' '), rightColX + 3, chartY + 3.5);
 
     // Loads count
     doc.setTextColor(...COLORS.gray500);
-    doc.text(item.loads.toString(), rightColX + 32, chartY + 3, { align: 'right' });
+    doc.text(item.loads.toString(), rightColX + 35, chartY + 3.5, { align: 'right' });
 
     // Bar background
-    const barX = rightColX + 35;
+    const barX = rightColX + 38;
     doc.setFillColor(...COLORS.gray200);
-    doc.roundedRect(barX, chartY, 38, 5, 1, 1, 'F');
+    doc.roundedRect(barX, chartY, 45, 6, 1.5, 1.5, 'F');
 
     // Bar fill
     doc.setFillColor(...color);
-    doc.roundedRect(barX, chartY, Math.max(barFillWidth, 2), 5, 1, 1, 'F');
+    doc.roundedRect(barX, chartY, Math.max(barFillWidth, 3), 6, 1.5, 1.5, 'F');
 
     // Value inside bar (if wide enough)
-    if (barFillWidth > 12) {
-      doc.setFontSize(5);
+    if (barFillWidth > 15) {
+      doc.setFontSize(6);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...COLORS.white);
-      doc.text(formatNumber(item.qty), barX + barFillWidth / 2, chartY + 3.2, { align: 'center' });
+      doc.text(formatNumber(item.qty), barX + barFillWidth / 2, chartY + 4, { align: 'center' });
     }
 
-    // Qty (right of bar)
-    doc.setFontSize(6);
+    // Qty + Percentage (right of bar)
+    doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...COLORS.gray700);
-    doc.text(formatNumber(item.qty), rightColX + rightColWidth - 12, chartY + 3);
-
-    // Percentage
-    doc.setTextColor(...COLORS.gray500);
-    doc.text(`${percent}%`, rightColX + rightColWidth - 2, chartY + 3, { align: 'right' });
+    doc.text(`${formatNumber(item.qty)} ${percent}%`, rightColX + rightColWidth - 5, chartY + 3.5, { align: 'right' });
 
     chartY += 8;
   });
 
+  // Update currentY to after both columns
+  currentY = twoColStartY + 58;
+
   // Legend (compact, single row)
-  chartY += 1;
   let legendX = rightColX + 3;
   const legendItems = [
     { label: 'OPEN', color: COLORS.orange400 },
@@ -522,7 +549,8 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
     body: data.supplierShipmentSchedule.map(item => [
       item.no.toString(),
       item.loadNumber,
-      item.items.map(i => `${i.sku}: ${i.qty}`).join(', ').substring(0, 28),
+      // Use product name if available, otherwise use SKU
+      item.items.map(i => `${i.productName || i.sku}: ${i.qty}`).join(', ').substring(0, 35),
       formatNumber(item.totalQty),
       item.customer.substring(0, 18),
       item.po || '-',
@@ -542,10 +570,10 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
     alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: {
       0: { cellWidth: 8 },
-      2: { cellWidth: 32 },
-      4: { cellWidth: 22 },
+      2: { cellWidth: 40 },  // Products column - wider for product names
+      4: { cellWidth: 20 },
       12: { halign: 'right' },
-      14: { cellWidth: 28 },
+      14: { cellWidth: 22 },
     },
     didParseCell: (hookData) => {
       if (hookData.section === 'body') {
@@ -564,6 +592,9 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
           if (status === 'AVAILABLE') { hookData.cell.styles.textColor = [22, 163, 74]; }
           if (status === 'IN TRANSIT') { hookData.cell.styles.textColor = COLORS.purple500; }
           if (status === 'HOLD') { hookData.cell.styles.textColor = COLORS.red400; }
+          if (status === 'DELIVERED') { hookData.cell.styles.textColor = COLORS.gray500; }
+          if (status === 'OPEN') { hookData.cell.styles.textColor = COLORS.orange400; }
+          if (status === 'SOLD') { hookData.cell.styles.textColor = [234, 88, 12]; }
         }
       }
     },
@@ -636,7 +667,8 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
     body: data.gdc1Inventory.map(item => [
       item.no.toString(),
       item.loadNumber,
-      item.items.map(i => `${i.sku}: ${i.qty}`).join(', ').substring(0, 28),
+      // Use product name if available, otherwise use SKU
+      item.items.map(i => `${i.productName || i.sku}: ${i.qty}`).join(', ').substring(0, 35),
       formatNumber(item.totalQty),
       (item.customer || '-').substring(0, 18),
       item.po || '-',
@@ -656,10 +688,10 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
     alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: {
       0: { cellWidth: 8 },
-      2: { cellWidth: 32 },
-      4: { cellWidth: 22 },
+      2: { cellWidth: 40 },  // Products column - wider for product names
+      4: { cellWidth: 20 },
       12: { halign: 'right' },
-      14: { cellWidth: 28 },
+      14: { cellWidth: 22 },
     },
     didParseCell: (hookData) => {
       if (hookData.section === 'body') {

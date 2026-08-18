@@ -1024,8 +1024,10 @@ export const rimInstallationRequired: RimInstallationItem[] = [
     id: 'rim-1',
     gdc1No: 18,
     loadNumber: 'SO2600054 A',
-    sku290_85R38Qty: 100,
-    beadLockQty: 100,
+    items: [
+      { sku: '290/85R38', productName: '290/85R38 CW Tire', qty: 100 },
+      { sku: 'Bead Lock', productName: '290/85R38 Bead Lock', qty: 100 },
+    ],
     totalQty: 200,
     status: 'AVAILABLE',
     actionRequired: 'TWS - RIM INSTALLATION NEEDED',
@@ -1035,8 +1037,10 @@ export const rimInstallationRequired: RimInstallationItem[] = [
     id: 'rim-2',
     gdc1No: 19,
     loadNumber: 'SO2600054 B',
-    sku290_85R38Qty: 100,
-    beadLockQty: 100,
+    items: [
+      { sku: '290/85R38', productName: '290/85R38 CW Tire', qty: 100 },
+      { sku: 'Bead Lock', productName: '290/85R38 Bead Lock', qty: 100 },
+    ],
     totalQty: 200,
     status: 'AVAILABLE',
     actionRequired: 'TWS - RIM INSTALLATION NEEDED',
@@ -1046,8 +1050,10 @@ export const rimInstallationRequired: RimInstallationItem[] = [
     id: 'rim-3',
     gdc1No: 20,
     loadNumber: 'SO2600055 A',
-    sku290_85R38Qty: 100,
-    beadLockQty: 100,
+    items: [
+      { sku: '290/85R38', productName: '290/85R38 CW Tire', qty: 100 },
+      { sku: 'Bead Lock', productName: '290/85R38 Bead Lock', qty: 100 },
+    ],
     totalQty: 200,
     status: 'AVAILABLE',
     actionRequired: 'TWS - RIM INSTALLATION NEEDED',
@@ -1057,8 +1063,10 @@ export const rimInstallationRequired: RimInstallationItem[] = [
     id: 'rim-4',
     gdc1No: 21,
     loadNumber: 'SO2600055 B',
-    sku290_85R38Qty: 100,
-    beadLockQty: 100,
+    items: [
+      { sku: '290/85R38', productName: '290/85R38 CW Tire', qty: 100 },
+      { sku: 'Bead Lock', productName: '290/85R38 Bead Lock', qty: 100 },
+    ],
     totalQty: 200,
     status: 'AVAILABLE',
     actionRequired: 'TWS - RIM INSTALLATION NEEDED',
@@ -1068,8 +1076,10 @@ export const rimInstallationRequired: RimInstallationItem[] = [
     id: 'rim-5',
     gdc1No: 22,
     loadNumber: 'SO2600056 A',
-    sku290_85R38Qty: 100,
-    beadLockQty: 100,
+    items: [
+      { sku: '290/85R38', productName: '290/85R38 CW Tire', qty: 100 },
+      { sku: 'Bead Lock', productName: '290/85R38 Bead Lock', qty: 100 },
+    ],
     totalQty: 200,
     status: 'AVAILABLE',
     actionRequired: 'TWS - RIM INSTALLATION NEEDED',
@@ -1079,8 +1089,10 @@ export const rimInstallationRequired: RimInstallationItem[] = [
     id: 'rim-6',
     gdc1No: 23,
     loadNumber: 'SO2600056 B',
-    sku290_85R38Qty: 100,
-    beadLockQty: 100,
+    items: [
+      { sku: '290/85R38', productName: '290/85R38 CW Tire', qty: 100 },
+      { sku: 'Bead Lock', productName: '290/85R38 Bead Lock', qty: 100 },
+    ],
     totalQty: 200,
     status: 'AVAILABLE',
     actionRequired: 'TWS - RIM INSTALLATION NEEDED',
@@ -1123,6 +1135,14 @@ const gdc1InventorySkus: SKUColumnInfo[] = [...new Set(
   productName: skuProductNames[sku] || sku,
 }));
 
+// Extract unique SKUs with product names from rim installation required
+const rimInstallationSkus: SKUColumnInfo[] = [...new Set(
+  rimInstallationRequired.flatMap(s => s.items.map(i => i.sku))
+)].sort().map(sku => ({
+  sku,
+  productName: skuProductNames[sku] || sku,
+}));
+
 export const operationsData: OperationsData = {
   stats: operationsStats,
   skuBreakdown,
@@ -1134,5 +1154,6 @@ export const operationsData: OperationsData = {
   gdc1Inventory,
   gdc1InventorySkus,
   rimInstallationRequired,
+  rimInstallationSkus,
   storyInBrief,
 };

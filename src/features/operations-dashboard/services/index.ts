@@ -36,7 +36,7 @@ export async function getOperationsData(): Promise<OperationsData> {
     immediateAttention,
     supplierScheduleResult,
     gdc1InventoryResult,
-    rimInstallationRequired,
+    rimInstallationResult,
   ] = await Promise.all([
     getOperationsStats(),
     getSKUBreakdown(),
@@ -53,6 +53,8 @@ export async function getOperationsData(): Promise<OperationsData> {
   const supplierScheduleSkus = supplierScheduleResult.uniqueSkus;
   const gdc1Inventory = gdc1InventoryResult.data;
   const gdc1InventorySkus = gdc1InventoryResult.uniqueSkus;
+  const rimInstallationRequired = rimInstallationResult.data;
+  const rimInstallationSkus = rimInstallationResult.uniqueSkus;
 
   // Generate story in brief based on fetched data
   const storyInBrief = await generateStoryInBrief(stats, skuBreakdown, rimInstallationRequired);
@@ -68,6 +70,7 @@ export async function getOperationsData(): Promise<OperationsData> {
     gdc1Inventory,
     gdc1InventorySkus,
     rimInstallationRequired,
+    rimInstallationSkus,
     storyInBrief,
   };
 }
@@ -131,7 +134,8 @@ export async function getWarehouseInventory() {
  * Get items requiring rim installation
  */
 export async function getRimItems() {
-  return getRimInstallationRequired();
+  const result = await getRimInstallationRequired();
+  return { data: result.data, uniqueSkus: result.uniqueSkus };
 }
 
 // ============================================
@@ -203,7 +207,10 @@ export async function getExportData(options: ExportOptions = {}) {
   }
 
   if (includeRimInstallation) {
-    promises.push(getRimInstallationRequired().then((result) => { data.rimInstallationRequired = result; }));
+    promises.push(getRimInstallationRequired().then((result) => {
+      data.rimInstallationRequired = result.data;
+      data.rimInstallationSkus = result.uniqueSkus;
+    }));
   }
 
   await Promise.all(promises);

@@ -27,9 +27,10 @@ import {
   Building2,
   Warehouse,
   // DollarSign,
-FileSignature,
+  FileSignature,
   ClipboardList, // Purchase Orders
-  Truck, // Operations dashboard
+  BarChart3, // Operations dashboard
+  // Truck, // Shipments (commented out)
   // Receipt, // Uncomment when Invoices module is enabled
   Factory, // Suppliers
   ClipboardCheck, // Pick Tickets
@@ -130,6 +131,13 @@ const NAV_SECTIONS = [
         icon: ShoppingCart,
         permission: 'orders.view_module',
       },
+      {
+        id: 'purchase-orders',
+        label: 'Purchase Orders',
+        href: '/purchase-orders',
+        icon: ClipboardList,
+        permission: 'purchase_orders.view_module',
+      },
       // {
       //   id: 'invoices',
       //   label: 'Invoices',
@@ -139,14 +147,14 @@ const NAV_SECTIONS = [
       // },
     ],
   },
-{
+  {
     title: 'Operations',
     items: [
       {
         id: 'operations',
         label: 'Operations',
         href: '/operations',
-        icon: Truck,
+        icon: BarChart3,
         permission: 'dashboard.view_module', // Uses dashboard permission for now
       },
       {
@@ -164,18 +172,6 @@ const NAV_SECTIONS = [
         permission: 'pick_tickets.view_module', // Uses same permission as pick tickets
       },
     ],
-  },
-  {
-    title: 'Procurement',
-    items: [
-      {
-        id: 'purchase-orders',
-        label: 'Purchase Orders',
-        href: '/purchase-orders',
-        icon: ClipboardList,
-        permission: 'purchase_orders.view_module',
-      },
-],
   },
   // Shipments section is temporarily hidden from the sidebar.
   // Uncomment this block when Shipments module is enabled.

@@ -6,13 +6,14 @@
  * Page header for the operations dashboard with refresh and export actions.
  */
 
-import { RefreshCw, Calendar, Download, FileText, ChevronDown } from 'lucide-react';
+import { RefreshCw, Calendar, Download, FileSpreadsheet, FileText, ChevronDown } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
 
@@ -102,7 +103,6 @@ export function OperationsHeader({
               <FileText className="h-4 w-4 mr-2 text-red-600" />
               Download PDF Report
             </DropdownMenuItem>
-            {/* Excel export options hidden for now
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => onExport?.('executive-summary')}>
               <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />
@@ -125,7 +125,6 @@ export function OperationsHeader({
               <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />
               Full Report (Excel)
             </DropdownMenuItem>
-            */}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
