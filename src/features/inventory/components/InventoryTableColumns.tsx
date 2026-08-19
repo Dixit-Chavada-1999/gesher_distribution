@@ -106,27 +106,27 @@ export function InventoryTableColumns(options: ColumnsOptions = {}): ColumnDef<I
 
         return (
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
               <Button variant="ghost" size="icon" className="h-8 w-8">
                 <span className="sr-only">Open menu</span>
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
               {onView && (
-                <DropdownMenuItem onClick={() => onView(item)}>
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onView(item); }}>
                   <Eye className="mr-2 h-4 w-4" />
                   View
                 </DropdownMenuItem>
               )}
               {onEdit && (
-                <DropdownMenuItem onClick={() => onEdit(item)}>
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(item); }}>
                   <Pencil className="mr-2 h-4 w-4" />
                   Edit
                 </DropdownMenuItem>
               )}
               {onAdjust && (
-                <DropdownMenuItem onClick={() => onAdjust(item)}>
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onAdjust(item); }}>
                   <ArrowUpDown className="mr-2 h-4 w-4" />
                   Adjust
                 </DropdownMenuItem>

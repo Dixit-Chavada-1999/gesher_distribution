@@ -415,7 +415,9 @@ interface CreateFromSOResult {
 
 export async function createPickTicketFromSalesOrder(
   salesOrderId: string,
-  warehouseId: string
+  warehouseId: string,
+  notifyContactIds?: string[],
+  specialInstructions?: string
 ): Promise<CreateFromSOResult> {
   const auth = await authorize('pick_tickets.create');
   if (!auth.ok) {
@@ -425,13 +427,21 @@ export async function createPickTicketFromSalesOrder(
   const userId = auth.user.id;
 
   try {
-    // Fetch sales order with items
+    // Fetch sales order with items and customer info
     const { data: salesOrder, error: soError } = await db
       .from('sales_orders')
       .select(`
         id,
         order_number,
         warehouse_id,
+        customer_id,
+        customer_po_number,
+        requested_delivery_date,
+        internal_notes,
+        shipping_address_street,
+        shipping_address_city,
+        shipping_address_state,
+        shipping_address_postal_code,
         sales_order_items (
           id,
           product_id,
@@ -445,9 +455,11 @@ export async function createPickTicketFromSalesOrder(
       .single();
 
     if (soError || !salesOrder) {
+      console.error('[createPickTicketFromSalesOrder] Query error:', soError);
+      console.error('[createPickTicketFromSalesOrder] salesOrderId:', salesOrderId);
       return {
         success: false,
-        error: 'Sales order not found',
+        error: soError?.message || 'Sales order not found',
       };
     }
 
@@ -552,7 +564,73 @@ export async function createPickTicketFromSalesOrder(
     if (result.success && result.data) {
       // Note: Shipment will be auto-created when Pick Ticket is COMPLETED (not here)
       // Pick Ticket CREATE = items need to be picked from warehouse
-      // Pick Ticket COMPLETE = items picked, ready to ship â†’ create shipment
+      // Pick Ticket COMPLETE = items picked, ready to ship -> create shipment
+
+      // Send pick ticket email to selected contacts with PDF attachment
+      if (notifyContactIds && notifyContactIds.length > 0) {
+        try {
+          // Get warehouse details
+          const { data: warehouse } = await db
+            .from('locations')
+            .select('name, location_code')
+            .eq('id', finalWarehouseId)
+            .single();
+
+          // Build ship to address
+          const shipToAddress = [
+            salesOrder.shipping_address_street,
+            [salesOrder.shipping_address_city, salesOrder.shipping_address_state, salesOrder.shipping_address_postal_code]
+              .filter(Boolean)
+              .join(', '),
+          ].filter(Boolean).join(', ');
+
+          // Get customer name
+          let customerName = 'Unknown Customer';
+          if (salesOrder.customer_id) {
+            const { data: customer } = await db
+              .from('customers')
+              .select('name')
+              .eq('id', salesOrder.customer_id)
+              .single();
+            customerName = customer?.name || 'Unknown Customer';
+          }
+
+          const { sendPickTicketEmails } = await import('../services/email.service');
+          const emailResult = await sendPickTicketEmails({
+            pickTicketId: result.data.id,
+            pickTicketNumber: result.data.pickTicketNumber,
+            salesOrderNumber: salesOrder.order_number,
+            warehouseName: warehouse?.name || 'Warehouse',
+            warehouseCode: warehouse?.location_code || '',
+            contactIds: notifyContactIds,
+            customerName,
+            shipToAddress: shipToAddress || 'N/A',
+            requiredDate: salesOrder.requested_delivery_date,
+            customerPoNumber: salesOrder.customer_po_number,
+            notes: specialInstructions || salesOrder.internal_notes,
+            items: (salesOrder.sales_order_items || []).map((item: {
+              sku: string;
+              description: string | null;
+              quantity: number;
+            }) => ({
+              sku: item.sku,
+              productName: item.description || item.sku,
+              quantity: item.quantity,
+              uom: 'EA',
+            })),
+          });
+
+          if (emailResult.sentTo.length > 0) {
+            console.log(`[createPickTicketFromSalesOrder] Emails sent to: ${emailResult.sentTo.join(', ')}`);
+          }
+          if (emailResult.errors.length > 0) {
+            console.error(`[createPickTicketFromSalesOrder] Email errors: ${emailResult.errors.join(', ')}`);
+          }
+        } catch (emailError) {
+          // Don't fail pick ticket creation if email fails
+          console.error('[createPickTicketFromSalesOrder] Failed to send emails:', emailError);
+        }
+      }
 
       revalidatePath('/pick-tickets');
       revalidatePath('/sales-orders');

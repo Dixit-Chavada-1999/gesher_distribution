@@ -24,6 +24,7 @@ import { Card, CardContent } from '@/shared/components/ui/card';
 import { InventoryTable } from './InventoryTable';
 import { ViewInventoryDrawer } from './ViewInventoryDrawer';
 import { AddInventoryDrawer } from './AddInventoryDrawer';
+import { AdjustInventoryDialog } from './AdjustInventoryDialog';
 import { useInventory } from '../hooks/useInventory';
 import type { InventoryListItem, InventoryListParams } from '../types';
 
@@ -38,6 +39,8 @@ export function InventoryPageContent() {
   const [selectedInventoryId, setSelectedInventoryId] = useState<string | null>(null);
   const [isViewDrawerOpen, setIsViewDrawerOpen] = useState(false);
   const [isAddDrawerOpen, setIsAddDrawerOpen] = useState(false);
+  const [isAdjustDialogOpen, setIsAdjustDialogOpen] = useState(false);
+  const [selectedItemForAdjust, setSelectedItemForAdjust] = useState<InventoryListItem | null>(null);
 
   // Data fetching
   const { data, meta, isLoading, error, refetch } = useInventory(params);
@@ -63,6 +66,16 @@ export function InventoryPageContent() {
   const handleCloseDrawer = useCallback(() => {
     setIsViewDrawerOpen(false);
     setSelectedInventoryId(null);
+  }, []);
+
+  const handleAdjust = useCallback((item: InventoryListItem) => {
+    setSelectedItemForAdjust(item);
+    setIsAdjustDialogOpen(true);
+  }, []);
+
+  const handleCloseAdjustDialog = useCallback(() => {
+    setIsAdjustDialogOpen(false);
+    setSelectedItemForAdjust(null);
   }, []);
 
   // Stats calculation
@@ -186,6 +199,7 @@ export function InventoryPageContent() {
         data={data}
         isLoading={isLoading}
         onView={handleView}
+        onAdjust={handleAdjust}
         onRowClick={handleView}
       />
 
@@ -228,6 +242,14 @@ export function InventoryPageContent() {
       <AddInventoryDrawer
         open={isAddDrawerOpen}
         onClose={() => setIsAddDrawerOpen(false)}
+        onSuccess={refetch}
+      />
+
+      {/* Adjust Dialog */}
+      <AdjustInventoryDialog
+        open={isAdjustDialogOpen}
+        item={selectedItemForAdjust}
+        onClose={handleCloseAdjustDialog}
         onSuccess={refetch}
       />
     </div>

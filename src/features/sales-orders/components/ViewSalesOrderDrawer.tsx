@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useState, useTransition } from 'react';
-import { Loader2, MapPin, Package, FileText, Calendar, User, Building2, Truck, AlertTriangle, ShieldCheck, CheckCircle, XCircle, ClipboardList } from 'lucide-react';
+import { Loader2, MapPin, Package, FileText, Calendar, User, Building2, Truck, AlertTriangle, ShieldCheck, CheckCircle, XCircle, ClipboardList, Check, ChevronsUpDown } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { useAuthStore } from '@/shared/stores';
@@ -52,7 +52,21 @@ import {
 
 import { getSalesOrder, releaseSalesOrderHold, confirmSalesOrder, cancelSalesOrder, getSalesOrderMasterData } from '../actions';
 import { createPickTicketFromSalesOrder } from '@/features/pick-tickets/actions';
+import { getActiveLocationContacts } from '@/features/locations/actions/location-contacts';
+import type { LocationContact } from '@/features/locations/repositories/location-contacts.repository';
 import type { SalesOrderWithItems } from '../types';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/shared/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+} from '@/shared/components/ui/command';
 import {
   ORDER_STATUS_LABELS,
   ORDER_STATUS_COLORS,
@@ -201,6 +215,11 @@ const [isReleasingHold, setIsReleasingHold] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
   const [warehouses, setWarehouses] = useState<Array<{ id: string; code: string; name: string }>>([]);
+  const [locationContacts, setLocationContacts] = useState<LocationContact[]>([]);
+  const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
+  const [isLoadingContacts, setIsLoadingContacts] = useState(false);
+  const [contactsPopoverOpen, setContactsPopoverOpen] = useState(false);
+  const [specialInstructions, setSpecialInstructions] = useState('');
 
   // ----------------------------------------
   // EFFECTS
@@ -227,6 +246,40 @@ const [isReleasingHold, setIsReleasingHold] = useState(false);
       console.error('Failed to fetch warehouses');
     }
   };
+
+  // Fetch location contacts when warehouse changes
+  useEffect(() => {
+    const fetchLocationContacts = async () => {
+      if (!selectedWarehouseId) {
+        setLocationContacts([]);
+        setSelectedContactIds([]);
+        return;
+      }
+
+      setIsLoadingContacts(true);
+      try {
+        const result = await getActiveLocationContacts(selectedWarehouseId);
+        if (result.success && result.data) {
+          setLocationContacts(result.data);
+          // No auto-select - user must select contacts manually
+          setSelectedContactIds([]);
+        } else {
+          setLocationContacts([]);
+          setSelectedContactIds([]);
+        }
+      } catch {
+        console.error('Failed to fetch location contacts');
+        setLocationContacts([]);
+        setSelectedContactIds([]);
+      } finally {
+        setIsLoadingContacts(false);
+      }
+    };
+
+    if (showPickTicketDialog) {
+      fetchLocationContacts();
+    }
+  }, [selectedWarehouseId, showPickTicketDialog]);
 
   // ----------------------------------------
   // DATA FETCHING
@@ -340,13 +393,22 @@ const handleReleaseHold = async () => {
       return;
     }
 
+    if (selectedContactIds.length === 0) {
+      toast.error('Please select at least one contact');
+      return;
+    }
+
     startTransition(async () => {
       try {
-        const result = await createPickTicketFromSalesOrder(order.id, warehouseId);
+        const result = await createPickTicketFromSalesOrder(order.id, warehouseId, selectedContactIds, specialInstructions || undefined);
         if (result.success) {
           toast.success(`Pick ticket created for ${order.orderNumber}`);
           setShowPickTicketDialog(false);
           setSelectedWarehouseId('');
+          setLocationContacts([]);
+          setSelectedContactIds([]);
+          setContactsPopoverOpen(false);
+          setSpecialInstructions('');
           fetchOrder(); // Refresh order data
         } else {
           toast.error(result.error || 'Failed to create pick ticket');
@@ -358,9 +420,31 @@ const handleReleaseHold = async () => {
     });
   };
 
+  // Toggle contact selection
+  const handleContactToggle = (contactId: string) => {
+    setSelectedContactIds(prev =>
+      prev.includes(contactId)
+        ? prev.filter(id => id !== contactId)
+        : [...prev, contactId]
+    );
+  };
+
+  // Toggle all contacts
+  const handleToggleAllContacts = () => {
+    if (selectedContactIds.length === locationContacts.length) {
+      setSelectedContactIds([]);
+    } else {
+      setSelectedContactIds(locationContacts.map(c => c.id));
+    }
+  };
+
   // Initialize selected warehouse when dialog opens
   const handleOpenPickTicketDialog = () => {
     setSelectedWarehouseId(order?.warehouseId || '');
+    setLocationContacts([]);
+    setSelectedContactIds([]);
+    setContactsPopoverOpen(false);
+    setSpecialInstructions('');
     setShowPickTicketDialog(true);
   };
 
@@ -765,37 +849,141 @@ const handleReleaseHold = async () => {
 
         {/* Create Pick Ticket Dialog */}
         <AlertDialog open={showPickTicketDialog} onOpenChange={setShowPickTicketDialog}>
-          <AlertDialogContent>
+          <AlertDialogContent className="max-w-md">
             <AlertDialogHeader>
               <AlertDialogTitle>Create Pick Ticket</AlertDialogTitle>
               <AlertDialogDescription>
                 Create a pick ticket for order <span className="font-semibold">{order?.orderNumber}</span>.
-                Select the warehouse to fulfill from.
+                Select the warehouse and contacts to notify.
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <div className="py-4">
-              <Label htmlFor="warehouse">Warehouse</Label>
-              <Select
-                value={selectedWarehouseId}
-                onValueChange={setSelectedWarehouseId}
-              >
-                <SelectTrigger className="mt-2">
-                  <SelectValue placeholder="Select warehouse..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {warehouses.map((warehouse) => (
-                    <SelectItem key={warehouse.id} value={warehouse.id}>
-                      {warehouse.name} ({warehouse.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="space-y-4 py-4">
+              {/* Warehouse Selection */}
+              <div>
+                <Label htmlFor="warehouse">Warehouse *</Label>
+                <Select
+                  value={selectedWarehouseId}
+                  onValueChange={setSelectedWarehouseId}
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder="Select warehouse..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {warehouses.map((warehouse) => (
+                      <SelectItem key={warehouse.id} value={warehouse.id}>
+                        {warehouse.name} ({warehouse.code})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Contacts Selection */}
+              {selectedWarehouseId && (
+                <div>
+                  <Label>Send Pick Ticket Email To *</Label>
+                  {isLoadingContacts ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      <span className="ml-2 text-sm text-muted-foreground">Loading contacts...</span>
+                    </div>
+                  ) : locationContacts.length === 0 ? (
+                    <div className="rounded-lg border border-dashed p-4 text-center mt-2">
+                      <p className="text-sm text-muted-foreground">
+                        No contacts found for this warehouse.
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Add contacts in the Locations section.
+                      </p>
+                    </div>
+                  ) : (
+                    <Popover open={contactsPopoverOpen} onOpenChange={setContactsPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={contactsPopoverOpen}
+                          className="w-full justify-between mt-2"
+                        >
+                          <span className="truncate">
+                            {selectedContactIds.length === 0
+                              ? 'Select contacts...'
+                              : selectedContactIds.length === 1
+                                ? locationContacts.find(c => c.id === selectedContactIds[0])?.name
+                                : `${selectedContactIds.length} contacts selected`}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[300px] p-0" align="start">
+                        <Command>
+                          <CommandList>
+                            <CommandEmpty>No contacts found.</CommandEmpty>
+                            <CommandGroup>
+                              {/* Select All Option */}
+                              <CommandItem
+                                onSelect={() => {
+                                  handleToggleAllContacts();
+                                  setContactsPopoverOpen(false);
+                                }}
+                                className="cursor-pointer"
+                              >
+                                <Check
+                                  className={`mr-2 h-4 w-4 ${
+                                    selectedContactIds.length === locationContacts.length && locationContacts.length > 0
+                                      ? 'opacity-100'
+                                      : 'opacity-0'
+                                  }`}
+                                />
+                                Select All
+                              </CommandItem>
+                              {/* Individual Contacts */}
+                              {locationContacts.map((contact) => (
+                                <CommandItem
+                                  key={contact.id}
+                                  onSelect={() => {
+                                    handleContactToggle(contact.id);
+                                    setContactsPopoverOpen(false);
+                                  }}
+                                  className="cursor-pointer"
+                                >
+                                  <Check
+                                    className={`mr-2 h-4 w-4 ${
+                                      selectedContactIds.includes(contact.id)
+                                        ? 'opacity-100'
+                                        : 'opacity-0'
+                                    }`}
+                                  />
+                                  {contact.name}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  )}
+                </div>
+              )}
+
+              {/* Special Instructions */}
+              {selectedWarehouseId && (
+                <div className="mt-4">
+                  <Label>Special Instructions (Optional)</Label>
+                  <textarea
+                    className="mt-2 w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    placeholder="Enter any special instructions for this pick ticket..."
+                    value={specialInstructions}
+                    onChange={(e) => setSpecialInstructions(e.target.value)}
+                  />
+                </div>
+              )}
             </div>
             <AlertDialogFooter>
               <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={handleCreatePickTicket}
-                disabled={isPending || !selectedWarehouseId}
+                disabled={isPending || !selectedWarehouseId || selectedContactIds.length === 0}
               >
                 {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 <ClipboardList className="mr-2 h-4 w-4" />

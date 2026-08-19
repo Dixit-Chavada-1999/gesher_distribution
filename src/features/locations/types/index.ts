@@ -289,3 +289,34 @@ export interface ViewLocationDrawerProps {
   onClose: () => void;
   onEdit?: (locationId: string) => void;
 }
+
+// ============================================
+// LOCATION CONTACT TYPES
+// ============================================
+
+/**
+ * Props for LocationContactsTable component
+ */
+export interface LocationContactsTableProps {
+  locationId: string;
+}
+
+/**
+ * Props for AddLocationContactDialog
+ */
+export interface AddLocationContactDialogProps {
+  open: boolean;
+  locationId: string;
+  onClose: () => void;
+  onSuccess?: () => void;
+}
+
+/**
+ * Props for EditLocationContactDialog
+ */
+export interface EditLocationContactDialogProps {
+  open: boolean;
+  contactId: string | null;
+  onClose: () => void;
+  onSuccess?: () => void;
+}

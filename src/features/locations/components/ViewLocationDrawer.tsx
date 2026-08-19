@@ -3,12 +3,13 @@
 /**
  * ViewLocationDrawer Component
  *
- * Side drawer for viewing location details.
- * Uses card-based sections for organized display.
+ * Side drawer for viewing location details with tabbed interface.
+ * Tab 1: Location Detail - Shows location information
+ * Tab 2: Location User - Shows and manages users assigned to this location
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { Loader2, MapPin, Phone, Mail, User, Building2, CheckCircle2, XCircle, Tag, Hash } from 'lucide-react';
+import { Loader2, MapPin, Phone, Mail, User, Building2, CheckCircle2, XCircle, Tag, Hash, Users } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
@@ -21,10 +22,12 @@ import {
 } from '@/shared/components/ui/sheet';
 import { ScrollArea } from '@/shared/components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
 
 import type { ViewLocationDrawerProps, Location } from '../types';
 import { LOCATION_TYPE_OPTIONS } from '../types';
 import { getLocation } from '../actions';
+import { LocationContactsTable } from './LocationContactsTable';
 
 // ============================================
 // HELPER COMPONENTS
@@ -103,6 +106,7 @@ export function ViewLocationDrawer({
   const [isLoading, setIsLoading] = useState(false);
   const [location, setLocation] = useState<Location | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('details');
 
   // Fetch location data
   const fetchLocation = useCallback(async () => {
@@ -131,9 +135,11 @@ export function ViewLocationDrawer({
   useEffect(() => {
     if (open && locationId) {
       fetchLocation();
+      setActiveTab('details'); // Reset to details tab when opening
     } else {
       setLocation(null);
       setError(null);
+      setActiveTab('details');
     }
   }, [open, locationId, fetchLocation]);
 
@@ -146,7 +152,7 @@ export function ViewLocationDrawer({
     <Sheet open={open} onOpenChange={onClose}>
       <SheetContent
         side="right"
-        className="flex w-full flex-col p-0 sm:max-w-[500px]"
+        className="flex w-full flex-col p-0 sm:max-w-[800px]"
       >
         {/* Header */}
         <SheetHeader className="flex-shrink-0 border-b px-6 py-4">
@@ -159,107 +165,132 @@ export function ViewLocationDrawer({
         </SheetHeader>
 
         {/* Content */}
-        <ScrollArea className="flex-1">
-          <div className="px-6 py-6">
-            {isLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : error ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <p className="text-destructive">{error}</p>
-                <Button variant="outline" onClick={fetchLocation} className="mt-4">
-                  Try Again
-                </Button>
-              </div>
-            ) : location ? (
-              <div className="space-y-4">
-                {/* Status Badges */}
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline">{getTypeLabel(location.locationType)}</Badge>
-                  {location.isActive ? (
-                    <Badge variant="default" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                      <CheckCircle2 className="mr-1 h-3 w-3" />
-                      Active
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary">
-                      <XCircle className="mr-1 h-3 w-3" />
-                      Inactive
-                    </Badge>
-                  )}
-                  {location.isDefault && (
-                    <Badge variant="default">Default</Badge>
-                  )}
-                </div>
-
-                {/* Location Information */}
-                <Section title="Location Information">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <InfoItem
-                      label="Location Name"
-                      value={location.name}
-                      icon={<Building2 className="h-4 w-4" />}
-                    />
-                    <InfoItem
-                      label="Location Code"
-                      value={location.locationCode}
-                      icon={<Hash className="h-4 w-4" />}
-                    />
-                    <InfoItem
-                      label="Type"
-                      value={getTypeLabel(location.locationType)}
-                      icon={<Tag className="h-4 w-4" />}
-                    />
-                  </div>
-                </Section>
-
-                {/* Address */}
-                <Section title="Address">
-                  {(location.address1 || location.city || location.state) ? (
-                    <AddressDisplay
-                      address={{
-                        address1: location.address1,
-                        address2: location.address2,
-                        city: location.city,
-                        state: location.state,
-                        zip: location.zip,
-                        country: location.country,
-                      }}
-                    />
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No address provided</p>
-                  )}
-                </Section>
-
-                {/* Contact Information */}
-                <Section title="Contact Information">
-                  {(location.contactName || location.contactPhone || location.contactEmail) ? (
-                    <div className="space-y-4">
-                      <InfoItem
-                        label="Contact Name"
-                        value={location.contactName}
-                        icon={<User className="h-4 w-4" />}
-                      />
-                      <InfoItem
-                        label="Phone"
-                        value={location.contactPhone}
-                        icon={<Phone className="h-4 w-4" />}
-                      />
-                      <InfoItem
-                        label="Email"
-                        value={location.contactEmail}
-                        icon={<Mail className="h-4 w-4" />}
-                      />
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No contact information provided</p>
-                  )}
-                </Section>
-              </div>
-            ) : null}
+        {isLoading ? (
+          <div className="flex-1 flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
-        </ScrollArea>
+        ) : error ? (
+          <div className="flex-1 flex flex-col items-center justify-center py-12 text-center">
+            <p className="text-destructive">{error}</p>
+            <Button variant="outline" onClick={fetchLocation} className="mt-4">
+              Try Again
+            </Button>
+          </div>
+        ) : location ? (
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+            <div className="border-b px-6">
+              <TabsList className="h-10">
+                <TabsTrigger value="details" className="gap-2">
+                  <Building2 className="h-4 w-4" />
+                  Location Detail
+                </TabsTrigger>
+                <TabsTrigger value="contacts" className="gap-2">
+                  <Users className="h-4 w-4" />
+                  Contacts
+                </TabsTrigger>
+              </TabsList>
+            </div>
+
+            <TabsContent value="details" className="flex-1 mt-0">
+              <ScrollArea className="h-full">
+                <div className="px-6 py-6">
+                  <div className="space-y-4">
+                    {/* Status Badges */}
+                    <div className="flex flex-wrap gap-2">
+                      <Badge variant="outline">{getTypeLabel(location.locationType)}</Badge>
+                      {location.isActive ? (
+                        <Badge variant="default" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                          <CheckCircle2 className="mr-1 h-3 w-3" />
+                          Active
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary">
+                          <XCircle className="mr-1 h-3 w-3" />
+                          Inactive
+                        </Badge>
+                      )}
+                      {location.isDefault && (
+                        <Badge variant="default">Default</Badge>
+                      )}
+                    </div>
+
+                    {/* Location Information */}
+                    <Section title="Location Information">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <InfoItem
+                          label="Location Name"
+                          value={location.name}
+                          icon={<Building2 className="h-4 w-4" />}
+                        />
+                        <InfoItem
+                          label="Location Code"
+                          value={location.locationCode}
+                          icon={<Hash className="h-4 w-4" />}
+                        />
+                        <InfoItem
+                          label="Type"
+                          value={getTypeLabel(location.locationType)}
+                          icon={<Tag className="h-4 w-4" />}
+                        />
+                      </div>
+                    </Section>
+
+                    {/* Address */}
+                    <Section title="Address">
+                      {(location.address1 || location.city || location.state) ? (
+                        <AddressDisplay
+                          address={{
+                            address1: location.address1,
+                            address2: location.address2,
+                            city: location.city,
+                            state: location.state,
+                            zip: location.zip,
+                            country: location.country,
+                          }}
+                        />
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No address provided</p>
+                      )}
+                    </Section>
+
+                    {/* Contact Information */}
+                    <Section title="Contact Information">
+                      {(location.contactName || location.contactPhone || location.contactEmail) ? (
+                        <div className="space-y-4">
+                          <InfoItem
+                            label="Contact Name"
+                            value={location.contactName}
+                            icon={<User className="h-4 w-4" />}
+                          />
+                          <InfoItem
+                            label="Phone"
+                            value={location.contactPhone}
+                            icon={<Phone className="h-4 w-4" />}
+                          />
+                          <InfoItem
+                            label="Email"
+                            value={location.contactEmail}
+                            icon={<Mail className="h-4 w-4" />}
+                          />
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No contact information provided</p>
+                      )}
+                    </Section>
+                  </div>
+                </div>
+              </ScrollArea>
+            </TabsContent>
+
+            <TabsContent value="contacts" className="flex-1 mt-0">
+              <ScrollArea className="h-full">
+                <div className="px-6 py-6">
+                  <LocationContactsTable locationId={location.id} />
+                </div>
+              </ScrollArea>
+            </TabsContent>
+          </Tabs>
+        ) : null}
 
         {/* Footer */}
         {location && (
