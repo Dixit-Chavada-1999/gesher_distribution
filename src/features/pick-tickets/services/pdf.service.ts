@@ -269,15 +269,7 @@ function generatePickTicketHtml(data: PickTicketPdfData): string {
       overflow: hidden;
     }
 
-    .info-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 4px;
-      height: 100%;
-      background: var(--primary);
-    }
+    /* Green left border removed per design request */
 
     .info-card h3 {
       font-size: 10px;
@@ -591,16 +583,16 @@ function generatePickTicketHtml(data: PickTicketPdfData): string {
           <span class="info-label">Order #</span>
           <span class="info-value">${data.salesOrderNumber}</span>
         </div>
+        <div class="info-row">
+          <span class="info-label">Customer</span>
+          <span class="info-value">${data.customerName}</span>
+        </div>
         ${data.customerPoNumber ? `
         <div class="info-row">
           <span class="info-label">Customer PO</span>
           <span class="info-value">${data.customerPoNumber}</span>
         </div>
         ` : ''}
-        <div class="info-row">
-          <span class="info-label">Customer</span>
-          <span class="info-value">${data.customerName}</span>
-        </div>
         <div class="info-row">
           <span class="info-label">Ship To</span>
           <span class="info-value">${data.shipToAddress}</span>

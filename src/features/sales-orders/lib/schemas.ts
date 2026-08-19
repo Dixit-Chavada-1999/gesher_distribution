@@ -103,7 +103,7 @@ export const orderItemFormSchema = z.object({
 
 export const createSalesOrderSchema = z.object({
   orderDate: z.coerce.date(),
-  requestedDeliveryDate: z.coerce.date().nullable().optional(),
+  requestedDeliveryDate: z.coerce.date().nullable(),
   customerId: z.string().uuid('Invalid customer ID'),
   salesRepId: z.string().uuid().nullable().optional(),
   warehouseId: z.string().uuid().nullable().optional(),
@@ -142,7 +142,7 @@ export const updateSalesOrderSchema = z.object({
 export const salesOrderFormSchema = z.object({
   orderNumber: z.string().optional(),
   orderDate: z.string().min(1, 'Order date is required'),
-  requestedDeliveryDate: z.string().optional().default(''),
+  requestedDeliveryDate: z.string().min(1, 'Requested delivery date is required'),
   customerId: z.string().min(1, 'Customer is required'),
   salesRepId: z.string().optional().default(''),
   warehouseId: z.string().optional().default(''),

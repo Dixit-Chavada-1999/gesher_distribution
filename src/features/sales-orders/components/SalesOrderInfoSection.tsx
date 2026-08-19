@@ -94,7 +94,7 @@ function SalesOrderInfoSectionComponent({
 
         {/* Requested Delivery Date */}
         <div className="space-y-2">
-          <Label htmlFor="requestedDeliveryDate">Requested Delivery Date</Label>
+          <Label htmlFor="requestedDeliveryDate">Requested Delivery Date *</Label>
           <Input
             id="requestedDeliveryDate"
             type="date"

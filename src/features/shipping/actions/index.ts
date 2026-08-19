@@ -1,0 +1,235 @@
+'use server';
+
+/**
+ * Shipping Server Actions
+ *
+ * API layer for shipping tracking functionality.
+ */
+
+import { createClient } from '@/shared/lib/supabase/server';
+import * as shippingRepo from '../repositories/shipping.repository';
+import { reprocessShippingEmail as reprocessEmail } from '../services/shipping-processor.service';
+import type {
+  ActionResult,
+  ShippingEmailWithInbound,
+  ShipmentStatusHistory,
+  ShippingEmailListResponse,
+} from '../types';
+
+// ============================================
+// SHIPPING EMAILS
+// ============================================
+
+/**
+ * Get shipping emails list with pagination
+ */
+export async function getShippingEmails(params: {
+  page?: number;
+  limit?: number;
+  isProcessed?: boolean;
+  hasIssue?: boolean;
+}): Promise<ActionResult<ShippingEmailListResponse>> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  const { page = 1, limit = 20 } = params;
+  const result = await shippingRepo.getShippingEmails(params);
+
+  return {
+    success: true,
+    data: {
+      data: result.data,
+      meta: {
+        total: result.total,
+        page,
+        limit,
+      },
+    },
+  };
+}
+
+/**
+ * Get a single shipping email by ID
+ */
+export async function getShippingEmail(
+  id: string
+): Promise<ActionResult<ShippingEmailWithInbound>> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  const email = await shippingRepo.getShippingEmailById(id);
+
+  if (!email) {
+    return { success: false, error: 'Shipping email not found' };
+  }
+
+  return {
+    success: true,
+    data: email,
+  };
+}
+
+// ============================================
+// STATUS HISTORY
+// ============================================
+
+/**
+ * Get status history for a shipment
+ */
+export async function getShipmentStatusHistory(
+  shipmentId: string
+): Promise<ActionResult<ShipmentStatusHistory[]>> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  const history = await shippingRepo.getShipmentStatusHistory(shipmentId);
+
+  return {
+    success: true,
+    data: history,
+  };
+}
+
+// ============================================
+// MANUAL OPERATIONS
+// ============================================
+
+/**
+ * Manually link a shipping email to a shipment
+ */
+export async function linkEmailToShipment(
+  shippingEmailId: string,
+  shipmentId: string
+): Promise<ActionResult<void>> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  const success = await shippingRepo.linkShippingEmailToShipment(
+    shippingEmailId,
+    shipmentId
+  );
+
+  if (!success) {
+    return { success: false, error: 'Failed to link email to shipment' };
+  }
+
+  return { success: true };
+}
+
+/**
+ * Reprocess a shipping email (re-extract and re-match)
+ */
+export async function reprocessShippingEmail(
+  shippingEmailId: string
+): Promise<ActionResult<{ matched: boolean; shipmentId?: string }>> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  const result = await reprocessEmail(shippingEmailId);
+
+  if (!result.success) {
+    return { success: false, error: result.error };
+  }
+
+  return {
+    success: true,
+    data: {
+      matched: result.matched,
+      shipmentId: result.shipmentId,
+    },
+  };
+}
+
+// ============================================
+// DASHBOARD STATS
+// ============================================
+
+/**
+ * Get shipping email statistics
+ */
+export async function getShippingStats(): Promise<
+  ActionResult<{
+    total: number;
+    processed: number;
+    unprocessed: number;
+    matched: number;
+    unmatched: number;
+    withIssues: number;
+  }>
+> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  // Get counts using separate queries
+  const [totalResult, processedResult, matchedResult, issuesResult] =
+    await Promise.all([
+      supabase
+        .from('shipping_emails')
+        .select('id', { count: 'exact', head: true }),
+      supabase
+        .from('shipping_emails')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_processed', true),
+      supabase
+        .from('shipping_emails')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_matched', true),
+      supabase
+        .from('shipping_emails')
+        .select('id', { count: 'exact', head: true })
+        .eq('has_issue', true),
+    ]);
+
+  const total = totalResult.count || 0;
+  const processed = processedResult.count || 0;
+  const matched = matchedResult.count || 0;
+  const withIssues = issuesResult.count || 0;
+
+  return {
+    success: true,
+    data: {
+      total,
+      processed,
+      unprocessed: total - processed,
+      matched,
+      unmatched: processed - matched,
+      withIssues,
+    },
+  };
+}

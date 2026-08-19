@@ -5,11 +5,16 @@
  *
  * Receives inbound emails from Postmark and processes them.
  * Emails sent to *@inbound.gesher.dev-build.in are caught here.
+ *
+ * Routing:
+ * - shipping@inbound.gesher.dev-build.in -> Shipping tracking processor
+ * - gesher_dev@inbound.gesher.dev-build.in -> PO email processor (existing)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/shared/lib/supabase/admin';
 import type { PostmarkInboundPayload } from '@/features/inbound-emails/types';
+import { processShippingEmail } from '@/features/shipping/services';
 
 // ============================================
 // POST /api/webhooks/postmark/inbound
@@ -147,11 +152,51 @@ export async function POST(request: NextRequest) {
         .eq('id', inboundEmail.id);
     }
 
+    // ============================================
+    // ROUTE EMAIL TO APPROPRIATE PROCESSOR
+    // ============================================
+
+    const lowerLocalPart = (localPart || '').toLowerCase();
+
+    if (lowerLocalPart === 'shipping') {
+      // Route to shipping processor
+      console.log('[Postmark Webhook] Routing to shipping processor');
+
+      const shippingResult = await processShippingEmail(
+        inboundEmail.id,
+        payload.Subject || '',
+        payload.TextBody || payload.HtmlBody || ''
+      );
+
+      console.log('[Postmark Webhook] Shipping processing result:', {
+        success: shippingResult.success,
+        matched: shippingResult.matched,
+        shipmentId: shippingResult.shipmentId,
+      });
+
+      // Update email status
+      await supabase
+        .from('inbound_emails')
+        .update({ status: shippingResult.success ? 'processed' : 'failed' })
+        .eq('id', inboundEmail.id);
+
+      return NextResponse.json({
+        success: true,
+        message: 'Shipping email processed',
+        emailId: inboundEmail.id,
+        type: 'shipping',
+        matched: shippingResult.matched,
+        shipmentId: shippingResult.shipmentId,
+      });
+    }
+
+    // Default: PO email processing (existing behavior)
     // Return success response
     return NextResponse.json({
       success: true,
       message: 'Email received and processed',
       emailId: inboundEmail.id,
+      type: 'po',
     });
 
   } catch (error) {

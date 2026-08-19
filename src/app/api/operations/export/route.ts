@@ -834,28 +834,42 @@ function createSupplierScheduleSheet(workbook: ExcelJS.Workbook, data: Operation
 function createGDC1InventorySheet(workbook: ExcelJS.Workbook, data: OperationsData): void {
   const ws = workbook.addWorksheet('GDC 1');
 
-  // Get unique SKUs with product names for dynamic price columns
+  // Get unique SKUs with product names for dynamic columns
   const uniqueSkus = data.gdc1InventorySkus || [];
 
   // Calculate dynamic column widths
-  const baseWidths = [8, 15, 25, 10, 15, 12, 12, 15, 12, 12, 12, 10, 10, 12, 12];
-  const priceWidths = uniqueSkus.map(() => 14); // Price columns
+  // Base: No., Load #
+  const startWidths = [8, 15];
+  // SKU quantity columns (dynamic based on unique SKUs)
+  const qtyWidths = uniqueSkus.map(() => 18);
+  // Total Qty and rest of columns
+  const midWidths = [10, 15, 12, 12, 18, 12, 12, 12, 10, 10, 12, 12];
+  // Price columns for each SKU
+  const priceWidths = uniqueSkus.map(() => 14);
+  // End columns
   const endWidths = [12, 12, 12, 25, 25];
-  setColumnWidths(ws, [...baseWidths, ...priceWidths, ...endWidths]);
+
+  setColumnWidths(ws, [...startWidths, ...qtyWidths, ...midWidths, ...priceWidths, ...endWidths]);
 
   let currentRow = 1;
-  const totalColumns = baseWidths.length + priceWidths.length + endWidths.length;
+  const totalColumns = startWidths.length + qtyWidths.length + midWidths.length + priceWidths.length + endWidths.length;
 
   mergeAndStyle(ws, currentRow, 1, currentRow, totalColumns, 'GDC1 Inventory', FONTS.headerTitle, COLORS.darkBlue);
   ws.getRow(currentRow).height = 35;
   currentRow++;
 
-  // Build dynamic headers - add price columns for each SKU with PRODUCT NAME
-  const baseHeaders = ['No.', 'Load #', 'Items', 'Total Qty', 'Customer', 'PO', 'ETA Port', 'Delivery Address', 'Confirmed ETA', 'Customer Expected', 'Actual Delivery', 'Qty Del.', 'Outstanding', 'Invoice #', 'Invoice Amt'];
-  // Use product name for price column headers
+  // Build dynamic headers with separate columns for each SKU quantity
+  const startHeaders = ['No.', 'Load #'];
+  // SKU quantity headers using product name
+  const qtyHeaders = uniqueSkus.map(sku => `${sku.productName} Qty`);
+  // Mid headers
+  const midHeaders = ['Total Qty', 'Customer', 'PO', 'ETA Port', 'Delivery Address', 'Confirmed ETA', 'Customer Expected', 'Actual Delivery', 'Qty Del.', 'Outstanding', 'Invoice #', 'Invoice Amt'];
+  // Price headers
   const priceHeaders = uniqueSkus.map(sku => `${sku.productName} Price`);
+  // End headers
   const endHeaders = ['50% Payment', '50% Due', 'Status', 'Action / Notes', 'Ankur Comments'];
-  const headers = [...baseHeaders, ...priceHeaders, ...endHeaders];
+
+  const headers = [...startHeaders, ...qtyHeaders, ...midHeaders, ...priceHeaders, ...endHeaders];
 
   headers.forEach((header, index) => {
     const cell = ws.getCell(currentRow, index + 1);
@@ -868,16 +882,32 @@ function createGDC1InventorySheet(workbook: ExcelJS.Workbook, data: OperationsDa
   ws.getRow(currentRow).height = 25;
   currentRow++;
 
+  // Calculate column index ranges for formatting
+  const qtyColStart = startHeaders.length;
+  const qtyColEnd = qtyColStart + uniqueSkus.length;
+  const totalQtyColIndex = qtyColEnd;
+  const priceColStart = startHeaders.length + qtyHeaders.length + midHeaders.length;
+  const priceColEnd = priceColStart + uniqueSkus.length;
+  const deliveryAddressColIndex = qtyColEnd + 4; // Delivery Address column
+  const notesColStart = priceColEnd + 3; // Action/Notes and Ankur Comments
+
   data.gdc1Inventory.forEach((item, index) => {
     const rowColor = index % 2 === 0 ? COLORS.white : COLORS.lightGray;
-    // Use product name if available, otherwise SKU
-    const itemsStr = item.items.map(i => `${i.productName || i.sku}: ${i.qty}`).join(', ');
 
-    // Build base row data
-    const baseRow = [
+    // Build start columns
+    const startRow = [
       item.no,
       item.loadNumber,
-      itemsStr,
+    ];
+
+    // Build dynamic SKU quantity columns
+    const qtyRow = uniqueSkus.map(skuInfo => {
+      const skuItem = item.items.find(i => i.sku === skuInfo.sku);
+      return skuItem?.qty || '-';
+    });
+
+    // Build mid columns
+    const midRow = [
       item.totalQty,
       item.customer || '',
       item.po || '',
@@ -892,12 +922,13 @@ function createGDC1InventorySheet(workbook: ExcelJS.Workbook, data: OperationsDa
       item.invoiceAmount
     ];
 
-    // Add dynamic price columns for each SKU (using sku.sku to match item)
+    // Build dynamic price columns
     const priceRow = uniqueSkus.map(skuInfo => {
       const skuItem = item.items.find(i => i.sku === skuInfo.sku);
       return skuItem?.unitPrice || '';
     });
 
+    // Build end columns
     const endRow = [
       formatDate(item.payment50PercentDate),
       formatDate(item.remaining50DueDate),
@@ -906,22 +937,30 @@ function createGDC1InventorySheet(workbook: ExcelJS.Workbook, data: OperationsDa
       item.ankurNotes
     ];
 
-    const row = [...baseRow, ...priceRow, ...endRow];
+    const row = [...startRow, ...qtyRow, ...midRow, ...priceRow, ...endRow];
 
     row.forEach((value, colIndex) => {
       const cell = ws.getCell(currentRow, colIndex + 1);
       cell.value = value;
       cell.font = FONTS.tableCell;
       applyFill(cell, rowColor);
-      // Adjust alignment indexes for dynamic columns
-      const priceColStart = 15;
-      const priceColEnd = priceColStart + uniqueSkus.length;
-      const isNumeric = [0, 3, 11, 12].includes(colIndex);
-      const isCurrency = colIndex === 14 || (colIndex >= priceColStart && colIndex < priceColEnd);
-      cell.alignment = { horizontal: isNumeric || isCurrency ? 'right' : 'left', vertical: 'middle', wrapText: [2, 7].includes(colIndex) || colIndex >= priceColEnd + 2 };
+
+      // Determine formatting based on column type
+      const isQtyCol = colIndex >= qtyColStart && colIndex < qtyColEnd;
+      const isTotalQtyCol = colIndex === totalQtyColIndex;
+      const isNumericCol = colIndex === 0 || isQtyCol || isTotalQtyCol || colIndex === qtyColEnd + 8 || colIndex === qtyColEnd + 9; // No., Qty cols, Qty Del., Outstanding
+      const isCurrencyCol = colIndex === qtyColEnd + 11 || (colIndex >= priceColStart && colIndex < priceColEnd); // Invoice Amt, Price cols
+      const isWrapCol = colIndex === deliveryAddressColIndex || colIndex >= notesColStart;
+
+      cell.alignment = {
+        horizontal: isNumericCol || isCurrencyCol ? 'right' : 'left',
+        vertical: 'middle',
+        wrapText: isWrapCol
+      };
       cell.border = BORDERS;
-      if (isNumeric) { cell.numFmt = '#,##0'; }
-      else if (isCurrency) { cell.numFmt = '$#,##0'; }
+
+      if (isNumericCol && value !== '-') { cell.numFmt = '#,##0'; }
+      else if (isCurrencyCol) { cell.numFmt = '$#,##0'; }
     });
     currentRow++;
   });

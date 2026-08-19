@@ -35,6 +35,7 @@ import {
   Factory, // Suppliers
   ClipboardCheck, // Pick Tickets
   PackageCheck, // Packing Lists
+  Ship, // Shipping Tracking
 } from 'lucide-react';
 
 import { cn } from '@/shared/lib/utils';
@@ -170,6 +171,13 @@ const NAV_SECTIONS = [
         href: '/packing-lists',
         icon: PackageCheck,
         permission: 'pick_tickets.view_module', // Uses same permission as pick tickets
+      },
+      {
+        id: 'shipping',
+        label: 'Shipping',
+        href: '/shipping',
+        icon: Ship,
+        permission: 'dashboard.view_module', // Uses dashboard permission for now
       },
     ],
   },
