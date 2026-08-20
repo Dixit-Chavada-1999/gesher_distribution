@@ -1120,15 +1120,30 @@ export class QuickBooksProvider implements IAccountingProvider {
         ? 'Service'
         : 'NonInventory';
 
-    // Get income account (required by QuickBooks for all item types)
-    // For inventory items, MUST use an account with AccountSubType = 'SalesOfProductIncome'
+    // Extract QBO-specific fields from metadata
+    const metadata = product.metadata || {};
+    const userIncomeAccount = metadata.qboIncomeAccount as string | undefined;
+    const userExpenseAccount = metadata.qboExpenseAccount as string | undefined;
+    const userAssetAccount = metadata.qboInventoryAssetAccount as string | undefined;
+    const purchaseDescription = metadata.purchaseDescription as string | undefined;
+    const isTaxable = metadata.isTaxable as boolean | undefined;
+
+    // Get income account - use user-selected if provided, otherwise auto-detect
     const isInventory = qboType === 'Inventory';
-    const incomeAccount = await this.getIncomeAccount(
-      tokenInfo.accessToken,
-      tokenInfo.externalAccountId,
-      tokenInfo.environment,
-      isInventory
-    );
+    let incomeAccount: { id: string; name: string } | null = null;
+
+    if (userIncomeAccount) {
+      // User selected an account - use it directly
+      incomeAccount = { id: userIncomeAccount, name: '' };
+    } else {
+      // Auto-detect income account
+      incomeAccount = await this.getIncomeAccount(
+        tokenInfo.accessToken,
+        tokenInfo.externalAccountId,
+        tokenInfo.environment,
+        isInventory
+      );
+    }
 
     if (!incomeAccount) {
       const errorMsg = isInventory
@@ -1148,15 +1163,24 @@ export class QuickBooksProvider implements IAccountingProvider {
         value: incomeAccount.id,
         name: incomeAccount.name,
       },
+      Taxable: isTaxable,
+      PurchaseDesc: purchaseDescription,
     };
 
     // For inventory items, we need expense account, asset account, and inventory tracking fields
     if (qboType === 'Inventory') {
-      const expenseAccount = await this.getExpenseAccount(
-        tokenInfo.accessToken,
-        tokenInfo.externalAccountId,
-        tokenInfo.environment
-      );
+      // Use user-selected expense account or auto-detect
+      let expenseAccount: { id: string; name: string } | null = null;
+      if (userExpenseAccount) {
+        expenseAccount = { id: userExpenseAccount, name: '' };
+      } else {
+        expenseAccount = await this.getExpenseAccount(
+          tokenInfo.accessToken,
+          tokenInfo.externalAccountId,
+          tokenInfo.environment
+        );
+      }
+
       if (expenseAccount) {
         qboItem.ExpenseAccountRef = {
           value: expenseAccount.id,
@@ -1164,12 +1188,18 @@ export class QuickBooksProvider implements IAccountingProvider {
         };
       }
 
-      // Get asset account for inventory tracking
-      const assetAccount = await this.getAssetAccount(
-        tokenInfo.accessToken,
-        tokenInfo.externalAccountId,
-        tokenInfo.environment
-      );
+      // Use user-selected asset account or auto-detect
+      let assetAccount: { id: string; name: string } | null = null;
+      if (userAssetAccount) {
+        assetAccount = { id: userAssetAccount, name: '' };
+      } else {
+        assetAccount = await this.getAssetAccount(
+          tokenInfo.accessToken,
+          tokenInfo.externalAccountId,
+          tokenInfo.environment
+        );
+      }
+
       if (assetAccount) {
         qboItem.AssetAccountRef = {
           value: assetAccount.id,
@@ -1474,6 +1504,14 @@ export class QuickBooksProvider implements IAccountingProvider {
       throw new Error('Item not found');
     }
 
+    // Extract QBO-specific fields from metadata
+    const metadata = product.metadata || {};
+    const userIncomeAccount = metadata.qboIncomeAccount as string | undefined;
+    const userExpenseAccount = metadata.qboExpenseAccount as string | undefined;
+    const userAssetAccount = metadata.qboInventoryAssetAccount as string | undefined;
+    const purchaseDescription = metadata.purchaseDescription as string | undefined;
+    const isTaxable = metadata.isTaxable as boolean | undefined;
+
     // Build update request with required fields from current item
     const qboItem: Partial<QuickBooksItem> = {
       Id: externalId,
@@ -1485,8 +1523,19 @@ export class QuickBooksProvider implements IAccountingProvider {
       UnitPrice: product.unitPrice ? product.unitPrice / 100 : currentItem.UnitPrice,
       // Required fields for Minor Version 75+
       Type: currentItem.Type,
-      IncomeAccountRef: currentItem.IncomeAccountRef,
-      ExpenseAccountRef: currentItem.ExpenseAccountRef,
+      // Use user-selected accounts if provided, otherwise keep current
+      IncomeAccountRef: userIncomeAccount
+        ? { value: userIncomeAccount, name: '' }
+        : currentItem.IncomeAccountRef,
+      ExpenseAccountRef: userExpenseAccount
+        ? { value: userExpenseAccount, name: '' }
+        : currentItem.ExpenseAccountRef,
+      AssetAccountRef: userAssetAccount
+        ? { value: userAssetAccount, name: '' }
+        : currentItem.AssetAccountRef,
+      // Additional fields
+      Taxable: isTaxable ?? currentItem.Taxable,
+      PurchaseDesc: purchaseDescription ?? currentItem.PurchaseDesc,
     };
 
     const url = `${getApiBaseUrl(tokenInfo.environment as QuickBooksEnvironment)}/v3/company/${tokenInfo.externalAccountId}/item?minorversion=${QBO_API_MINOR_VERSION}`;

@@ -17,6 +17,8 @@ import type {
   RimInstallationItem,
   ShipmentStatus,
   SKUColumnInfo,
+  FilterOptions,
+  OperationsFilters,
 } from '../types';
 
 // ============================================
@@ -70,14 +72,14 @@ function mapLoadStatus(dbStatus: string | null): ShipmentStatus {
 // - Committed Customer = Supplier Schedule (with Load#) + GDC1 (status = SOLD)
 // ============================================
 
-export async function getOperationsStats(): Promise<OperationsStats> {
+export async function getOperationsStats(filters?: OperationsFilters): Promise<OperationsStats> {
   const supabase = await createClient();
 
   const now = new Date();
   const next7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
   // Get ALL sales orders with items for KPI calculation
-  const { data: salesOrders, error: soError } = await supabase
+  let soQuery = supabase
     .from('sales_orders')
     .select(`
       id,
@@ -86,10 +88,25 @@ export async function getOperationsStats(): Promise<OperationsStats> {
       product_source,
       grand_total,
       requested_delivery_date,
-      sales_order_items(quantity)
+      customer_id,
+      customer_po_number,
+      sales_order_items(quantity, product_id)
     `)
     .is('deleted_at', null)
     .neq('status', 'cancelled');
+
+  // Apply filters
+  if (filters?.customerId) {
+    soQuery = soQuery.eq('customer_id', filters.customerId);
+  }
+  if (filters?.salesOrderId) {
+    soQuery = soQuery.eq('id', filters.salesOrderId);
+  }
+  if (filters?.customerPoNumber) {
+    soQuery = soQuery.eq('customer_po_number', filters.customerPoNumber);
+  }
+
+  const { data: salesOrders, error: soError } = await soQuery;
 
   if (soError) {
     console.error('Error fetching sales orders for stats:', soError);
@@ -126,6 +143,13 @@ export async function getOperationsStats(): Promise<OperationsStats> {
   // Process sales orders based on Jenny's Excel logic
   salesOrders?.forEach((so) => {
     const items = so.sales_order_items || [];
+
+    // Filter by productId if specified
+    if (filters?.productId) {
+      const hasProduct = items.some((item: { product_id?: string }) => item.product_id === filters.productId);
+      if (!hasProduct) return;
+    }
+
     const totalQty = items.reduce((sum: number, item: { quantity: number }) => sum + (item.quantity || 0), 0);
     const invoiceAmt = so.grand_total ? so.grand_total / 100 : 0;
     const isWarehouse = so.product_source === 'warehouse';  // GDC1 Inventory
@@ -221,15 +245,16 @@ export async function getOperationsStats(): Promise<OperationsStats> {
  * - GDC1 Available: sales_orders where product_source = 'warehouse'
  * - Only includes inventory-type products (excludes non_inventory and service)
  */
-export async function getSKUBreakdown(): Promise<SKUBreakdown[]> {
+export async function getSKUBreakdown(filters?: OperationsFilters): Promise<SKUBreakdown[]> {
   const supabase = await createClient();
 
   // Get sales order items with product_source info - only inventory products
-  const { data: items, error } = await supabase
+  let query = supabase
     .from('sales_order_items')
     .select(`
       sku,
       quantity,
+      product_id,
       product:products!inner(
         id,
         name,
@@ -239,12 +264,30 @@ export async function getSKUBreakdown(): Promise<SKUBreakdown[]> {
         id,
         product_source,
         status,
-        deleted_at
+        deleted_at,
+        customer_id,
+        customer_po_number
       )
     `)
     .is('sales_order.deleted_at', null)
     .neq('sales_order.status', 'cancelled')
     .eq('product.item_type', 'inventory');
+
+  // Apply filters
+  if (filters?.customerId) {
+    query = query.eq('sales_order.customer_id', filters.customerId);
+  }
+  if (filters?.salesOrderId) {
+    query = query.eq('sales_order.id', filters.salesOrderId);
+  }
+  if (filters?.customerPoNumber) {
+    query = query.eq('sales_order.customer_po_number', filters.customerPoNumber);
+  }
+  if (filters?.productId) {
+    query = query.eq('product_id', filters.productId);
+  }
+
+  const { data: items, error } = await query;
 
   if (error) {
     console.error('Error fetching SKU breakdown:', error);
@@ -310,7 +353,7 @@ export async function getSKUBreakdown(): Promise<SKUBreakdown[]> {
 // Optional productSource filter: 'dropship' for Shipment Overview, 'warehouse' for GDC1
 // ============================================
 
-export async function getCustomerCommitments(productSource?: 'dropship' | 'warehouse'): Promise<CustomerCommitment[]> {
+export async function getCustomerCommitments(productSource?: 'dropship' | 'warehouse', filters?: OperationsFilters): Promise<CustomerCommitment[]> {
   const supabase = await createClient();
 
   const now = new Date();
@@ -325,12 +368,15 @@ export async function getCustomerCommitments(productSource?: 'dropship' | 'wareh
       grand_total,
       requested_delivery_date,
       product_source,
+      customer_id,
+      customer_po_number,
       customers(
         id,
         name
       ),
       sales_order_items(
-        quantity
+        quantity,
+        product_id
       )
     `)
     .is('deleted_at', null)
@@ -339,6 +385,17 @@ export async function getCustomerCommitments(productSource?: 'dropship' | 'wareh
   // Filter by product_source if specified
   if (productSource) {
     query = query.eq('product_source', productSource);
+  }
+
+  // Apply filters
+  if (filters?.customerId) {
+    query = query.eq('customer_id', filters.customerId);
+  }
+  if (filters?.salesOrderId) {
+    query = query.eq('id', filters.salesOrderId);
+  }
+  if (filters?.customerPoNumber) {
+    query = query.eq('customer_po_number', filters.customerPoNumber);
   }
 
   const { data: salesOrders, error } = await query;
@@ -365,6 +422,13 @@ export async function getCustomerCommitments(productSource?: 'dropship' | 'wareh
 
     // Calculate total qty from items
     const items = so.sales_order_items || [];
+
+    // Filter by productId if specified
+    if (filters?.productId) {
+      const hasProduct = items.some((item: { product_id?: string }) => item.product_id === filters.productId);
+      if (!hasProduct) return;
+    }
+
     const totalQty = items.reduce((sum: number, item: { quantity: number }) => sum + (item.quantity || 0), 0);
 
     // Invoice amount from grand_total (stored in cents)
@@ -417,20 +481,35 @@ export async function getCustomerCommitments(productSource?: 'dropship' | 'wareh
 // - HOLD: From shipments table
 // ============================================
 
-export async function getShipmentStatusMix(): Promise<ShipmentStatusMix[]> {
+export async function getShipmentStatusMix(filters?: OperationsFilters): Promise<ShipmentStatusMix[]> {
   const supabase = await createClient();
 
   // Get sales orders with items for status breakdown - same logic as KPIs
-  const { data: salesOrders, error: soError } = await supabase
+  let soQuery = supabase
     .from('sales_orders')
     .select(`
       id,
       status,
       product_source,
-      sales_order_items(quantity)
+      customer_id,
+      customer_po_number,
+      sales_order_items(quantity, product_id)
     `)
     .is('deleted_at', null)
     .neq('status', 'cancelled');
+
+  // Apply filters
+  if (filters?.customerId) {
+    soQuery = soQuery.eq('customer_id', filters.customerId);
+  }
+  if (filters?.salesOrderId) {
+    soQuery = soQuery.eq('id', filters.salesOrderId);
+  }
+  if (filters?.customerPoNumber) {
+    soQuery = soQuery.eq('customer_po_number', filters.customerPoNumber);
+  }
+
+  const { data: salesOrders, error: soError } = await soQuery;
 
   if (soError) {
     console.error('Error fetching sales orders for status mix:', soError);
@@ -453,6 +532,13 @@ export async function getShipmentStatusMix(): Promise<ShipmentStatusMix[]> {
   // Process sales orders - same logic as getOperationsStats()
   salesOrders?.forEach((so) => {
     const items = so.sales_order_items || [];
+
+    // Filter by productId if specified
+    if (filters?.productId) {
+      const hasProduct = items.some((item: { product_id?: string }) => item.product_id === filters.productId);
+      if (!hasProduct) return;
+    }
+
     const totalQty = items.reduce((sum: number, item: { quantity: number }) => sum + (item.quantity || 0), 0);
     const isWarehouse = so.product_source === 'warehouse';
     const isDropship = so.product_source === 'dropship';
@@ -536,7 +622,7 @@ export async function getShipmentStatusMix(): Promise<ShipmentStatusMix[]> {
 // Now pulls from BOTH shipments table AND sales_orders table
 // ============================================
 
-export async function getImmediateAttention(): Promise<ImmediateAttentionItem[]> {
+export async function getImmediateAttention(filters?: OperationsFilters): Promise<ImmediateAttentionItem[]> {
   const supabase = await createClient();
 
   const now = new Date();
@@ -547,7 +633,7 @@ export async function getImmediateAttention(): Promise<ImmediateAttentionItem[]>
   // ============================================
   // 1. Get from SHIPMENTS table (traditional flow)
   // ============================================
-  const { data: shipments, error: shipError } = await supabase
+  let shipQuery = supabase
     .from('shipments')
     .select(`
       id,
@@ -568,11 +654,37 @@ export async function getImmediateAttention(): Promise<ImmediateAttentionItem[]>
         customer_po_number,
         requested_delivery_date,
         product_source,
+        customer_id,
         customers(id, name)
       )
     `)
     .is('deleted_at', null)
     .order('created_at', { ascending: false });
+
+  // Apply status filter to load_status
+  if (filters?.status) {
+    const statusMap: Record<ShipmentStatus, string> = {
+      'AVAILABLE': 'available',
+      'OPEN': 'open',
+      'HOLD': 'hold',
+      'IN_TRANSIT': 'in_transit',
+      'SOLD': 'sold',
+      'CLOSED': 'closed',
+      'INVOICED': 'invoiced',
+      'NOT_INVOICED': 'not_invoiced',
+      'PARTIALLY_PAID': 'partially_paid',
+      'PAID': 'paid',
+      'DISPUTED': 'disputed',
+      'PO_NEEDED': 'po_needed',
+      'DELIVERED': 'delivered',
+    };
+    shipQuery = shipQuery.eq('load_status', statusMap[filters.status]);
+  }
+  if (filters?.salesOrderId) {
+    shipQuery = shipQuery.eq('sales_order_id', filters.salesOrderId);
+  }
+
+  const { data: shipments, error: shipError } = await shipQuery;
 
   if (shipError) {
     console.error('Error fetching shipments for immediate attention:', shipError);
@@ -587,6 +699,14 @@ export async function getImmediateAttention(): Promise<ImmediateAttentionItem[]>
       return; // Skip warehouse shipments
     }
 
+    // Apply filters on related sales order data
+    if (filters?.customerId && salesOrderData?.customer_id !== filters.customerId) {
+      return;
+    }
+    if (filters?.customerPoNumber && salesOrderData?.customer_po_number !== filters.customerPoNumber) {
+      return;
+    }
+
     // Priority: eta_port_tracking (from shipping email) > eta_to_port (manual) > estimated_arrival
     const etaDate = s.eta_port_tracking || s.eta_to_port || s.estimated_arrival;
     const etaPort = etaDate ? new Date(etaDate) : null;
@@ -598,7 +718,13 @@ export async function getImmediateAttention(): Promise<ImmediateAttentionItem[]>
     const status = s.load_status as string;
     const isActive = status === 'open' || status === 'in_transit' || !status;
 
-    if (isActive || isThisWeek || isOverdue || s.is_delayed) {
+    // If status filter is applied, include all matching items
+    // Otherwise, only include active/urgent items
+    const shouldInclude = filters?.status
+      ? true  // Status filter already applied in query
+      : (isActive || isThisWeek || isOverdue || s.is_delayed);
+
+    if (shouldInclude) {
       result.push({
         id: s.id,
         loadNumber: s.shipment_number || s.supplier_reference_number || 'N/A',
@@ -620,7 +746,17 @@ export async function getImmediateAttention(): Promise<ImmediateAttentionItem[]>
   // 2. Get from SALES_ORDERS table (for orders without shipments)
   // Only DROPSHIP orders - warehouse orders shown in GDC1 Inventory tab
   // ============================================
-  const { data: salesOrders, error: soError } = await supabase
+
+  // Map ShipmentStatus to SO status for filtering
+  const statusToSoStatusMap: Partial<Record<ShipmentStatus, string[]>> = {
+    'OPEN': ['pending', 'draft'],
+    'SOLD': ['confirmed'],
+    'IN_TRANSIT': ['processing', 'shipped'],
+    'DELIVERED': ['delivered'],
+    // AVAILABLE is for warehouse inventory, not dropship orders - returns empty
+  };
+
+  let soQuery = supabase
     .from('sales_orders')
     .select(`
       id,
@@ -630,13 +766,40 @@ export async function getImmediateAttention(): Promise<ImmediateAttentionItem[]>
       product_source,
       requested_delivery_date,
       internal_notes,
+      customer_id,
       customers(id, name),
-      sales_order_items(quantity)
+      sales_order_items(quantity, product_id)
     `)
     .is('deleted_at', null)
     .eq('product_source', 'dropship')  // Only DROPSHIP orders
-    .in('status', ['pending', 'confirmed', 'processing', 'shipped'])
     .order('requested_delivery_date', { ascending: true });
+
+  // Apply status filter - if status doesn't map to SO statuses, skip SO query
+  if (filters?.status) {
+    const soStatuses = statusToSoStatusMap[filters.status];
+    if (soStatuses && soStatuses.length > 0) {
+      soQuery = soQuery.in('status', soStatuses);
+    } else {
+      // Status like AVAILABLE doesn't apply to dropship orders - return empty for SO
+      soQuery = soQuery.eq('status', 'NONE_MATCH'); // Will return empty
+    }
+  } else {
+    // No status filter - get all active statuses
+    soQuery = soQuery.in('status', ['pending', 'confirmed', 'processing', 'shipped']);
+  }
+
+  // Apply other filters
+  if (filters?.customerId) {
+    soQuery = soQuery.eq('customer_id', filters.customerId);
+  }
+  if (filters?.salesOrderId) {
+    soQuery = soQuery.eq('id', filters.salesOrderId);
+  }
+  if (filters?.customerPoNumber) {
+    soQuery = soQuery.eq('customer_po_number', filters.customerPoNumber);
+  }
+
+  const { data: salesOrders, error: soError } = await soQuery;
 
   if (soError) {
     console.error('Error fetching sales orders for immediate attention:', soError);
@@ -654,6 +817,13 @@ export async function getImmediateAttention(): Promise<ImmediateAttentionItem[]>
     // Skip if already added from shipments (by sales_order_id)
     if (addedSalesOrderIds.has(so.id)) { return; }
 
+    // Filter by productId if specified
+    const items = so.sales_order_items || [];
+    if (filters?.productId) {
+      const hasProduct = items.some((item: { product_id?: string }) => item.product_id === filters.productId);
+      if (!hasProduct) return;
+    }
+
     const customerData = toOne(so.customers);
     const deliveryDate = so.requested_delivery_date ? new Date(so.requested_delivery_date) : null;
 
@@ -664,7 +834,13 @@ export async function getImmediateAttention(): Promise<ImmediateAttentionItem[]>
     // Include if due this week, overdue, or in active status
     const isActive = so.status === 'pending' || so.status === 'confirmed' || so.status === 'processing';
 
-    if (isThisWeek || isOverdue || isActive) {
+    // If status filter is applied, include all matching items
+    // Otherwise, only include active/urgent items
+    const shouldInclude = filters?.status
+      ? true  // Status filter already applied in query
+      : (isThisWeek || isOverdue || isActive);
+
+    if (shouldInclude) {
       // Calculate total qty from items
       const items = so.sales_order_items || [];
       const totalQty = items.reduce((sum: number, item: { quantity: number }) => sum + (item.quantity || 0), 0);
@@ -747,11 +923,19 @@ export async function getUniqueSKUs(): Promise<string[]> {
  *   - delivered → DELIVERED
  *   - cancelled → excluded
  */
-export async function getSupplierShipmentSchedule(): Promise<{ data: ShipmentScheduleItem[]; uniqueSkus: SKUColumnInfo[] }> {
+export async function getSupplierShipmentSchedule(filters?: OperationsFilters): Promise<{ data: ShipmentScheduleItem[]; uniqueSkus: SKUColumnInfo[] }> {
   const supabase = await createClient();
 
+  // Map ShipmentStatus to SO status for filtering
+  const statusToSoStatus: Partial<Record<ShipmentStatus, string[]>> = {
+    'OPEN': ['draft', 'pending'],
+    'SOLD': ['confirmed', 'processing'],
+    'IN_TRANSIT': ['shipped'],
+    'DELIVERED': ['delivered'],
+  };
+
   // Get Sales Orders where product_source = 'dropship' (Supplier/Galileo)
-  const { data: salesOrders, error } = await supabase
+  let soQuery = supabase
     .from('sales_orders')
     .select(`
       id,
@@ -780,6 +964,22 @@ export async function getSupplierShipmentSchedule(): Promise<{ data: ShipmentSch
     .neq('status', 'cancelled')
     .order('created_at', { ascending: false });
 
+  // Apply filters
+  if (filters?.customerId) {
+    soQuery = soQuery.eq('customer_id', filters.customerId);
+  }
+  if (filters?.salesOrderId) {
+    soQuery = soQuery.eq('id', filters.salesOrderId);
+  }
+  if (filters?.customerPoNumber) {
+    soQuery = soQuery.eq('customer_po_number', filters.customerPoNumber);
+  }
+  if (filters?.status && statusToSoStatus[filters.status]) {
+    soQuery = soQuery.in('status', statusToSoStatus[filters.status]!);
+  }
+
+  const { data: salesOrders, error } = await soQuery;
+
   if (error) {
     console.error('Error fetching supplier schedule:', error);
     throw error;
@@ -788,7 +988,7 @@ export async function getSupplierShipmentSchedule(): Promise<{ data: ShipmentSch
   // Get sales order items for SKU breakdown with product names - only inventory products
   const salesOrderIds = salesOrders?.map((s) => s.id) || [];
 
-  const { data: items } = await supabase
+  let itemsQuery = supabase
     .from('sales_order_items')
     .select(`
       sales_order_id,
@@ -797,10 +997,18 @@ export async function getSupplierShipmentSchedule(): Promise<{ data: ShipmentSch
       quantity,
       unit_price,
       line_total,
+      product_id,
       products!inner(id, name, item_type)
     `)
     .in('sales_order_id', salesOrderIds)
     .eq('products.item_type', 'inventory');
+
+  // Apply product filter
+  if (filters?.productId) {
+    itemsQuery = itemsQuery.eq('product_id', filters.productId);
+  }
+
+  const { data: items } = await itemsQuery;
 
   // Group items by sales order and build SKU info map
   // Also track prices per SKU per order for price columns
@@ -931,11 +1139,18 @@ export async function getSupplierShipmentSchedule(): Promise<{ data: ShipmentSch
  *   - shipped, delivered → INVOICED
  *   - cancelled → excluded
  */
-export async function getGDC1Inventory(): Promise<{ data: GDC1InventoryItem[]; uniqueSkus: SKUColumnInfo[] }> {
+export async function getGDC1Inventory(filters?: OperationsFilters): Promise<{ data: GDC1InventoryItem[]; uniqueSkus: SKUColumnInfo[] }> {
   const supabase = await createClient();
 
+  // Map ShipmentStatus to SO status for filtering
+  const statusToSoStatus: Partial<Record<ShipmentStatus, string[]>> = {
+    'AVAILABLE': ['draft', 'pending'],
+    'SOLD': ['confirmed', 'processing'],
+    'INVOICED': ['shipped', 'delivered'],
+  };
+
   // Get Sales Orders where product_source = 'warehouse'
-  const { data: salesOrders, error } = await supabase
+  let soQuery = supabase
     .from('sales_orders')
     .select(`
       id,
@@ -964,6 +1179,22 @@ export async function getGDC1Inventory(): Promise<{ data: GDC1InventoryItem[]; u
     .neq('status', 'cancelled')
     .order('created_at', { ascending: false });
 
+  // Apply filters
+  if (filters?.customerId) {
+    soQuery = soQuery.eq('customer_id', filters.customerId);
+  }
+  if (filters?.salesOrderId) {
+    soQuery = soQuery.eq('id', filters.salesOrderId);
+  }
+  if (filters?.customerPoNumber) {
+    soQuery = soQuery.eq('customer_po_number', filters.customerPoNumber);
+  }
+  if (filters?.status && statusToSoStatus[filters.status]) {
+    soQuery = soQuery.in('status', statusToSoStatus[filters.status]!);
+  }
+
+  const { data: salesOrders, error } = await soQuery;
+
   if (error) {
     console.error('Error fetching GDC1 inventory:', error);
     throw error;
@@ -972,7 +1203,7 @@ export async function getGDC1Inventory(): Promise<{ data: GDC1InventoryItem[]; u
   // Get sales order items for SKU breakdown with product names and prices - only inventory products
   const salesOrderIds = salesOrders?.map((s) => s.id) || [];
 
-  const { data: items } = await supabase
+  let itemsQuery = supabase
     .from('sales_order_items')
     .select(`
       sales_order_id,
@@ -981,10 +1212,18 @@ export async function getGDC1Inventory(): Promise<{ data: GDC1InventoryItem[]; u
       quantity,
       unit_price,
       line_total,
+      product_id,
       products!inner(id, name, item_type)
     `)
     .in('sales_order_id', salesOrderIds)
     .eq('products.item_type', 'inventory');
+
+  // Apply product filter
+  if (filters?.productId) {
+    itemsQuery = itemsQuery.eq('product_id', filters.productId);
+  }
+
+  const { data: items } = await itemsQuery;
 
   // Group items by sales order and build SKU info map
   // Also track prices per SKU per order for price columns
@@ -1126,7 +1365,7 @@ export async function getGDC1Inventory(): Promise<{ data: GDC1InventoryItem[]; u
 // Returns dynamic SKU columns like other tables
 // ============================================
 
-export async function getRimInstallationRequired(): Promise<{ data: RimInstallationItem[]; uniqueSkus: SKUColumnInfo[] }> {
+export async function getRimInstallationRequired(filters?: OperationsFilters): Promise<{ data: RimInstallationItem[]; uniqueSkus: SKUColumnInfo[] }> {
   const supabase = await createClient();
   const result: RimInstallationItem[] = [];
   const skuInfoMap = new Map<string, string>(); // sku -> productName
@@ -1135,7 +1374,7 @@ export async function getRimInstallationRequired(): Promise<{ data: RimInstallat
   // ============================================
   // 1. Check SHIPMENTS table for rim installation
   // ============================================
-  const { data: shipments, error: shipError } = await supabase
+  let shipQuery = supabase
     .from('shipments')
     .select(`
       id,
@@ -1143,11 +1382,38 @@ export async function getRimInstallationRequired(): Promise<{ data: RimInstallat
       total_qty,
       load_status,
       action_required,
-      executive_notes
+      executive_notes,
+      sales_order_id,
+      sales_orders(customer_id, customer_po_number)
     `)
     .is('deleted_at', null)
     .ilike('action_required', '%rim%installation%')
     .order('supplier_reference_number', { ascending: true });
+
+  // Apply status filter
+  if (filters?.status) {
+    const statusMap: Record<ShipmentStatus, string> = {
+      'AVAILABLE': 'available',
+      'OPEN': 'open',
+      'HOLD': 'hold',
+      'IN_TRANSIT': 'in_transit',
+      'SOLD': 'sold',
+      'CLOSED': 'closed',
+      'INVOICED': 'invoiced',
+      'NOT_INVOICED': 'not_invoiced',
+      'PARTIALLY_PAID': 'partially_paid',
+      'PAID': 'paid',
+      'DISPUTED': 'disputed',
+      'PO_NEEDED': 'po_needed',
+      'DELIVERED': 'delivered',
+    };
+    shipQuery = shipQuery.eq('load_status', statusMap[filters.status]);
+  }
+  if (filters?.salesOrderId) {
+    shipQuery = shipQuery.eq('sales_order_id', filters.salesOrderId);
+  }
+
+  const { data: shipments, error: shipError } = await shipQuery;
 
   if (shipError) {
     console.error('Error fetching shipments for rim installation:', shipError);
@@ -1189,6 +1455,16 @@ export async function getRimInstallationRequired(): Promise<{ data: RimInstallat
     });
 
     shipments?.forEach((s) => {
+      const salesOrderData = toOne(s.sales_orders);
+
+      // Apply filters on related sales order data
+      if (filters?.customerId && salesOrderData?.customer_id !== filters.customerId) {
+        return;
+      }
+      if (filters?.customerPoNumber && salesOrderData?.customer_po_number !== filters.customerPoNumber) {
+        return;
+      }
+
       const items = itemsByShipment.get(s.id) || [];
       const totalQty = items.reduce((sum, item) => sum + item.qty, 0);
 
@@ -1208,16 +1484,19 @@ export async function getRimInstallationRequired(): Promise<{ data: RimInstallat
   // ============================================
   // 2. Check SALES_ORDERS table for rim installation
   // ============================================
-  const { data: salesOrders, error: soError } = await supabase
+  let soQuery = supabase
     .from('sales_orders')
     .select(`
       id,
       order_number,
       status,
       internal_notes,
+      customer_id,
+      customer_po_number,
       sales_order_items(
         sku,
         quantity,
+        product_id,
         products(id, name)
       )
     `)
@@ -1225,6 +1504,19 @@ export async function getRimInstallationRequired(): Promise<{ data: RimInstallat
     .neq('status', 'cancelled')
     .ilike('internal_notes', '%rim%installation%')
     .order('order_number', { ascending: true });
+
+  // Apply filters
+  if (filters?.customerId) {
+    soQuery = soQuery.eq('customer_id', filters.customerId);
+  }
+  if (filters?.salesOrderId) {
+    soQuery = soQuery.eq('id', filters.salesOrderId);
+  }
+  if (filters?.customerPoNumber) {
+    soQuery = soQuery.eq('customer_po_number', filters.customerPoNumber);
+  }
+
+  const { data: salesOrders, error: soError } = await soQuery;
 
   if (soError) {
     console.error('Error fetching sales orders for rim installation:', soError);
@@ -1238,10 +1530,17 @@ export async function getRimInstallationRequired(): Promise<{ data: RimInstallat
     if (addedIds.has(so.id)) { return; }
 
     const soItems = so.sales_order_items || [];
+
+    // Filter by productId if specified
+    if (filters?.productId) {
+      const hasProduct = soItems.some((item: { product_id?: string }) => item.product_id === filters.productId);
+      if (!hasProduct) return;
+    }
+
     const items: { sku: string; productName: string; qty: number }[] = [];
     let totalQty = 0;
 
-    soItems.forEach((item: { sku: string; quantity: number; products: unknown }) => {
+    soItems.forEach((item: { sku: string; quantity: number; product_id?: string; products: unknown }) => {
       const productData = toOne(item.products) as { name?: string } | null;
       const productName = productData?.name || item.sku || 'Unknown';
       const qty = item.quantity || 0;
@@ -1317,4 +1616,84 @@ export async function generateStoryInBrief(
   }
 
   return story;
+}
+
+// ============================================
+// GET FILTER OPTIONS
+// Fetches dropdown options for all filters
+// ============================================
+
+export async function getFilterOptions(): Promise<FilterOptions> {
+  const supabase = await createClient();
+
+  // Fetch customers, products, sales orders, and customer PO numbers in parallel
+  const [customersResult, productsResult, salesOrdersResult] = await Promise.all([
+    // Customers
+    supabase
+      .from('customers')
+      .select('id, name')
+      .is('deleted_at', null)
+      .order('name', { ascending: true }),
+
+    // Products (inventory items only)
+    supabase
+      .from('products')
+      .select('id, name, sku')
+      .is('deleted_at', null)
+      .eq('item_type', 'inventory')
+      .order('name', { ascending: true }),
+
+    // Sales Orders (for SO# and Customer PO#)
+    supabase
+      .from('sales_orders')
+      .select('id, order_number, customer_po_number')
+      .is('deleted_at', null)
+      .neq('status', 'cancelled')
+      .order('created_at', { ascending: false })
+      .limit(200),
+  ]);
+
+  // Build customer options
+  const customers = (customersResult.data || []).map((c) => ({
+    value: c.id,
+    label: c.name,
+  }));
+
+  // Build product options
+  const products = (productsResult.data || []).map((p) => ({
+    value: p.id,
+    label: p.name || p.sku || 'Unknown',
+  }));
+
+  // Build sales order options
+  const salesOrders = (salesOrdersResult.data || []).map((so) => ({
+    value: so.id,
+    label: so.order_number,
+  }));
+
+  // Build unique customer PO numbers
+  const customerPoSet = new Set<string>();
+  (salesOrdersResult.data || []).forEach((so) => {
+    if (so.customer_po_number) {
+      customerPoSet.add(so.customer_po_number);
+    }
+  });
+
+  const customerPoNumbers = Array.from(customerPoSet)
+    .sort()
+    .map((po) => ({
+      value: po,
+      label: po,
+    }));
+
+  // Status options are static and defined in the component
+  const statuses: FilterOptions['statuses'] = [];
+
+  return {
+    customers,
+    products,
+    statuses,
+    salesOrders,
+    customerPoNumbers,
+  };
 }

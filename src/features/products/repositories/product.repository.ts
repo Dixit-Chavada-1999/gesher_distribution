@@ -42,6 +42,19 @@ interface DbProduct {
   qbo_realm_id: string | null;
   qbo_synced_at: string | null;
   qbo_sync_error: string | null;
+
+  // QuickBooks Account Fields
+  qbo_income_account: string | null;
+  qbo_expense_account: string | null;
+  qbo_inventory_asset_account: string | null;
+
+  // Description Fields
+  sales_description: string | null;
+  purchase_description: string | null;
+
+  // Other Fields
+  barcode: string | null;
+  is_taxable: boolean;
 }
 
 // ============================================
@@ -305,6 +318,16 @@ class ProductRepositoryImpl {
         item_type: data.itemType || 'inventory',
         is_sellable: data.isSellable ?? true,
         image_url: data.imageUrl ?? null,
+        // QuickBooks Account Fields
+        qbo_income_account: data.qboIncomeAccount ?? null,
+        qbo_expense_account: data.qboExpenseAccount ?? null,
+        qbo_inventory_asset_account: data.qboInventoryAssetAccount ?? null,
+        // Description Fields
+        sales_description: data.salesDescription ?? null,
+        purchase_description: data.purchaseDescription ?? null,
+        // Other Fields
+        barcode: data.barcode ?? null,
+        is_taxable: data.isTaxable ?? false,
         created_by: userId ?? null,
         updated_by: userId ?? null,
       })
@@ -344,6 +367,16 @@ class ProductRepositoryImpl {
     if (data.itemType !== undefined) {updateData.item_type = data.itemType;}
     if (data.isSellable !== undefined) {updateData.is_sellable = data.isSellable;}
     if (data.imageUrl !== undefined) {updateData.image_url = data.imageUrl;}
+    // QuickBooks Account Fields
+    if (data.qboIncomeAccount !== undefined) {updateData.qbo_income_account = data.qboIncomeAccount;}
+    if (data.qboExpenseAccount !== undefined) {updateData.qbo_expense_account = data.qboExpenseAccount;}
+    if (data.qboInventoryAssetAccount !== undefined) {updateData.qbo_inventory_asset_account = data.qboInventoryAssetAccount;}
+    // Description Fields
+    if (data.salesDescription !== undefined) {updateData.sales_description = data.salesDescription;}
+    if (data.purchaseDescription !== undefined) {updateData.purchase_description = data.purchaseDescription;}
+    // Other Fields
+    if (data.barcode !== undefined) {updateData.barcode = data.barcode;}
+    if (data.isTaxable !== undefined) {updateData.is_taxable = data.isTaxable;}
 
     const { data: result, error } = await db
       .from('products')
@@ -490,6 +523,19 @@ class ProductRepositoryImpl {
       qboRealmId: data.qbo_realm_id ?? null,
       qboSyncedAt: data.qbo_synced_at ? new Date(data.qbo_synced_at) : null,
       qboSyncError: data.qbo_sync_error ?? null,
+
+      // QuickBooks Account Fields
+      qboIncomeAccount: data.qbo_income_account ?? null,
+      qboExpenseAccount: data.qbo_expense_account ?? null,
+      qboInventoryAssetAccount: data.qbo_inventory_asset_account ?? null,
+
+      // Description Fields
+      salesDescription: data.sales_description ?? null,
+      purchaseDescription: data.purchase_description ?? null,
+
+      // Other Fields
+      barcode: data.barcode ?? null,
+      isTaxable: data.is_taxable ?? false,
     };
   }
 

@@ -974,6 +974,7 @@ export async function findOrCreateProductFromPO(
       status: 'active',
       itemType: 'inventory',
       isSellable: true,
+      isTaxable: false,
     }, auth.user.id);
 
     if (createResult.success && createResult.data) {

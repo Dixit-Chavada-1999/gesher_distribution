@@ -48,6 +48,19 @@ export interface Product {
   qboRealmId: string | null;
   qboSyncedAt: Date | null;
   qboSyncError: string | null;
+
+  // QuickBooks Account Fields
+  qboIncomeAccount: string | null;
+  qboExpenseAccount: string | null;
+  qboInventoryAssetAccount: string | null;
+
+  // Description Fields
+  salesDescription: string | null;
+  purchaseDescription: string | null;
+
+  // Other Fields
+  barcode: string | null;
+  isTaxable: boolean;
 }
 
 /**
@@ -82,6 +95,16 @@ export interface CreateProductDTO {
   itemType?: ProductItemType;
   isSellable?: boolean;
   imageUrl?: string | null;
+  // QuickBooks Account Fields
+  qboIncomeAccount?: string | null;
+  qboExpenseAccount?: string | null;
+  qboInventoryAssetAccount?: string | null;
+  // Description Fields
+  salesDescription?: string | null;
+  purchaseDescription?: string | null;
+  // Other Fields
+  barcode?: string | null;
+  isTaxable?: boolean;
 }
 
 /**
@@ -102,6 +125,16 @@ export interface UpdateProductDTO {
   itemType?: ProductItemType;
   isSellable?: boolean;
   imageUrl?: string | null;
+  // QuickBooks Account Fields
+  qboIncomeAccount?: string | null;
+  qboExpenseAccount?: string | null;
+  qboInventoryAssetAccount?: string | null;
+  // Description Fields
+  salesDescription?: string | null;
+  purchaseDescription?: string | null;
+  // Other Fields
+  barcode?: string | null;
+  isTaxable?: boolean;
 }
 
 // ============================================
@@ -160,6 +193,16 @@ export interface ProductFormValues {
   itemType: ProductItemType;
   isSellable: boolean;
   imageUrl: string;
+  // QuickBooks Account Fields
+  qboIncomeAccount: string;
+  qboExpenseAccount: string;
+  qboInventoryAssetAccount: string;
+  // Description Fields
+  salesDescription: string;
+  purchaseDescription: string;
+  // Other Fields
+  barcode: string;
+  isTaxable: boolean;
 }
 
 // ============================================
@@ -254,4 +297,14 @@ export const DEFAULT_PRODUCT_FORM_VALUES: ProductFormValues = {
   itemType: 'inventory',
   isSellable: true,
   imageUrl: '',
+  // QuickBooks Account Fields
+  qboIncomeAccount: '',
+  qboExpenseAccount: '',
+  qboInventoryAssetAccount: '',
+  // Description Fields
+  salesDescription: '',
+  purchaseDescription: '',
+  // Other Fields
+  barcode: '',
+  isTaxable: false,
 };

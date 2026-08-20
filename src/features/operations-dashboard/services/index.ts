@@ -15,8 +15,9 @@ import {
   getGDC1Inventory,
   getRimInstallationRequired,
   generateStoryInBrief,
+  getFilterOptions,
 } from '../repositories';
-import type { OperationsData } from '../types';
+import type { OperationsData, OperationsFilters, FilterOptions } from '../types';
 
 // ============================================
 // GET FULL OPERATIONS DATA
@@ -26,7 +27,7 @@ import type { OperationsData } from '../types';
  * Fetches all data needed for the operations dashboard
  * This is the main entry point for the dashboard
  */
-export async function getOperationsData(): Promise<OperationsData> {
+export async function getOperationsData(filters?: OperationsFilters): Promise<OperationsData> {
   // Fetch all data in parallel for better performance
   const [
     stats,
@@ -38,14 +39,14 @@ export async function getOperationsData(): Promise<OperationsData> {
     gdc1InventoryResult,
     rimInstallationResult,
   ] = await Promise.all([
-    getOperationsStats(),
-    getSKUBreakdown(),
-    getCustomerCommitments(),
-    getShipmentStatusMix(),
-    getImmediateAttention(),
-    getSupplierShipmentSchedule(),
-    getGDC1Inventory(),
-    getRimInstallationRequired(),
+    getOperationsStats(filters),
+    getSKUBreakdown(filters),
+    getCustomerCommitments(undefined, filters),
+    getShipmentStatusMix(filters),
+    getImmediateAttention(filters),
+    getSupplierShipmentSchedule(filters),
+    getGDC1Inventory(filters),
+    getRimInstallationRequired(filters),
   ]);
 
   // Extract data and unique SKUs from results
@@ -146,8 +147,15 @@ export async function getRimItems() {
  * Refresh all dashboard data
  * Called when user clicks refresh button
  */
-export async function refreshDashboard(): Promise<OperationsData> {
-  return getOperationsData();
+export async function refreshDashboard(filters?: OperationsFilters): Promise<OperationsData> {
+  return getOperationsData(filters);
+}
+
+/**
+ * Get filter options for dropdowns
+ */
+export async function getFilterOptionsData(): Promise<FilterOptions> {
+  return getFilterOptions();
 }
 
 // ============================================

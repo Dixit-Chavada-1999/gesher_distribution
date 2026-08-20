@@ -24,6 +24,7 @@ import { Badge } from '@/shared/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 
 import { getProduct } from '../actions';
+// import { lookupQboAccountNames } from '../actions'; // COMMENTED OUT - QBO disabled
 import type { ProductWithFormattedPrices, ProductStatus, ProductItemType } from '../types';
 import { ProductPriceMatrix } from '@/features/price-matrix/components';
 
@@ -140,6 +141,7 @@ export function ViewProductDrawer({
   const [product, setProduct] = useState<ProductWithFormattedPrices | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // const [accountNames, setAccountNames] = useState<Record<string, string>>({}); // COMMENTED OUT - QBO disabled
 
   const canEdit = hasPermission('products.edit');
   const canDelete = hasPermission('products.delete');
@@ -158,6 +160,20 @@ export function ViewProductDrawer({
       const result = await getProduct(productId);
       if (result.success && result.data) {
         setProduct(result.data);
+
+        // Fetch account names if there are QBO account IDs - COMMENTED OUT - QBO disabled
+        // const accountIds = [
+        //   result.data.qboIncomeAccount,
+        //   result.data.qboExpenseAccount,
+        //   result.data.qboInventoryAssetAccount,
+        // ].filter((id): id is string => !!id);
+
+        // if (accountIds.length > 0) {
+        //   const namesResult = await lookupQboAccountNames(accountIds);
+        //   if (namesResult.success && namesResult.data) {
+        //     setAccountNames(namesResult.data);
+        //   }
+        // }
       } else {
         console.error('Failed to load product:', result);
         setError(result.error || 'Failed to load product');
@@ -176,6 +192,7 @@ export function ViewProductDrawer({
     } else {
       setProduct(null);
       setError(null);
+      // setAccountNames({}); // COMMENTED OUT - QBO disabled
     }
   }, [open, productId, fetchProduct]);
 
@@ -319,8 +336,67 @@ export function ViewProductDrawer({
                       value={product.weightLbs ? `${product.weightLbs} lbs` : null}
                       icon={<Weight className="h-4 w-4" />}
                     />
+                    <InfoItem
+                      label="Barcode"
+                      value={product.barcode}
+                    />
                   </div>
                 </Section>
+
+                {/* QuickBooks Accounts - COMMENTED OUT FOR NOW
+                {(product.qboIncomeAccount || product.qboExpenseAccount || product.qboInventoryAssetAccount) && (
+                  <Section title="QuickBooks Accounts">
+                    <div className="grid grid-cols-3 gap-4">
+                      <InfoItem
+                        label="Income Account"
+                        value={product.qboIncomeAccount ? (accountNames[product.qboIncomeAccount] || product.qboIncomeAccount) : null}
+                      />
+                      <InfoItem
+                        label="Expense Account"
+                        value={product.qboExpenseAccount ? (accountNames[product.qboExpenseAccount] || product.qboExpenseAccount) : null}
+                      />
+                      <InfoItem
+                        label="Inventory Asset Account"
+                        value={product.qboInventoryAssetAccount ? (accountNames[product.qboInventoryAssetAccount] || product.qboInventoryAssetAccount) : null}
+                      />
+                    </div>
+                  </Section>
+                )}
+                */}
+
+                {/* Descriptions - COMMENTED OUT FOR NOW
+                {(product.salesDescription || product.purchaseDescription) && (
+                  <Section title="Descriptions">
+                    <div className="grid grid-cols-2 gap-4">
+                      <InfoItem
+                        label="Sales Description"
+                        value={product.salesDescription ? (
+                          <span className="whitespace-pre-wrap">{product.salesDescription}</span>
+                        ) : null}
+                      />
+                      <InfoItem
+                        label="Purchase Description"
+                        value={product.purchaseDescription ? (
+                          <span className="whitespace-pre-wrap">{product.purchaseDescription}</span>
+                        ) : null}
+                      />
+                    </div>
+                  </Section>
+                )}
+                */}
+
+                {/* Tax Status - COMMENTED OUT FOR NOW
+                {product.isTaxable !== undefined && (
+                  <Section title="Tax Information">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-muted-foreground">Taxable:</span>
+                      <Badge variant={product.isTaxable ? 'default' : 'secondary'}>
+                        {product.isTaxable ? 'Yes' : 'No'}
+                      </Badge>
+                    </div>
+                  </Section>
+                )}
+                */}
 
                 {/* Metadata */}
                 <Section title="Metadata">

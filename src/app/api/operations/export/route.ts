@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
-import type { OperationsData } from '@/features/operations-dashboard/types';
+import type { OperationsData, OperationsFilters, ShipmentStatus } from '@/features/operations-dashboard/types';
 import { getOperationsData } from '@/features/operations-dashboard/services';
 
 // ============================================
@@ -975,8 +975,22 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const exportType = searchParams.get('type') || 'all';
 
-    // Fetch operations data
-    const data = await getOperationsData();
+    // Extract filters from query params
+    const filters: OperationsFilters = {};
+    const customerId = searchParams.get('customerId');
+    const productId = searchParams.get('productId');
+    const status = searchParams.get('status');
+    const salesOrderId = searchParams.get('salesOrderId');
+    const customerPoNumber = searchParams.get('customerPoNumber');
+
+    if (customerId) filters.customerId = customerId;
+    if (productId) filters.productId = productId;
+    if (status) filters.status = status as ShipmentStatus;
+    if (salesOrderId) filters.salesOrderId = salesOrderId;
+    if (customerPoNumber) filters.customerPoNumber = customerPoNumber;
+
+    // Fetch operations data with filters
+    const data = await getOperationsData(Object.keys(filters).length > 0 ? filters : undefined);
 
     // Debug: Log all data for verification
     console.log('=== EXPORT DEBUG ===');

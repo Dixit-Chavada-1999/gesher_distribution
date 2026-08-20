@@ -80,3 +80,37 @@ export type { QboCustomerSyncService } from './services/qbo-customer-sync.servic
 // Product Sync Service
 export { qboProductSyncService } from './services/qbo-product-sync.service';
 export type { QboProductSyncService } from './services/qbo-product-sync.service';
+
+// Account Sync Service
+export { qboAccountSyncService } from './services/qbo-account-sync.service';
+export type { QboAccountSyncService } from './services/qbo-account-sync.service';
+
+// Chart of Accounts Types
+export type {
+  ChartOfAccount,
+  ChartOfAccountsRow,
+  ChartOfAccountsInsert,
+  ChartOfAccountsUpdate,
+  ChartOfAccountsFilter,
+  ChartOfAccountsSyncResult,
+  AccountOption,
+  AccountsByClassification,
+  AccountClassification,
+} from './types/chart-of-accounts';
+
+// Chart of Accounts Repository
+export {
+  findAccounts,
+  findAccountById,
+  findAccountByQboId,
+  getIncomeAccounts,
+  getExpenseAccounts,
+  getAssetAccounts,
+  getAccountsByClassification,
+  getAccountNameById,
+  getAccountNamesByIds,
+  upsertAccount,
+  upsertAccounts,
+  getLastSyncTime,
+  countAccountsByRealm,
+} from './repositories/chart-of-accounts.repository';

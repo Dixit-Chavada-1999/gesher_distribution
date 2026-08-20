@@ -42,8 +42,8 @@ export * from './actions';
 // Schemas (validation schemas)
 export * from './lib/schemas';
 
-// Repository (optional - if exposed)
-export { customerRepository } from './repositories';
-
-// Service (optional - if exposed)
-export { customerService } from './services';
+// NOTE: Repository and Service are NOT exported here to avoid
+// importing server-only code into client components.
+// Import them directly where needed:
+// import { customerRepository } from '@/features/customers/repositories';
+// import { customerService } from '@/features/customers/services';

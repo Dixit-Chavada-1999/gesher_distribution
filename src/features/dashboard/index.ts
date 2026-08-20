@@ -40,6 +40,8 @@ export type {
   // New types
   RevenueDataPoint,
   UnitsBySKUDataPoint,
+  ProductLegendItem,
+  UnitsBySKUChartData,
   ChannelPerformanceDataPoint,
   MarginDataPoint,
   ARAgingData,
@@ -73,3 +75,6 @@ export {
 
 // Utilities
 export { getIcon, iconMap } from './lib/icons';
+
+// Actions
+export { getUnitsBySKUData, getChannelPerformanceData, getInventoryByLocationData, getDashboardStatsData, getMarginAnalysisData } from './actions';

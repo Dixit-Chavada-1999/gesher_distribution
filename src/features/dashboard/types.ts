@@ -98,8 +98,18 @@ export interface RevenueDataPoint {
 
 export interface UnitsBySKUDataPoint {
   name: string;
-  units38: number;
-  units24: number;
+  [key: string]: string | number; // Dynamic product keys (e.g., units_PRODUCT_SKU)
+}
+
+export interface ProductLegendItem {
+  key: string;
+  label: string;
+  color: string;
+}
+
+export interface UnitsBySKUChartData {
+  data: UnitsBySKUDataPoint[];
+  products: ProductLegendItem[];
 }
 
 export interface ChannelPerformanceDataPoint {

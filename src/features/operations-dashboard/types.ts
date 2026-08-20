@@ -214,3 +214,28 @@ export interface OperationsData {
   rimInstallationSkus: SKUColumnInfo[];  // Dynamic SKU column headers for rim installation
   storyInBrief: string;
 }
+
+// ============================================
+// FILTER TYPES
+// ============================================
+
+export interface OperationsFilters {
+  customerId?: string;
+  productId?: string;
+  status?: ShipmentStatus;
+  salesOrderId?: string;
+  customerPoNumber?: string;  // Customer PO Number from sales_orders.customer_po_number
+}
+
+export interface FilterOption {
+  value: string;
+  label: string;
+}
+
+export interface FilterOptions {
+  customers: FilterOption[];
+  products: FilterOption[];
+  statuses: FilterOption[];
+  salesOrders: FilterOption[];
+  customerPoNumbers: FilterOption[];
+}

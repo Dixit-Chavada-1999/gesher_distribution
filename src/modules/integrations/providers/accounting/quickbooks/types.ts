@@ -161,6 +161,8 @@ export interface QuickBooksItem {
   Name: string;
   Sku?: string;
   Description?: string;
+  PurchaseDesc?: string;
+  PurchaseCost?: number;
   UnitPrice?: number;
   Type?: 'Inventory' | 'Service' | 'NonInventory';
   Active?: boolean;

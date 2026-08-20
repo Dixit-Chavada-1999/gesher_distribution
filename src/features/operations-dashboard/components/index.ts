@@ -3,6 +3,7 @@
  */
 
 export { OperationsHeader } from './OperationsHeader';
+export { OperationsFilters } from './OperationsFilters';
 export { OperationsStatsGrid } from './OperationsStatsGrid';
 export { ImmediateAttentionTable } from './ImmediateAttentionTable';
 export { SKUBreakdown } from './SKUBreakdown';

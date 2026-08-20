@@ -30,6 +30,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/sha
 import type {
   RevenueDataPoint,
   UnitsBySKUDataPoint,
+  ProductLegendItem,
   ChannelPerformanceDataPoint,
   MarginDataPoint,
 } from '../types';
@@ -129,14 +130,23 @@ export function RevenueChart({ data }: RevenueChartProps) {
 
 interface UnitsBySKUChartProps {
   data: UnitsBySKUDataPoint[];
+  products?: ProductLegendItem[];
 }
 
-export function UnitsBySKUChart({ data }: UnitsBySKUChartProps) {
+export function UnitsBySKUChart({ data, products }: UnitsBySKUChartProps) {
+  // Default products for backward compatibility
+  const defaultProducts: ProductLegendItem[] = [
+    { key: 'units38', label: '38" Tire', color: COLORS.primary },
+    { key: 'units24', label: '24" Tire', color: COLORS.secondary },
+  ];
+
+  const productList = products && products.length > 0 ? products : defaultProducts;
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Units by SKU</CardTitle>
-        <CardDescription>38&quot; vs 24&quot; tire sales</CardDescription>
+        <CardDescription>Product sales by month</CardDescription>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>
@@ -152,8 +162,15 @@ export function UnitsBySKUChart({ data }: UnitsBySKUChartProps) {
               }}
             />
             <Legend />
-            <Bar dataKey="units38" fill={COLORS.primary} name='38" Tire' radius={[4, 4, 0, 0]} />
-            <Bar dataKey="units24" fill={COLORS.secondary} name='24" Tire' radius={[4, 4, 0, 0]} />
+            {productList.map((product) => (
+              <Bar
+                key={product.key}
+                dataKey={product.key}
+                fill={product.color}
+                name={product.label}
+                radius={[4, 4, 0, 0]}
+              />
+            ))}
           </BarChart>
         </ResponsiveContainer>
       </CardContent>
@@ -319,6 +336,7 @@ export function MarginChart({ data }: MarginChartProps) {
 interface DashboardChartsGridProps {
   revenueData: RevenueDataPoint[];
   unitsData: UnitsBySKUDataPoint[];
+  unitsProducts?: ProductLegendItem[];
   channelData: ChannelPerformanceDataPoint[];
   marginData: MarginDataPoint[];
 }
@@ -326,13 +344,14 @@ interface DashboardChartsGridProps {
 export function DashboardChartsGrid({
   revenueData,
   unitsData,
+  unitsProducts,
   channelData,
   marginData,
 }: DashboardChartsGridProps) {
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <RevenueChart data={revenueData} />
-      <UnitsBySKUChart data={unitsData} />
+      <UnitsBySKUChart data={unitsData} products={unitsProducts} />
       <ChannelPerformanceChart data={channelData} />
       <MarginChart data={marginData} />
     </div>

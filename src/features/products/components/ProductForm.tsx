@@ -6,6 +6,7 @@
  * Form for creating and editing products.
  */
 
+// import { useEffect, useState } from 'react'; // COMMENTED OUT - QBO disabled
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/shared/components/ui/button';
@@ -30,6 +31,8 @@ import {
 } from '@/shared/components/ui/select';
 import { productFormSchema, type ProductFormInput, productToFormValues } from '../lib/schemas';
 import { DEFAULT_PRODUCT_FORM_VALUES, PRODUCT_STATUS_OPTIONS, PRODUCT_ITEM_TYPE_OPTIONS } from '../types';
+// import { getQboAccountsForProduct } from '../actions'; // COMMENTED OUT - QBO disabled
+// import type { AccountOption } from '@/modules/integrations/quickbooks'; // COMMENTED OUT - QBO disabled
 
 interface ProductFormProps {
   initialData?: {
@@ -47,6 +50,16 @@ interface ProductFormProps {
     itemType: 'inventory' | 'non_inventory' | 'service';
     isSellable: boolean;
     imageUrl: string | null;
+    // QuickBooks Account Fields
+    qboIncomeAccount: string | null;
+    qboExpenseAccount: string | null;
+    qboInventoryAssetAccount: string | null;
+    // Description Fields
+    salesDescription: string | null;
+    purchaseDescription: string | null;
+    // Other Fields
+    barcode: string | null;
+    isTaxable: boolean;
   };
   onSubmit: (data: ProductFormInput) => Promise<void>;
   onCancel?: () => void;
@@ -61,6 +74,31 @@ export function ProductForm({
   isLoading = false,
   submitLabel = 'Save Product',
 }: ProductFormProps) {
+  // QBO accounts state - COMMENTED OUT FOR NOW
+  // const [incomeAccounts, setIncomeAccounts] = useState<AccountOption[]>([]);
+  // const [expenseAccounts, setExpenseAccounts] = useState<AccountOption[]>([]);
+  // const [assetAccounts, setAssetAccounts] = useState<AccountOption[]>([]);
+  // const [accountsLoading, setAccountsLoading] = useState(true);
+
+  // Fetch QBO accounts on mount - COMMENTED OUT FOR NOW
+  // useEffect(() => {
+  //   async function fetchAccounts() {
+  //     try {
+  //       const result = await getQboAccountsForProduct();
+  //       if (result.success && result.data) {
+  //         setIncomeAccounts(result.data.income || []);
+  //         setExpenseAccounts(result.data.expense || []);
+  //         setAssetAccounts(result.data.asset || []);
+  //       }
+  //     } catch (error) {
+  //       console.error('Failed to fetch QBO accounts:', error);
+  //     } finally {
+  //       setAccountsLoading(false);
+  //     }
+  //   }
+  //   fetchAccounts();
+  // }, []);
+
   const form = useForm<ProductFormInput>({
     resolver: zodResolver(productFormSchema),
     defaultValues: initialData
@@ -367,7 +405,213 @@ export function ProductForm({
               </FormItem>
             )}
           />
+
+          {/* Taxable - COMMENTED OUT FOR NOW
+          <FormField
+            control={form.control}
+            name="isTaxable"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-base">Taxable</FormLabel>
+                  <FormDescription>
+                    Product is subject to sales tax
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch checked={field.value} onCheckedChange={field.onChange} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+          */}
         </div>
+
+        {/* QuickBooks Accounts Section - COMMENTED OUT FOR NOW
+        <div className="space-y-4">
+          <h3 className="text-lg font-medium">QuickBooks Accounts</h3>
+          <p className="text-sm text-muted-foreground">
+            Map this product to QuickBooks accounts for proper financial tracking
+          </p>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <FormField
+              control={form.control}
+              name="qboIncomeAccount"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Income Account</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                    disabled={accountsLoading}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder={accountsLoading ? "Loading..." : "Select income account"} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="max-h-60 overflow-y-auto">
+                      <SelectItem value="">None</SelectItem>
+                      {incomeAccounts.map((account, index) => (
+                        <SelectItem key={`income-${account.value}-${index}`} value={account.value}>
+                          {account.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Revenue account for sales
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="qboExpenseAccount"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Expense Account</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                    disabled={accountsLoading}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder={accountsLoading ? "Loading..." : "Select expense account"} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="max-h-60 overflow-y-auto">
+                      <SelectItem value="">None</SelectItem>
+                      {expenseAccounts.map((account, index) => (
+                        <SelectItem key={`expense-${account.value}-${index}`} value={account.value}>
+                          {account.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    COGS account for purchases
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="qboInventoryAssetAccount"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Inventory Asset Account</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                    disabled={accountsLoading}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder={accountsLoading ? "Loading..." : "Select asset account"} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="max-h-60 overflow-y-auto">
+                      <SelectItem value="">None</SelectItem>
+                      {assetAccounts.map((account, index) => (
+                        <SelectItem key={`asset-${account.value}-${index}`} value={account.value}>
+                          {account.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    For inventory items only
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
+        */}
+
+        {/* Descriptions Section - COMMENTED OUT FOR NOW
+        <div className="space-y-4">
+          <h3 className="text-lg font-medium">Descriptions</h3>
+          <p className="text-sm text-muted-foreground">
+            Descriptions for sales and purchase documents
+          </p>
+
+          <FormField
+            control={form.control}
+            name="salesDescription"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Sales Description</FormLabel>
+                <FormControl>
+                  <Textarea
+                    {...field}
+                    placeholder="Description shown on invoices, quotes, and sales receipts..."
+                    rows={3}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Appears on customer-facing documents
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="purchaseDescription"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Purchase Description</FormLabel>
+                <FormControl>
+                  <Textarea
+                    {...field}
+                    placeholder="Description shown on purchase orders..."
+                    rows={3}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Appears on supplier-facing documents
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+        */}
+
+        {/* Additional Fields Section - COMMENTED OUT FOR NOW
+        <div className="space-y-4">
+          <h3 className="text-lg font-medium">Additional Information</h3>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="barcode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Barcode</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="UPC, EAN, or custom barcode" />
+                  </FormControl>
+                  <FormDescription>
+                    Product barcode for scanning
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
+        */}
 
         {/* Form Actions */}
         <div className="flex justify-end gap-3 border-t pt-4">

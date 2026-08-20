@@ -258,10 +258,10 @@ export const productService = {
         console.error('Failed to log product create audit:', err);
       });
 
-      // Trigger QBO sync (fire and forget)
-      this.syncProductToQbo(product, userId).catch((err) => {
-        console.error('Failed to trigger QBO product sync:', err);
-      });
+      // Trigger QBO sync (fire and forget) - COMMENTED OUT FOR NOW
+      // this.syncProductToQbo(product, userId).catch((err) => {
+      //   console.error('Failed to trigger QBO product sync:', err);
+      // });
 
       return {
         success: true,
@@ -351,10 +351,10 @@ export const productService = {
         console.error('Failed to log product update audit:', err);
       });
 
-      // Trigger QBO sync (fire and forget)
-      this.syncProductToQbo(product, userId).catch((err) => {
-        console.error('Failed to trigger QBO product sync:', err);
-      });
+      // Trigger QBO sync (fire and forget) - COMMENTED OUT FOR NOW
+      // this.syncProductToQbo(product, userId).catch((err) => {
+      //   console.error('Failed to trigger QBO product sync:', err);
+      // });
 
       return {
         success: true,

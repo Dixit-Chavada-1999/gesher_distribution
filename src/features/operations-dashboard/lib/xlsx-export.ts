@@ -5,7 +5,7 @@
  * professional Excel workbooks with native Excel charts.
  */
 
-import type { OperationsData } from '../types';
+import type { OperationsData, OperationsFilters } from '../types';
 
 // ============================================
 // TYPES
@@ -30,10 +30,19 @@ export type XLSXExportType =
 /**
  * Export operations data to XLSX with native Excel charts.
  * Uses server-side API for chart generation.
+ * Accepts optional filters to export filtered data.
  */
-export async function exportToXLSX(type: XLSXExportType, _data: OperationsData): Promise<void> {
+export async function exportToXLSX(type: XLSXExportType, _data: OperationsData, filters?: OperationsFilters): Promise<void> {
   try {
-    const response = await fetch(`/api/operations/export?type=${type}`);
+    // Build query params with filters
+    const params = new URLSearchParams({ type });
+    if (filters?.customerId) params.append('customerId', filters.customerId);
+    if (filters?.productId) params.append('productId', filters.productId);
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.salesOrderId) params.append('salesOrderId', filters.salesOrderId);
+    if (filters?.customerPoNumber) params.append('customerPoNumber', filters.customerPoNumber);
+
+    const response = await fetch(`/api/operations/export?${params.toString()}`);
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));

@@ -5,10 +5,10 @@
  * matching the web dashboard UI styling exactly.
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import type { OperationsData } from '@/features/operations-dashboard/types';
+import type { OperationsData, OperationsFilters, ShipmentStatus } from '@/features/operations-dashboard/types';
 import { getOperationsData } from '@/features/operations-dashboard/services';
 
 // ============================================
@@ -762,9 +762,25 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
 // API ROUTE HANDLER
 // ============================================
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const data = await getOperationsData();
+    // Extract filters from query params
+    const searchParams = request.nextUrl.searchParams;
+    const filters: OperationsFilters = {};
+    const customerId = searchParams.get('customerId');
+    const productId = searchParams.get('productId');
+    const status = searchParams.get('status');
+    const salesOrderId = searchParams.get('salesOrderId');
+    const customerPoNumber = searchParams.get('customerPoNumber');
+
+    if (customerId) filters.customerId = customerId;
+    if (productId) filters.productId = productId;
+    if (status) filters.status = status as ShipmentStatus;
+    if (salesOrderId) filters.salesOrderId = salesOrderId;
+    if (customerPoNumber) filters.customerPoNumber = customerPoNumber;
+
+    // Fetch operations data with filters
+    const data = await getOperationsData(Object.keys(filters).length > 0 ? filters : undefined);
     const pdfBuffer = await generatePDF(data);
 
     const dateStr = new Date().toISOString().split('T')[0];

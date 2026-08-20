@@ -18,6 +18,7 @@ import {
   getWarehouseInventory,
   getRimItems,
   getExportData,
+  getFilterOptionsData,
   type ExportOptions,
 } from '../services';
 import type {
@@ -29,6 +30,8 @@ import type {
   RimInstallationItem,
   ShipmentStatus,
   SKUColumnInfo,
+  OperationsFilters,
+  FilterOptions,
 } from '../types';
 
 // ============================================
@@ -48,15 +51,31 @@ interface ActionResult<T> {
 /**
  * Fetch all operations dashboard data
  */
-export async function fetchOperationsData(): Promise<ActionResult<OperationsData>> {
+export async function fetchOperationsData(filters?: OperationsFilters): Promise<ActionResult<OperationsData>> {
   try {
-    const data = await getOperationsData();
+    const data = await getOperationsData(filters);
     return { success: true, data };
   } catch (error) {
     console.error('Error fetching operations data:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to fetch operations data',
+    };
+  }
+}
+
+/**
+ * Fetch filter options for dropdowns
+ */
+export async function fetchFilterOptions(): Promise<ActionResult<FilterOptions>> {
+  try {
+    const data = await getFilterOptionsData();
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error fetching filter options:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch filter options',
     };
   }
 }
@@ -152,8 +171,8 @@ export async function fetchRimInstallation(): Promise<ActionResult<RimInstallati
 /**
  * Refresh all dashboard data (called by refresh button)
  */
-export async function refreshOperationsData(): Promise<ActionResult<OperationsData>> {
-  return fetchOperationsData();
+export async function refreshOperationsData(filters?: OperationsFilters): Promise<ActionResult<OperationsData>> {
+  return fetchOperationsData(filters);
 }
 
 // ============================================

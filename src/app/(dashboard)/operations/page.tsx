@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 
 // Import components directly to avoid barrel export issues
 import { OperationsHeader, type ExportOption } from '@/features/operations-dashboard/components/OperationsHeader';
+import { OperationsFilters } from '@/features/operations-dashboard/components/OperationsFilters';
 import { OperationsStatsGrid } from '@/features/operations-dashboard/components/OperationsStatsGrid';
 import { ImmediateAttentionTable } from '@/features/operations-dashboard/components/ImmediateAttentionTable';
 import { SKUBreakdown } from '@/features/operations-dashboard/components/SKUBreakdown';
@@ -30,7 +31,7 @@ import { GDC1InventoryTable } from '@/features/operations-dashboard/components/G
 import { EditShipmentDialog, type EditSource } from '@/features/operations-dashboard/components/EditShipmentDialog';
 
 // Server actions
-import { fetchOperationsData } from '@/features/operations-dashboard/actions';
+import { fetchOperationsData, fetchFilterOptions } from '@/features/operations-dashboard/actions';
 
 // Export utilities
 import { exportToXLSX, type XLSXExportType } from '@/features/operations-dashboard/lib/xlsx-export';
@@ -42,6 +43,8 @@ import type {
   ShipmentScheduleItem,
   GDC1InventoryItem,
   ShipmentStatus,
+  OperationsFilters as OperationsFiltersType,
+  FilterOptions,
 } from '@/features/operations-dashboard/types';
 
 // Helper type for edit dialog
@@ -82,6 +85,15 @@ const emptyData: OperationsData = {
   storyInBrief: '',
 };
 
+// Empty filter options for initial state
+const emptyFilterOptions: FilterOptions = {
+  customers: [],
+  products: [],
+  statuses: [],
+  salesOrders: [],
+  customerPoNumbers: [],
+};
+
 export default function OperationsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -89,6 +101,10 @@ export default function OperationsPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [data, setData] = useState<OperationsData>(emptyData);
   const [error, setError] = useState<string | null>(null);
+
+  // Filter state
+  const [filters, setFilters] = useState<OperationsFiltersType>({});
+  const [filterOptions, setFilterOptions] = useState<FilterOptions>(emptyFilterOptions);
 
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -103,13 +119,13 @@ export default function OperationsPage() {
   }, [lastUpdated]);
 
   // Fetch data from database
-  const loadData = useCallback(async (showRefreshing = false) => {
+  const loadData = useCallback(async (showRefreshing = false, currentFilters?: OperationsFiltersType) => {
     if (showRefreshing) {
       setIsRefreshing(true);
     }
 
     try {
-      const result = await fetchOperationsData();
+      const result = await fetchOperationsData(currentFilters);
 
       if (result.success && result.data) {
         setData(result.data);
@@ -128,21 +144,48 @@ export default function OperationsPage() {
     }
   }, []);
 
-  // Load data on mount
+  // Load filter options
+  const loadFilterOptions = useCallback(async () => {
+    try {
+      const result = await fetchFilterOptions();
+      if (result.success && result.data) {
+        setFilterOptions(result.data);
+      }
+    } catch (err) {
+      console.error('Error loading filter options:', err);
+    }
+  }, []);
+
+  // Load data and filter options on mount
   useEffect(() => {
     loadData();
-  }, [loadData]);
+    loadFilterOptions();
+  }, [loadData, loadFilterOptions]);
+
+  // Reload data when filters change
+  const handleFiltersChange = (newFilters: OperationsFiltersType) => {
+    setFilters(newFilters);
+    loadData(true, newFilters);
+  };
 
   const handleRefresh = () => {
-    loadData(true);
+    loadData(true, filters);
   };
 
   const handleExport = async (type: ExportOption = 'all') => {
     setIsExporting(true);
     try {
       if (type === 'pdf') {
-        // PDF export via API
-        const response = await fetch('/api/operations/export-pdf');
+        // PDF export via API with filters
+        const params = new URLSearchParams();
+        if (filters.customerId) params.append('customerId', filters.customerId);
+        if (filters.productId) params.append('productId', filters.productId);
+        if (filters.status) params.append('status', filters.status);
+        if (filters.salesOrderId) params.append('salesOrderId', filters.salesOrderId);
+        if (filters.customerPoNumber) params.append('customerPoNumber', filters.customerPoNumber);
+
+        const queryString = params.toString();
+        const response = await fetch(`/api/operations/export-pdf${queryString ? `?${queryString}` : ''}`);
         if (!response.ok) {
           throw new Error('PDF export failed');
         }
@@ -156,8 +199,8 @@ export default function OperationsPage() {
         window.URL.revokeObjectURL(url);
         toast.success('PDF export completed successfully');
       } else {
-        // XLSX export
-        await exportToXLSX(type as XLSXExportType, data);
+        // XLSX export with filters
+        await exportToXLSX(type as XLSXExportType, data, filters);
         toast.success('Excel export completed successfully');
       }
     } catch (err) {
@@ -219,7 +262,7 @@ export default function OperationsPage() {
 
   // Handle successful edit - refresh data
   const handleEditSuccess = () => {
-    loadData(true);
+    loadData(true, filters);
   };
 
   // Show loading state
@@ -261,8 +304,28 @@ export default function OperationsPage() {
           <TabsTrigger value="gdc1-inventory">GDC1 Inventory</TabsTrigger>
         </TabsList>
 
+        {/* Filters - Between tabs and content */}
+        <div className="mt-4">
+          <OperationsFilters
+            filters={filters}
+            onFiltersChange={handleFiltersChange}
+            filterOptions={filterOptions}
+            isLoading={isRefreshing}
+          />
+        </div>
+
+        {/* Loading Overlay for Data */}
+        {isRefreshing && (
+          <div className="mt-4 flex items-center justify-center rounded-lg border bg-muted/50 py-12">
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            </div>
+          </div>
+        )}
+
         {/* Tab 1: Executive Summary */}
-        <TabsContent value="executive-summary" className="space-y-6">
+        <TabsContent value="executive-summary" className={`space-y-6 ${isRefreshing ? 'hidden' : ''}`}>
           {/* KPI Stats */}
           <OperationsStatsGrid stats={data.stats} />
 
@@ -292,7 +355,7 @@ export default function OperationsPage() {
         </TabsContent>
 
         {/* Tab 2: Shipment Overview */}
-        <TabsContent value="shipment-overview" className="space-y-6">
+        <TabsContent value="shipment-overview" className={`space-y-6 ${isRefreshing ? 'hidden' : ''}`}>
           <ShipmentOverviewTable
             inTransitItems={data.immediateAttention}
             customerSummary={data.customerCommitments}
@@ -300,7 +363,7 @@ export default function OperationsPage() {
         </TabsContent>
 
         {/* Tab 3: Supplier Schedule */}
-        <TabsContent value="supplier-schedule" className="space-y-6">
+        <TabsContent value="supplier-schedule" className={`space-y-6 ${isRefreshing ? 'hidden' : ''}`}>
           <SupplierShipmentScheduleTable
             data={data.supplierShipmentSchedule}
             uniqueSkus={data.supplierScheduleSkus || []}
@@ -309,7 +372,7 @@ export default function OperationsPage() {
         </TabsContent>
 
         {/* Tab 4: GDC1 Inventory */}
-        <TabsContent value="gdc1-inventory" className="space-y-6">
+        <TabsContent value="gdc1-inventory" className={`space-y-6 ${isRefreshing ? 'hidden' : ''}`}>
           <GDC1InventoryTable
             data={data.gdc1Inventory}
             uniqueSkus={data.gdc1InventorySkus || []}

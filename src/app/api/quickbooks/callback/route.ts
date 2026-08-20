@@ -20,6 +20,7 @@ import {
   STATE_COOKIE_NAME,
   QBO_REDIRECT_PATHS,
 } from '@/modules/integrations/providers/accounting/quickbooks';
+import { qboAccountSyncService } from '@/modules/integrations/quickbooks';
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -88,6 +89,19 @@ export async function GET(request: Request) {
       status: connection.status,
       externalAccountName: connection.external_account_name,
     });
+
+    // Auto-sync Chart of Accounts from QuickBooks
+    try {
+      const syncResult = await qboAccountSyncService.syncAccounts(connection.id);
+      console.log('Chart of Accounts synced:', {
+        created: syncResult.created,
+        updated: syncResult.updated,
+        errors: syncResult.errors.length,
+      });
+    } catch (syncError) {
+      // Log but don't fail the connection - accounts can be synced later
+      console.error('Chart of Accounts sync failed (non-fatal):', syncError);
+    }
 
     // Success - return HTML that closes the popup
     return new Response(

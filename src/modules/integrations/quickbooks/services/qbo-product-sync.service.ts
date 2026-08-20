@@ -38,7 +38,7 @@ function mapProductToQboFormat(product: Product): AccountingProduct {
   return {
     name: product.name,
     sku: product.sku,
-    description: product.description || undefined,
+    description: product.salesDescription || product.description || undefined,
     unitPrice: product.basePrice, // Already in cents, will be converted in provider
     // Use product's item type - maps directly to QBO types: inventory, non_inventory, service
     type: product.itemType || 'non_inventory',
@@ -48,6 +48,14 @@ function mapProductToQboFormat(product: Product): AccountingProduct {
       gesherSku: product.sku,
       category: product.category,
       baseCost: product.baseCost,
+      // QBO-specific account references (if user selected them)
+      qboIncomeAccount: product.qboIncomeAccount || undefined,
+      qboExpenseAccount: product.qboExpenseAccount || undefined,
+      qboInventoryAssetAccount: product.qboInventoryAssetAccount || undefined,
+      // Additional QBO fields
+      purchaseDescription: product.purchaseDescription || undefined,
+      isTaxable: product.isTaxable,
+      barcode: product.barcode || undefined,
     },
   };
 }

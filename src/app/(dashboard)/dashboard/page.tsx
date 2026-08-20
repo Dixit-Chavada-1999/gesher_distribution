@@ -23,7 +23,7 @@ import {
   DashboardChartsGrid,
   InventoryOverview,
   ARAPSummary,
-  // Mock data
+  // Mock data (to be replaced with dynamic data)
   dashboardStats,
   recentActivities,
   revenueChartData,
@@ -33,6 +33,12 @@ import {
   inventoryByLocation,
   arAgingData,
   apSummaryData,
+  // Actions
+  getUnitsBySKUData,
+  getChannelPerformanceData,
+  getInventoryByLocationData,
+  getDashboardStatsData,
+  getMarginAnalysisData,
 } from '@/features/dashboard';
 import { getCurrentUser, hasPermission } from '@/shared/lib/auth';
 
@@ -106,6 +112,38 @@ export default async function DashboardPage() {
   const canViewFinancials = hasPermission(user, 'dashboard.view_financials');
   const canViewInventory = hasPermission(user, 'dashboard.view_inventory');
 
+  // Fetch dynamic data for charts and KPIs
+  const [unitsBySKUResult, channelResult, inventoryResult, statsResult, marginResult] = await Promise.all([
+    getUnitsBySKUData(),
+    getChannelPerformanceData(),
+    getInventoryByLocationData(),
+    getDashboardStatsData(),
+    getMarginAnalysisData(),
+  ]);
+
+  const dynamicUnitsBySKU = unitsBySKUResult.success && unitsBySKUResult.data?.data?.length
+    ? unitsBySKUResult.data.data
+    : unitsBySKUData; // Fallback to mock data if no real data
+  const unitsProducts = unitsBySKUResult.success && unitsBySKUResult.data?.products?.length
+    ? unitsBySKUResult.data.products
+    : undefined; // Use default products if no real data
+
+  const dynamicChannelData = channelResult.success && channelResult.data?.length
+    ? channelResult.data
+    : channelPerformanceData; // Fallback to mock data if no real data
+
+  const dynamicInventory = inventoryResult.success && inventoryResult.data?.length
+    ? inventoryResult.data
+    : inventoryByLocation; // Fallback to mock data if no real data
+
+  const dynamicStats = statsResult.success && statsResult.data?.length
+    ? statsResult.data
+    : dashboardStats; // Fallback to mock data if no real data
+
+  const dynamicMarginData = marginResult.success && marginResult.data?.length
+    ? marginResult.data
+    : marginChartData; // Fallback to mock data if no real data
+
   return (
     <div className="space-y-6">
       {/* Welcome Header */}
@@ -113,16 +151,17 @@ export default async function DashboardPage() {
 
       {/* KPI Stats Grid - requires dashboard.view_analytics */}
       {canViewAnalytics && (
-        <DashboardStatsGrid stats={dashboardStats} />
+        <DashboardStatsGrid stats={dynamicStats} />
       )}
 
       {/* Charts Grid - requires dashboard.view_analytics */}
       {canViewAnalytics && (
         <DashboardChartsGrid
           revenueData={revenueChartData}
-          unitsData={unitsBySKUData}
-          channelData={channelPerformanceData}
-          marginData={marginChartData}
+          unitsData={dynamicUnitsBySKU}
+          unitsProducts={unitsProducts}
+          channelData={dynamicChannelData}
+          marginData={dynamicMarginData}
         />
       )}
 
@@ -133,7 +172,7 @@ export default async function DashboardPage() {
 
       {/* Inventory Overview - requires dashboard.view_inventory */}
       {canViewInventory && (
-        <InventoryOverview byLocation={inventoryByLocation} />
+        <InventoryOverview byLocation={dynamicInventory} />
       )}
 
       {/* Recent Activity - requires dashboard.view_activity */}

@@ -411,3 +411,126 @@ export async function resyncProductToQbo(productId: string): Promise<ActionResul
 
   return productService.resyncProductToQbo(productId, auth.user.id);
 }
+
+// ============================================
+// QBO CHART OF ACCOUNTS ACTIONS
+// ============================================
+
+import {
+  getIncomeAccounts,
+  getExpenseAccounts,
+  getAssetAccounts,
+  getAccountsByClassification,
+  getAccountNamesByIds,
+} from '@/modules/integrations/quickbooks';
+import type { AccountOption, AccountsByClassification } from '@/modules/integrations/quickbooks';
+
+/**
+ * Get income accounts for dropdown
+ */
+export async function getQboIncomeAccounts(): Promise<ActionResult<AccountOption[]>> {
+  const auth = await authorize('products.view_module');
+  if (!auth.ok) {return auth.result;}
+
+  try {
+    const accounts = await getIncomeAccounts();
+    return { success: true, data: accounts };
+  } catch (error) {
+    console.error('getQboIncomeAccounts error:', error);
+    return { success: false, error: 'Failed to fetch income accounts' };
+  }
+}
+
+/**
+ * Get expense accounts for dropdown
+ */
+export async function getQboExpenseAccounts(): Promise<ActionResult<AccountOption[]>> {
+  const auth = await authorize('products.view_module');
+  if (!auth.ok) {return auth.result;}
+
+  try {
+    const accounts = await getExpenseAccounts();
+    return { success: true, data: accounts };
+  } catch (error) {
+    console.error('getQboExpenseAccounts error:', error);
+    return { success: false, error: 'Failed to fetch expense accounts' };
+  }
+}
+
+/**
+ * Get asset accounts for dropdown (Inventory Asset)
+ */
+export async function getQboAssetAccounts(): Promise<ActionResult<AccountOption[]>> {
+  const auth = await authorize('products.view_module');
+  if (!auth.ok) {return auth.result;}
+
+  try {
+    const accounts = await getAssetAccounts();
+    return { success: true, data: accounts };
+  } catch (error) {
+    console.error('getQboAssetAccounts error:', error);
+    return { success: false, error: 'Failed to fetch asset accounts' };
+  }
+}
+
+/**
+ * Get all accounts grouped by classification (for ProductForm)
+ */
+export async function getQboAccountsForProduct(): Promise<ActionResult<AccountsByClassification>> {
+  const auth = await authorize('products.view_module');
+  if (!auth.ok) {return auth.result;}
+
+  try {
+    const accounts = await getAccountsByClassification();
+    return { success: true, data: accounts };
+  } catch (error) {
+    console.error('getQboAccountsForProduct error:', error);
+    return { success: false, error: 'Failed to fetch accounts' };
+  }
+}
+
+/**
+ * Lookup account names by IDs (for display in View drawer)
+ * Handles both IDs and names - returns name if already a name, looks up if ID
+ */
+export async function lookupQboAccountNames(accountIds: string[]): Promise<ActionResult<Record<string, string>>> {
+  const auth = await authorize('products.view_module');
+  if (!auth.ok) {return auth.result;}
+
+  try {
+    // Filter out empty values and values that are already names (contain spaces or letters)
+    const idsToLookup = accountIds.filter(id => {
+      if (!id) return false;
+      // If it's purely numeric, it's likely an ID that needs lookup
+      return /^\d+$/.test(id);
+    });
+
+    if (idsToLookup.length === 0) {
+      // All values are already names or empty
+      const result: Record<string, string> = {};
+      accountIds.forEach(id => {
+        if (id) result[id] = id; // Return as-is
+      });
+      return { success: true, data: result };
+    }
+
+    // Lookup names for numeric IDs
+    const names = await getAccountNamesByIds(idsToLookup);
+
+    // Build result - include both looked up names and pass-through names
+    const result: Record<string, string> = {};
+    accountIds.forEach(id => {
+      if (!id) return;
+      if (names[id]) {
+        result[id] = names[id];
+      } else {
+        result[id] = id; // Return as-is if not found
+      }
+    });
+
+    return { success: true, data: result };
+  } catch (error) {
+    console.error('lookupQboAccountNames error:', error);
+    return { success: false, error: 'Failed to lookup account names' };
+  }
+}

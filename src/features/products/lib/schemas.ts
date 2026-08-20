@@ -76,6 +76,16 @@ export const createProductSchema = z.object({
   itemType: productItemTypeSchema.default('inventory'),
   isSellable: z.boolean().default(true),
   imageUrl: z.string().url('Invalid image URL').optional().nullable().or(z.literal('')),
+  // QuickBooks Account Fields
+  qboIncomeAccount: z.string().max(100).optional().nullable(),
+  qboExpenseAccount: z.string().max(100).optional().nullable(),
+  qboInventoryAssetAccount: z.string().max(100).optional().nullable(),
+  // Description Fields
+  salesDescription: z.string().max(5000).optional().nullable(),
+  purchaseDescription: z.string().max(5000).optional().nullable(),
+  // Other Fields
+  barcode: z.string().max(50).optional().nullable(),
+  isTaxable: z.boolean().default(false),
 });
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;
@@ -108,6 +118,16 @@ export const updateProductSchema = z.object({
   itemType: productItemTypeSchema.optional(),
   isSellable: z.boolean().optional(),
   imageUrl: z.string().url('Invalid image URL').optional().nullable().or(z.literal('')),
+  // QuickBooks Account Fields
+  qboIncomeAccount: z.string().max(100).optional().nullable(),
+  qboExpenseAccount: z.string().max(100).optional().nullable(),
+  qboInventoryAssetAccount: z.string().max(100).optional().nullable(),
+  // Description Fields
+  salesDescription: z.string().max(5000).optional().nullable(),
+  purchaseDescription: z.string().max(5000).optional().nullable(),
+  // Other Fields
+  barcode: z.string().max(50).optional().nullable(),
+  isTaxable: z.boolean().optional(),
 });
 
 export type UpdateProductInput = z.infer<typeof updateProductSchema>;
@@ -156,6 +176,16 @@ export const productFormSchema = z.object({
   itemType: productItemTypeSchema,
   isSellable: z.boolean(),
   imageUrl: z.string().url('Invalid image URL').optional().or(z.literal('')),
+  // QuickBooks Account Fields
+  qboIncomeAccount: z.string().max(100).optional(),
+  qboExpenseAccount: z.string().max(100).optional(),
+  qboInventoryAssetAccount: z.string().max(100).optional(),
+  // Description Fields
+  salesDescription: z.string().max(5000).optional(),
+  purchaseDescription: z.string().max(5000).optional(),
+  // Other Fields
+  barcode: z.string().max(50).optional(),
+  isTaxable: z.boolean(),
 });
 
 export type ProductFormInput = z.infer<typeof productFormSchema>;
@@ -205,6 +235,16 @@ export function formToCreateDTO(values: ProductFormInput): CreateProductInput {
     itemType: values.itemType,
     isSellable: values.isSellable,
     imageUrl: values.imageUrl || null,
+    // QuickBooks Account Fields
+    qboIncomeAccount: values.qboIncomeAccount || null,
+    qboExpenseAccount: values.qboExpenseAccount || null,
+    qboInventoryAssetAccount: values.qboInventoryAssetAccount || null,
+    // Description Fields
+    salesDescription: values.salesDescription || null,
+    purchaseDescription: values.purchaseDescription || null,
+    // Other Fields
+    barcode: values.barcode || null,
+    isTaxable: values.isTaxable,
   };
 }
 
@@ -226,6 +266,16 @@ export function productToFormValues(product: {
   itemType: 'inventory' | 'non_inventory' | 'service';
   isSellable: boolean;
   imageUrl: string | null;
+  // QuickBooks Account Fields
+  qboIncomeAccount: string | null;
+  qboExpenseAccount: string | null;
+  qboInventoryAssetAccount: string | null;
+  // Description Fields
+  salesDescription: string | null;
+  purchaseDescription: string | null;
+  // Other Fields
+  barcode: string | null;
+  isTaxable: boolean;
 }): ProductFormInput {
   return {
     sku: product.sku,
@@ -242,5 +292,15 @@ export function productToFormValues(product: {
     itemType: product.itemType,
     isSellable: product.isSellable,
     imageUrl: product.imageUrl || '',
+    // QuickBooks Account Fields
+    qboIncomeAccount: product.qboIncomeAccount || '',
+    qboExpenseAccount: product.qboExpenseAccount || '',
+    qboInventoryAssetAccount: product.qboInventoryAssetAccount || '',
+    // Description Fields
+    salesDescription: product.salesDescription || '',
+    purchaseDescription: product.purchaseDescription || '',
+    // Other Fields
+    barcode: product.barcode || '',
+    isTaxable: product.isTaxable,
   };
 }

@@ -4,6 +4,9 @@
  * Type definitions for QuickBooks OAuth connection.
  */
 
+// Re-export Chart of Accounts types
+export * from './chart-of-accounts';
+
 // ============================================
 // DATABASE TYPES
 // ============================================
