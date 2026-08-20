@@ -517,10 +517,23 @@ export async function getShipmentStatusMix(filters?: OperationsFilters): Promise
   }
 
   // Get shipments for additional statuses (HOLD, etc.)
-  const { data: shipments, error: shipError } = await supabase
+  // Join with sales_orders to enable customer filtering in JS
+  let shipQuery = supabase
     .from('shipments')
-    .select('load_status, total_qty')
+    .select(`
+      load_status,
+      total_qty,
+      sales_order_id,
+      sales_orders(customer_id, customer_po_number)
+    `)
     .is('deleted_at', null);
+
+  // Apply sales_order_id filter directly (this works)
+  if (filters?.salesOrderId) {
+    shipQuery = shipQuery.eq('sales_order_id', filters.salesOrderId);
+  }
+
+  const { data: shipments, error: shipError } = await shipQuery;
 
   if (shipError) {
     console.error('Error fetching shipments for status mix:', shipError);
@@ -586,15 +599,34 @@ export async function getShipmentStatusMix(filters?: OperationsFilters): Promise
   });
 
   // Add HOLD status from shipments table if any
+  // Filter in JS since Supabase doesn't support filtering on joined tables directly
   shipments?.forEach((s) => {
-    if (s.load_status === 'hold') {
-      if (!statusMap.has('HOLD')) {
-        statusMap.set('HOLD', { loads: 0, qty: 0 });
+    // Only process HOLD status shipments
+    if (s.load_status !== 'hold') return;
+
+    const salesOrder = s.sales_orders as { customer_id?: string; customer_po_number?: string } | null;
+
+    // Apply customer filter in JS - skip if filter is set and doesn't match
+    if (filters?.customerId) {
+      if (!salesOrder || salesOrder.customer_id !== filters.customerId) {
+        return;
       }
-      const current = statusMap.get('HOLD')!;
-      current.loads += 1;
-      current.qty += s.total_qty || 0;
     }
+
+    // Apply customer PO filter in JS - skip if filter is set and doesn't match
+    if (filters?.customerPoNumber) {
+      if (!salesOrder || salesOrder.customer_po_number !== filters.customerPoNumber) {
+        return;
+      }
+    }
+
+    // Add to HOLD status count
+    if (!statusMap.has('HOLD')) {
+      statusMap.set('HOLD', { loads: 0, qty: 0 });
+    }
+    const current = statusMap.get('HOLD')!;
+    current.loads += 1;
+    current.qty += s.total_qty || 0;
   });
 
   // Convert to array
