@@ -171,6 +171,50 @@ export async function reprocessShippingEmail(
 }
 
 // ============================================
+// INBOUND EMAIL CONTENT
+// ============================================
+
+/**
+ * Get full inbound email content for preview
+ */
+export async function getInboundEmailContent(
+  inboundEmailId: string
+): Promise<ActionResult<{
+  id: string;
+  subject: string;
+  from_email: string;
+  from_name: string | null;
+  to_email: string | null;
+  received_at: string;
+  text_body: string | null;
+  html_body: string | null;
+}>> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  const { data, error } = await supabase
+    .from('inbound_emails')
+    .select('id, subject, from_email, from_name, to_email, received_at, text_body, html_body')
+    .eq('id', inboundEmailId)
+    .single();
+
+  if (error || !data) {
+    return { success: false, error: 'Email not found' };
+  }
+
+  return {
+    success: true,
+    data,
+  };
+}
+
+// ============================================
 // DASHBOARD STATS
 // ============================================
 

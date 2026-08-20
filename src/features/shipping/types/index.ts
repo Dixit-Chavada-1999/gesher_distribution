@@ -162,6 +162,8 @@ export interface ProcessShippingEmailResult {
   matched: boolean;
   extraction?: ShippingEmailExtraction;
   error?: string;
+  /** Reason why shipment update was skipped (e.g., low confidence) */
+  skippedReason?: string;
 }
 
 /**

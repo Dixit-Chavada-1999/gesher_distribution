@@ -60,6 +60,7 @@ export async function getInboundEmails(
     let query = supabase
       .from('inbound_emails')
       .select('*', { count: 'exact' })
+      .neq('to_local_part', 'shipping') // Exclude shipping emails - they show in Shipping module
       .order('received_at', { ascending: false });
 
     // Apply filters

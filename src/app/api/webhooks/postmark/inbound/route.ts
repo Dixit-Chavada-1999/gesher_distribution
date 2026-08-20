@@ -162,10 +162,16 @@ export async function POST(request: NextRequest) {
       // Route to shipping processor
       console.log('[Postmark Webhook] Routing to shipping processor');
 
+      // Pass the email received timestamp for ETA comparison
+      const eventTimestamp = payload.Date
+        ? new Date(payload.Date).toISOString()
+        : new Date().toISOString();
+
       const shippingResult = await processShippingEmail(
         inboundEmail.id,
         payload.Subject || '',
-        payload.TextBody || payload.HtmlBody || ''
+        payload.TextBody || payload.HtmlBody || '',
+        eventTimestamp
       );
 
       console.log('[Postmark Webhook] Shipping processing result:', {

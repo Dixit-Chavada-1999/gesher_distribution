@@ -15,17 +15,86 @@ import type {
 } from '../types';
 
 // ============================================
+// STATUS ORDER CONSTANTS (for regression prevention)
+// ============================================
+
+/**
+ * Tracking status progression order.
+ * Status can only move forward in this list, never backwards.
+ * Exception is special - it's a side-effect status that doesn't affect progression.
+ */
+const TRACKING_STATUS_ORDER: string[] = [
+  'booked',
+  'container_picked',
+  'loaded_on_vessel',
+  'departed_origin',
+  'in_transit',
+  'arrived_port',
+  'customs_clearance',
+  'on_rail',
+  'at_ramp',
+  'out_for_delivery',
+  'delivered',
+];
+
+/**
+ * Load status progression order for Operations Dashboard.
+ */
+const LOAD_STATUS_ORDER: string[] = ['open', 'in_transit', 'delivered'];
+
+/**
+ * Check if new status is a valid progression from current status.
+ * Returns true if the transition is allowed.
+ */
+function isValidStatusProgression(
+  currentStatus: string | null,
+  newStatus: string,
+  statusOrder: string[]
+): boolean {
+  // No current status - any status is valid
+  if (!currentStatus) return true;
+
+  // Exception status is always allowed (it's a side-effect, not progression)
+  if (newStatus === 'exception') return true;
+
+  // Hold status is always allowed (it's a side-effect, not progression)
+  if (newStatus === 'hold') return true;
+
+  const currentIdx = statusOrder.indexOf(currentStatus);
+  const newIdx = statusOrder.indexOf(newStatus);
+
+  // If either status is not in the list, allow the update
+  if (currentIdx === -1 || newIdx === -1) return true;
+
+  // Only allow forward progression or same status
+  return newIdx >= currentIdx;
+}
+
+// ============================================
 // SHIPPING EMAILS
 // ============================================
 
 /**
  * Create a shipping email record from extraction
+ * Includes idempotency check - returns existing record if already processed
  */
 export async function createShippingEmail(data: {
   inbound_email_id: string;
   extraction: ShippingEmailExtraction;
 }): Promise<ShippingEmail | null> {
   const supabase = createAdminClient();
+
+  // Idempotency check: Return existing record if this inbound email was already processed
+  const { data: existing } = await supabase
+    .from('shipping_emails')
+    .select('*')
+    .eq('inbound_email_id', data.inbound_email_id)
+    .single();
+
+  if (existing) {
+    console.log(`[Shipping] Shipping email already exists for inbound ${data.inbound_email_id}, returning existing`);
+    return existing as ShippingEmail;
+  }
 
   const { data: record, error } = await supabase
     .from('shipping_emails')
@@ -153,7 +222,8 @@ export async function getShippingEmailById(
 // ============================================
 
 /**
- * Find shipment by container number or SO number
+ * Find shipment by SO number or container number
+ * Priority: SO number FIRST (business identifier), then container number (can be shared)
  */
 export async function findShipmentByReference(
   containerNumber?: string | null,
@@ -161,25 +231,7 @@ export async function findShipmentByReference(
 ): Promise<ShipmentReference | null> {
   const supabase = createAdminClient();
 
-  // Try container number first
-  if (containerNumber) {
-    const { data } = await supabase
-      .from('shipments')
-      .select('id, shipment_number, sales_order_id')
-      .eq('container_number', containerNumber)
-      .is('deleted_at', null)
-      .single();
-
-    if (data) {
-      return {
-        id: data.id,
-        shipment_number: data.shipment_number,
-        sales_order_id: data.sales_order_id,
-      };
-    }
-  }
-
-  // Try SO number - need to join with sales_orders
+  // PRIORITY 1: Try SO number first (more reliable business identifier)
   if (soNumber) {
     // First find the sales order
     const { data: salesOrder } = await supabase
@@ -199,6 +251,7 @@ export async function findShipmentByReference(
         .single();
 
       if (shipment) {
+        console.log(`[Shipping] Matched by SO number: ${soNumber} → ${shipment.shipment_number}`);
         return {
           id: shipment.id,
           shipment_number: shipment.shipment_number,
@@ -206,6 +259,25 @@ export async function findShipmentByReference(
           order_number: salesOrder.order_number,
         };
       }
+    }
+  }
+
+  // PRIORITY 2: Try container number (fallback if SO doesn't match)
+  if (containerNumber) {
+    const { data } = await supabase
+      .from('shipments')
+      .select('id, shipment_number, sales_order_id')
+      .eq('container_number', containerNumber)
+      .is('deleted_at', null)
+      .single();
+
+    if (data) {
+      console.log(`[Shipping] Matched by container number: ${containerNumber} → ${data.shipment_number}`);
+      return {
+        id: data.id,
+        shipment_number: data.shipment_number,
+        sales_order_id: data.sales_order_id,
+      };
     }
   }
 
@@ -218,6 +290,11 @@ export async function findShipmentByReference(
 
 /**
  * Update shipment with tracking info
+ * Includes regression protection for status and ETA
+ *
+ * @param shipmentId - The shipment to update
+ * @param data - Tracking data to update
+ * @param eventTimestamp - Optional timestamp of the email event (for ETA comparison)
  */
 export async function updateShipmentTracking(
   shipmentId: string,
@@ -235,15 +312,53 @@ export async function updateShipmentTracking(
     issue_description?: string;
     transload_container?: string;
     is_transloaded?: boolean;
-  }
+  },
+  eventTimestamp?: string
 ): Promise<boolean> {
   const supabase = createAdminClient();
 
-  const updateData: Record<string, unknown> = {
-    ...data,
-    last_tracking_update: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  };
+  // Get current shipment state for comparison
+  const { data: current, error: fetchError } = await supabase
+    .from('shipments')
+    .select('tracking_status, eta_port_tracking, eta_ramp, last_tracking_update')
+    .eq('id', shipmentId)
+    .single();
+
+  if (fetchError) {
+    console.error('[Shipping] Error fetching current shipment:', fetchError);
+    return false;
+  }
+
+  const updateData: Record<string, unknown> = { ...data };
+
+  // STATUS REGRESSION PROTECTION
+  // Only allow status to move forward in the progression order
+  if (data.tracking_status && current?.tracking_status) {
+    if (!isValidStatusProgression(current.tracking_status, data.tracking_status, TRACKING_STATUS_ORDER)) {
+      console.log(
+        `[Shipping] Skipping status regression: ${current.tracking_status} → ${data.tracking_status}`
+      );
+      delete updateData.tracking_status;
+    }
+  }
+
+  // ETA COMPARISON USING EVENT TIMESTAMP
+  // Only update ETA if this event is newer than the last tracking update
+  const currentLastUpdate = current?.last_tracking_update
+    ? new Date(current.last_tracking_update).getTime()
+    : 0;
+  const eventTime = eventTimestamp
+    ? new Date(eventTimestamp).getTime()
+    : Date.now();
+
+  // If this event is older than the last update, skip ETA updates
+  if (eventTime < currentLastUpdate) {
+    console.log(
+      `[Shipping] Skipping ETA update from older event: event=${eventTimestamp}, last=${current?.last_tracking_update}`
+    );
+    delete updateData.eta_port_tracking;
+    delete updateData.eta_ramp;
+  }
 
   // Remove undefined values
   Object.keys(updateData).forEach((key) => {
@@ -251,6 +366,16 @@ export async function updateShipmentTracking(
       delete updateData[key];
     }
   });
+
+  // If nothing to update after filtering, return success
+  if (Object.keys(updateData).length === 0) {
+    console.log('[Shipping] No updates needed after regression checks');
+    return true;
+  }
+
+  // Add timestamps
+  updateData.last_tracking_update = new Date().toISOString();
+  updateData.updated_at = new Date().toISOString();
 
   const { error } = await supabase
     .from('shipments')
@@ -270,7 +395,14 @@ export async function updateShipmentTracking(
 // ============================================
 
 /**
+ * Deduplication window in milliseconds (5 minutes)
+ * Prevents duplicate status history entries from webhook retries
+ */
+const STATUS_HISTORY_DEDUP_WINDOW_MS = 5 * 60 * 1000;
+
+/**
  * Create status history entry
+ * Includes idempotency check - skips if same status exists within dedup window
  */
 export async function createStatusHistory(data: {
   shipment_id: string;
@@ -282,6 +414,26 @@ export async function createStatusHistory(data: {
   raw_extract?: Record<string, unknown>;
 }): Promise<ShipmentStatusHistory | null> {
   const supabase = createAdminClient();
+
+  // Idempotency check: Skip if same status was recorded within the dedup window
+  const dedupCutoff = new Date(Date.now() - STATUS_HISTORY_DEDUP_WINDOW_MS).toISOString();
+
+  const { data: existing } = await supabase
+    .from('shipment_status_history')
+    .select('id, status_date')
+    .eq('shipment_id', data.shipment_id)
+    .eq('status', data.status)
+    .gte('status_date', dedupCutoff)
+    .order('status_date', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (existing) {
+    console.log(
+      `[Shipping] Skipping duplicate status history: ${data.status} already recorded at ${existing.status_date}`
+    );
+    return existing as ShipmentStatusHistory;
+  }
 
   const { data: record, error } = await supabase
     .from('shipment_status_history')
@@ -383,5 +535,174 @@ export async function markShippingEmailProcessed(
     return false;
   }
 
+  return true;
+}
+
+// ============================================
+// SHIPMENT LOAD STATUS UPDATE (for Operations Dashboard)
+// ============================================
+
+/**
+ * Map tracking status to load_status (for Operations Dashboard)
+ * Tracking status from emails → load_status that Jenny sees
+ */
+const TRACKING_TO_LOAD_STATUS: Record<string, string> = {
+  booked: 'open',
+  container_picked: 'open',
+  loaded_on_vessel: 'open',
+  departed_origin: 'in_transit',
+  in_transit: 'in_transit',
+  arrived_port: 'in_transit',
+  customs_clearance: 'in_transit',
+  on_rail: 'in_transit',
+  at_ramp: 'in_transit',
+  out_for_delivery: 'in_transit',
+  delivered: 'delivered',
+  exception: 'hold',
+};
+
+/**
+ * Update shipment load_status based on tracking status
+ * This updates the status shown in Operations Dashboard
+ * Includes regression protection for load_status
+ */
+export async function updateShipmentLoadStatus(
+  shipmentId: string,
+  trackingStatus: string
+): Promise<boolean> {
+  const supabase = createAdminClient();
+
+  const loadStatus = TRACKING_TO_LOAD_STATUS[trackingStatus] || 'open';
+
+  // Get current load_status for regression check
+  const { data: current, error: fetchError } = await supabase
+    .from('shipments')
+    .select('load_status')
+    .eq('id', shipmentId)
+    .single();
+
+  if (fetchError) {
+    console.error('[Shipping] Error fetching current load_status:', fetchError);
+    return false;
+  }
+
+  // LOAD STATUS REGRESSION PROTECTION
+  if (current?.load_status && !isValidStatusProgression(current.load_status, loadStatus, LOAD_STATUS_ORDER)) {
+    console.log(
+      `[Shipping] Skipping load_status regression: ${current.load_status} → ${loadStatus}`
+    );
+    return true; // Not an error, just skip the update
+  }
+
+  // Build action_required message based on status
+  let actionRequired = '';
+  switch (trackingStatus) {
+    case 'in_transit':
+    case 'departed_origin':
+      actionRequired = 'In Transit - Awaiting Delivery';
+      break;
+    case 'arrived_port':
+      actionRequired = 'Arrived at Port - Awaiting Customs';
+      break;
+    case 'customs_clearance':
+      actionRequired = 'Customs Clearance in Progress';
+      break;
+    case 'on_rail':
+      actionRequired = 'On Rail - En Route to Ramp';
+      break;
+    case 'at_ramp':
+      actionRequired = 'At Ramp - Ready for Pickup';
+      break;
+    case 'out_for_delivery':
+      actionRequired = 'Out for Delivery';
+      break;
+    case 'delivered':
+      actionRequired = 'Delivered';
+      break;
+    case 'exception':
+      actionRequired = 'Exception - Requires Attention';
+      break;
+  }
+
+  const { error } = await supabase
+    .from('shipments')
+    .update({
+      load_status: loadStatus,
+      action_required: actionRequired,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', shipmentId);
+
+  if (error) {
+    console.error('[Shipping] Error updating shipment load_status:', error);
+    return false;
+  }
+
+  console.log(
+    `[Shipping] Updated shipment ${shipmentId} load_status: ${trackingStatus} → ${loadStatus}`
+  );
+  return true;
+}
+
+// ============================================
+// SALES ORDER STATUS UPDATE
+// ============================================
+
+/**
+ * Update sales order status based on shipping tracking status
+ */
+export async function updateSalesOrderStatus(
+  salesOrderId: string,
+  newStatus: string
+): Promise<boolean> {
+  const supabase = createAdminClient();
+
+  // First get current status to check if update is needed
+  const { data: currentOrder, error: fetchError } = await supabase
+    .from('sales_orders')
+    .select('status')
+    .eq('id', salesOrderId)
+    .single();
+
+  if (fetchError || !currentOrder) {
+    console.error('[Shipping] Error fetching sales order:', fetchError);
+    return false;
+  }
+
+  // Don't update if already at target status or beyond
+  const statusOrder = ['draft', 'pending', 'confirmed', 'processing', 'shipped', 'delivered'];
+  const currentIndex = statusOrder.indexOf(currentOrder.status);
+  const newIndex = statusOrder.indexOf(newStatus);
+
+  // Only update if moving forward in the workflow
+  if (newIndex <= currentIndex) {
+    console.log(
+      `[Shipping] Skipping SO status update: current=${currentOrder.status}, proposed=${newStatus}`
+    );
+    return true; // Not an error, just no update needed
+  }
+
+  // Don't update cancelled orders
+  if (currentOrder.status === 'cancelled') {
+    console.log('[Shipping] Skipping SO status update: order is cancelled');
+    return true;
+  }
+
+  const { error } = await supabase
+    .from('sales_orders')
+    .update({
+      status: newStatus,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', salesOrderId);
+
+  if (error) {
+    console.error('[Shipping] Error updating sales order status:', error);
+    return false;
+  }
+
+  console.log(
+    `[Shipping] Updated SO ${salesOrderId} status: ${currentOrder.status} → ${newStatus}`
+  );
   return true;
 }

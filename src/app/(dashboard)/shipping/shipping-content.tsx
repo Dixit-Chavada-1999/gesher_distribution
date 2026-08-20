@@ -15,6 +15,7 @@ import {
   Clock,
   RefreshCw,
   Package,
+  Eye,
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
@@ -28,7 +29,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/shared/components/ui/table';
-import { getShippingEmails, getShippingStats } from '@/features/shipping/actions';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/shared/components/ui/dialog';
+import { getShippingEmails, getShippingStats, getInboundEmailContent } from '@/features/shipping/actions';
 import type { ShippingEmailWithInbound } from '@/features/shipping/types';
 
 // Status badge colors
@@ -71,6 +78,34 @@ function formatDate(dateStr: string | null): string {
   });
 }
 
+// Format issue type for display
+function formatIssueType(issueType: string | null): string {
+  if (!issueType) {
+    return '';
+  }
+  // Special cases for abbreviations
+  const abbreviations: Record<string, string> = {
+    lfd: 'LFD',
+  };
+
+  return issueType
+    .split('_')
+    .map((word) => abbreviations[word.toLowerCase()] || word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+// Email preview type
+interface EmailPreview {
+  id: string;
+  subject: string;
+  from_email: string;
+  from_name: string | null;
+  to_email: string | null;
+  received_at: string;
+  text_body: string | null;
+  html_body: string | null;
+}
+
 export function ShippingContent() {
   const [emails, setEmails] = useState<ShippingEmailWithInbound[]>([]);
   const [stats, setStats] = useState({
@@ -82,6 +117,9 @@ export function ShippingContent() {
     withIssues: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [emailPreview, setEmailPreview] = useState<EmailPreview | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -108,6 +146,21 @@ export function ShippingContent() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  const handleViewEmail = async (inboundEmailId: string) => {
+    setPreviewLoading(true);
+    setPreviewOpen(true);
+    try {
+      const result = await getInboundEmailContent(inboundEmailId);
+      if (result.success && result.data) {
+        setEmailPreview(result.data);
+      }
+    } catch (error) {
+      console.error('Error fetching email content:', error);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -233,6 +286,7 @@ export function ShippingContent() {
                   <TableHead>LFD</TableHead>
                   <TableHead>Matched</TableHead>
                   <TableHead>Issues</TableHead>
+                  <TableHead className="text-center">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -281,11 +335,21 @@ export function ShippingContent() {
                       {email.has_issue ? (
                         <Badge variant="destructive">
                           <AlertTriangle className="h-3 w-3 mr-1" />
-                          {email.issue_type?.replace('_', ' ')}
+                          {formatIssueType(email.issue_type)}
                         </Badge>
                       ) : (
                         <span className="text-muted-foreground">-</span>
                       )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleViewEmail(email.inbound_email_id)}
+                        title="View original email"
+                      >
+                        <Eye className="h-4 w-4 text-muted-foreground hover:text-primary" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -294,6 +358,76 @@ export function ShippingContent() {
           )}
         </CardContent>
       </Card>
+
+      {/* Email Preview Dialog */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5" />
+              Original Email
+            </DialogTitle>
+          </DialogHeader>
+
+          {previewLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : emailPreview ? (
+            <div className="flex-1 overflow-auto space-y-4">
+              {/* Email Header */}
+              <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm">
+                      <span className="text-muted-foreground">From:</span>{' '}
+                      <span className="font-medium">
+                        {emailPreview.from_name ? `${emailPreview.from_name} <${emailPreview.from_email}>` : emailPreview.from_email}
+                      </span>
+                    </p>
+                    {emailPreview.to_email && (
+                      <p className="text-sm">
+                        <span className="text-muted-foreground">To:</span>{' '}
+                        <span className="font-medium">{emailPreview.to_email}</span>
+                      </p>
+                    )}
+                    <p className="text-sm">
+                      <span className="text-muted-foreground">Date:</span>{' '}
+                      <span className="font-medium">{formatDate(emailPreview.received_at)}</span>
+                    </p>
+                  </div>
+                </div>
+                <div className="pt-2 border-t">
+                  <p className="text-sm">
+                    <span className="text-muted-foreground">Subject:</span>{' '}
+                    <span className="font-semibold">{emailPreview.subject}</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Email Body */}
+              <div className="border rounded-lg p-4 bg-white min-h-[200px] max-h-[400px] overflow-auto">
+                {emailPreview.html_body ? (
+                  <div
+                    className="prose prose-sm max-w-none"
+                    dangerouslySetInnerHTML={{ __html: emailPreview.html_body }}
+                  />
+                ) : emailPreview.text_body ? (
+                  <pre className="whitespace-pre-wrap text-sm font-sans">
+                    {emailPreview.text_body}
+                  </pre>
+                ) : (
+                  <p className="text-muted-foreground italic">No email content available</p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>Failed to load email content</p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -103,6 +103,7 @@ export async function getOperationsStats(): Promise<OperationsStats> {
       id,
       load_status,
       eta_to_port,
+      eta_port_tracking,
       estimated_arrival
     `)
     .is('deleted_at', null);
@@ -186,7 +187,8 @@ export async function getOperationsStats(): Promise<OperationsStats> {
 
   // Count in-transit shipments arriving in next 7 days
   shipments?.forEach((s) => {
-    const etaDate = s.eta_to_port || s.estimated_arrival;
+    // Priority: eta_port_tracking (from shipping email) > eta_to_port (manual) > estimated_arrival
+    const etaDate = s.eta_port_tracking || s.eta_to_port || s.estimated_arrival;
     if (etaDate) {
       const eta = new Date(etaDate);
       if (eta >= now && eta <= next7Days) {
@@ -553,6 +555,7 @@ export async function getImmediateAttention(): Promise<ImmediateAttentionItem[]>
       supplier_reference_number,
       total_qty,
       eta_to_port,
+      eta_port_tracking,
       customer_expected_delivery,
       load_status,
       action_required,
@@ -584,7 +587,8 @@ export async function getImmediateAttention(): Promise<ImmediateAttentionItem[]>
       return; // Skip warehouse shipments
     }
 
-    const etaDate = s.eta_to_port || s.estimated_arrival;
+    // Priority: eta_port_tracking (from shipping email) > eta_to_port (manual) > estimated_arrival
+    const etaDate = s.eta_port_tracking || s.eta_to_port || s.estimated_arrival;
     const etaPort = etaDate ? new Date(etaDate) : null;
     const customerDueDate = s.customer_expected_delivery || salesOrderData?.requested_delivery_date;
     const customerDue = customerDueDate ? new Date(customerDueDate) : null;
@@ -638,12 +642,17 @@ export async function getImmediateAttention(): Promise<ImmediateAttentionItem[]>
     console.error('Error fetching sales orders for immediate attention:', soError);
   }
 
-  // Track IDs we've already added from shipments
-  const addedIds = new Set(result.map(r => r.id));
+  // Track SALES ORDER IDs we've already added from shipments (to avoid duplicates)
+  const addedSalesOrderIds = new Set<string>();
+  shipments?.forEach((s) => {
+    if (s.sales_order_id) {
+      addedSalesOrderIds.add(s.sales_order_id);
+    }
+  });
 
   salesOrders?.forEach((so) => {
-    // Skip if already added from shipments
-    if (addedIds.has(so.id)) { return; }
+    // Skip if already added from shipments (by sales_order_id)
+    if (addedSalesOrderIds.has(so.id)) { return; }
 
     const customerData = toOne(so.customers);
     const deliveryDate = so.requested_delivery_date ? new Date(so.requested_delivery_date) : null;
@@ -661,11 +670,14 @@ export async function getImmediateAttention(): Promise<ImmediateAttentionItem[]>
       const totalQty = items.reduce((sum: number, item: { quantity: number }) => sum + (item.quantity || 0), 0);
 
       // Map SO status to display status
+      // Business Flow: confirmed (SOLD) → processing (IN_TRANSIT, supplier shipped) → shipped → delivered
       let displayStatus: ShipmentStatus = 'OPEN';
-      if (so.status === 'confirmed' || so.status === 'processing') {
-        displayStatus = 'SOLD';
-      } else if (so.status === 'shipped') {
-        displayStatus = 'IN_TRANSIT';
+      if (so.status === 'confirmed') {
+        displayStatus = 'SOLD'; // Waiting for supplier to ship
+      } else if (so.status === 'processing' || so.status === 'shipped') {
+        displayStatus = 'IN_TRANSIT'; // Supplier has shipped, goods in transit
+      } else if (so.status === 'delivered') {
+        displayStatus = 'DELIVERED';
       }
 
       result.push({

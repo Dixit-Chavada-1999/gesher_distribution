@@ -7,10 +7,45 @@
 
 import { extractShippingInfo } from './shipping-extract.service';
 import * as shippingRepo from '../repositories/shipping.repository';
+import {
+  updateSalesOrderStatus,
+  updateShipmentLoadStatus,
+} from '../repositories/shipping.repository';
 import type {
   ProcessShippingEmailResult,
   ShippingEmailExtraction,
+  ShipmentTrackingStatus,
 } from '../types';
+import type { OrderStatus } from '@/features/sales-orders/types';
+
+// ============================================
+// CONFIDENCE THRESHOLD
+// ============================================
+
+/**
+ * Minimum AI extraction confidence required to auto-update shipment data.
+ * Extractions below this threshold will be logged but not applied.
+ */
+const CONFIDENCE_THRESHOLD = 0.6;
+
+// ============================================
+// STATUS MAPPING: Tracking → Sales Order
+// ============================================
+
+const TRACKING_TO_ORDER_STATUS: Record<ShipmentTrackingStatus, OrderStatus> = {
+  booked: 'confirmed',
+  container_picked: 'processing',
+  loaded_on_vessel: 'processing',
+  departed_origin: 'processing',
+  in_transit: 'processing',
+  arrived_port: 'processing',
+  customs_clearance: 'processing',
+  on_rail: 'shipped',
+  at_ramp: 'shipped',
+  out_for_delivery: 'shipped',
+  delivered: 'delivered',
+  exception: 'processing', // Keep processing, don't change on exception
+};
 
 // ============================================
 // MAIN PROCESSOR
@@ -22,14 +57,21 @@ import type {
  * Flow:
  * 1. Extract shipping info using AI
  * 2. Create shipping_emails record
- * 3. Try to match with existing shipment (by Container# or SO#)
- * 4. If matched: Update shipment + Create status history
- * 5. If issue detected: Log for alerting
+ * 3. Check confidence threshold
+ * 4. Try to match with existing shipment (by Container# or SO#)
+ * 5. If matched and confidence OK: Update shipment + Create status history
+ * 6. If issue detected: Log for alerting
+ *
+ * @param inboundEmailId - The ID of the inbound email record
+ * @param subject - Email subject
+ * @param body - Email body
+ * @param eventTimestamp - Optional timestamp of when the email was received (for ETA comparison)
  */
 export async function processShippingEmail(
   inboundEmailId: string,
   subject: string,
-  body: string
+  body: string,
+  eventTimestamp?: string
 ): Promise<ProcessShippingEmailResult> {
   try {
     // Step 1: Extract shipping info using AI
@@ -45,7 +87,7 @@ export async function processShippingEmail(
       confidence: extraction.confidence,
     });
 
-    // Step 2: Create shipping email record
+    // Step 2: Create shipping email record (idempotent - returns existing if duplicate)
     const shippingEmail = await shippingRepo.createShippingEmail({
       inbound_email_id: inboundEmailId,
       extraction,
@@ -59,7 +101,26 @@ export async function processShippingEmail(
       };
     }
 
-    // Step 3: Try to match with existing shipment
+    // Step 3: Check confidence threshold
+    // Low confidence extractions should not auto-update shipment data
+    if (extraction.confidence < CONFIDENCE_THRESHOLD) {
+      console.warn(
+        `[Shipping] Low confidence extraction (${extraction.confidence} < ${CONFIDENCE_THRESHOLD}). Skipping shipment updates.`
+      );
+
+      // Mark email as processed but don't update shipment
+      await shippingRepo.markShippingEmailProcessed(shippingEmail.id);
+
+      return {
+        success: true,
+        shippingEmailId: shippingEmail.id,
+        matched: false,
+        extraction,
+        skippedReason: `Low confidence: ${extraction.confidence}`,
+      };
+    }
+
+    // Step 4: Try to match with existing shipment
     const shipment = await shippingRepo.findShipmentByReference(
       extraction.containerNumber,
       extraction.soNumber
@@ -68,24 +129,31 @@ export async function processShippingEmail(
     if (shipment) {
       console.log(`[Shipping] Matched to shipment: ${shipment.shipment_number}`);
 
-      // Step 4: Update shipment with tracking info
-      await shippingRepo.updateShipmentTracking(shipment.id, {
-        container_number: extraction.containerNumber || undefined,
-        mbl_number: extraction.mblNumber || undefined,
-        vessel_name: extraction.vesselName || undefined,
-        voyage_number: extraction.voyageNumber || undefined,
-        tracking_status: extraction.detectedStatus,
-        eta_port_tracking: extraction.etaPort || undefined,
-        eta_ramp: extraction.etaRamp || undefined,
-        lfd_date: extraction.lfdDate || undefined,
-        has_issue: extraction.hasIssue,
-        issue_type: extraction.issueType || undefined,
-        issue_description: extraction.issueDescription || undefined,
-        transload_container: extraction.newContainerNumber || undefined,
-        is_transloaded: extraction.isTransload,
-      });
+      // Step 5: Update shipment with tracking info (with regression protection)
+      await shippingRepo.updateShipmentTracking(
+        shipment.id,
+        {
+          container_number: extraction.containerNumber || undefined,
+          mbl_number: extraction.mblNumber || undefined,
+          vessel_name: extraction.vesselName || undefined,
+          voyage_number: extraction.voyageNumber || undefined,
+          tracking_status: extraction.detectedStatus,
+          eta_port_tracking: extraction.etaPort || undefined,
+          eta_ramp: extraction.etaRamp || undefined,
+          lfd_date: extraction.lfdDate || undefined,
+          has_issue: extraction.hasIssue,
+          issue_type: extraction.issueType || undefined,
+          issue_description: extraction.issueDescription || undefined,
+          transload_container: extraction.newContainerNumber || undefined,
+          is_transloaded: extraction.isTransload,
+        },
+        eventTimestamp // Pass event timestamp for ETA comparison
+      );
 
-      // Step 5: Create status history entry
+      // Step 5b: Update shipment load_status for Operations Dashboard (with regression protection)
+      await updateShipmentLoadStatus(shipment.id, extraction.detectedStatus);
+
+      // Step 6: Create status history entry (idempotent - skips duplicates)
       await shippingRepo.createStatusHistory({
         shipment_id: shipment.id,
         status: extraction.detectedStatus,
@@ -96,15 +164,26 @@ export async function processShippingEmail(
         raw_extract: extraction as unknown as Record<string, unknown>,
       });
 
-      // Step 6: Link shipping email to shipment
+      // Step 7: Link shipping email to shipment
       await shippingRepo.linkShippingEmailToShipment(
         shippingEmail.id,
         shipment.id
       );
 
-      // Step 7: Handle issues if detected
+      // Step 8: Handle issues if detected
       if (extraction.hasIssue) {
         await handleShippingIssue(shipment.id, extraction);
+      }
+
+      // Step 9: Update Sales Order status based on tracking status
+      if (shipment.sales_order_id && extraction.detectedStatus) {
+        const newOrderStatus = TRACKING_TO_ORDER_STATUS[extraction.detectedStatus];
+        if (newOrderStatus) {
+          await updateSalesOrderStatus(shipment.sales_order_id, newOrderStatus);
+          console.log(
+            `[Shipping] Sales Order status updated based on tracking: ${extraction.detectedStatus} → ${newOrderStatus}`
+          );
+        }
       }
 
       return {

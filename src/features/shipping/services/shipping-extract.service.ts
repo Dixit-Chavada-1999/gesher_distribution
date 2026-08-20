@@ -52,7 +52,7 @@ IMPORTANT CONTEXT:
 - These are emails between SEAIR Global (freight forwarder), Galileo (supplier in India), and Gesher Distribution (importer in USA)
 - Container numbers format: 4 letters + 7 digits (e.g., TCLU8042633, SEGU4010515, CMAU9623325)
 - MBL format: SEAOTB##### or similar shipping line formats
-- SO numbers format: SO2600### (Gesher's Sales Order reference)
+- SO numbers format: SO-YYYY-NNNNN (e.g., SO-2026-00003) - Gesher's Sales Order reference. Keep the dashes!
 
 EXTRACT THE FOLLOWING:
 
@@ -97,7 +97,7 @@ Return ONLY valid JSON in this exact format:
 {
   "containerNumber": "TCLU8042633",
   "mblNumber": "SEAOTB17624",
-  "soNumber": "SO2600031",
+  "soNumber": "SO-2026-00003",
   "vesselName": "MSC VESSEL NAME",
   "voyageNumber": "ABC123",
   "etaPort": "2025-08-25",
@@ -225,8 +225,9 @@ function fallbackExtraction(
   // MBL number: Various formats
   const mblMatch = fullText.match(/\b(SEAOTB\d+|[A-Z]{6,}\d{5,})\b/i);
 
-  // SO number: SO followed by 7 digits
-  const soMatch = fullText.match(/\b(SO\d{7})\b/i);
+  // SO number: SO-YYYY-NNNNN or SO####### format
+  // Examples: SO-2026-00003, SO2600028
+  const soMatch = fullText.match(/\b(SO-\d{4}-\d{5}|SO\d{7})\b/i);
 
   // Dates: Various formats
   const datePattern = /\b(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{2,4}|\w+ \d{1,2},? \d{4})\b/g;

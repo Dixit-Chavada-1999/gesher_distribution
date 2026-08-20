@@ -4,6 +4,11 @@ const nextConfig: NextConfig = {
   /* React Strict Mode */
   reactStrictMode: true,
 
+  /* ESLint - Ignore during builds (run separately in CI) */
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+
   /* Image Optimization */
   images: {
     remotePatterns: [
