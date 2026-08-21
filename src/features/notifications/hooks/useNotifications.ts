@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   getNotifications,
   getUnreadNotificationCount,
@@ -52,6 +52,7 @@ export function useNotifications(
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const prevUnreadCountRef = useRef(0);
 
   // Fetch notifications
   const fetchNotifications = useCallback(
@@ -74,6 +75,7 @@ export function useNotifications(
           );
           setTotal(result.data.total);
           setUnreadCount(result.data.unreadCount);
+          prevUnreadCountRef.current = result.data.unreadCount; // Keep ref in sync
           setPage(pageNum);
         } else {
           setError(result.error || 'Failed to fetch notifications');
@@ -88,17 +90,29 @@ export function useNotifications(
     [limit, unreadOnly]
   );
 
-  // Refresh unread count only (lightweight refresh)
+  // Refresh unread count and check if we need to fetch new notifications
   const refreshUnreadCount = useCallback(async () => {
     try {
       const result = await getUnreadNotificationCount();
       if (result.success && typeof result.data === 'number') {
-        setUnreadCount(result.data);
+        const newCount = result.data;
+        const prevCount = prevUnreadCountRef.current;
+
+        // Update the ref
+        prevUnreadCountRef.current = newCount;
+
+        // If count increased, fetch full list to show new notifications
+        if (newCount > prevCount) {
+          console.log('[useNotifications] New notifications detected, refreshing list...', { prevCount, newCount });
+          await fetchNotifications(1, false);
+        } else {
+          setUnreadCount(newCount);
+        }
       }
     } catch (err) {
       console.error('useNotifications refreshUnreadCount error:', err);
     }
-  }, []);
+  }, [fetchNotifications]);
 
   // Full refresh
   const refresh = useCallback(async () => {

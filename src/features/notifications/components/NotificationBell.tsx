@@ -36,7 +36,7 @@ export function NotificationBell() {
   } = useNotifications({
     limit: 10,
     autoRefresh: true,
-    refreshInterval: 60000,
+    refreshInterval: 30000, // 30 seconds - faster notification detection
   });
 
   // Handle real-time notification
@@ -74,12 +74,12 @@ export function NotificationBell() {
         <Button
           variant="ghost"
           size="icon"
-          className="relative text-[hsl(var(--sidebar-foreground))] hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--foreground))]"
+          className="relative text-white hover:bg-white/10 hover:text-white"
           aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
         >
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[hsl(var(--sidebar-primary))] px-1 text-[10px] font-medium text-white">
+            <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[hsl(var(--sidebar-primary))] px-1 text-[10px] font-medium text-white">
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}

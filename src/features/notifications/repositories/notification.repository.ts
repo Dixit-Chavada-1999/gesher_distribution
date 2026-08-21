@@ -139,10 +139,18 @@ class NotificationRepositoryImpl {
       dataLength: data?.length,
       count,
       error: error?.message,
-      firstItem: data?.[0],
+      errorCode: error?.code,
+      errorDetails: error?.details,
+      rawData: JSON.stringify(data?.slice(0, 2), null, 2),
     });
 
     if (error) {
+      console.error('[NotificationRepo] Query error details:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: (error as { hint?: string }).hint,
+      });
       throw new Error(`Failed to fetch notifications: ${error.message}`);
     }
 
@@ -153,8 +161,23 @@ class NotificationRepositoryImpl {
       .eq('user_id', userId)
       .eq('is_read', false);
 
+    // Map with error handling
+    const mappedData: NotificationWithStatus[] = [];
+    for (const row of data || []) {
+      try {
+        mappedData.push(this.mapToNotificationWithStatus(row));
+      } catch (mapError) {
+        console.error('[NotificationRepo] Error mapping row:', {
+          rowId: row.id,
+          notificationId: row.notification_id,
+          notifications: row.notifications,
+          error: mapError instanceof Error ? mapError.message : 'Unknown error',
+        });
+      }
+    }
+
     return {
-      data: (data || []).map((row) => this.mapToNotificationWithStatus(row)),
+      data: mappedData,
       total: count || 0,
       unreadCount: unreadCount || 0,
     };
