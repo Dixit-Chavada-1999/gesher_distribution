@@ -201,6 +201,11 @@ export const salesOrderService = {
       // Create order
       const order = await salesOrderRepository.create(validation.data, userId);
 
+      // Send notification (async, non-blocking)
+      this.sendSalesOrderCreatedNotification(order, userId).catch((err) => {
+        console.error('Failed to send sales order created notification:', err);
+      });
+
       return {
         success: true,
         data: order,
@@ -211,6 +216,30 @@ export const salesOrderService = {
         success: false,
         error: 'Failed to create sales order',
       };
+    }
+  },
+
+  /**
+   * Send notification for sales order created (helper method)
+   */
+  async sendSalesOrderCreatedNotification(
+    order: SalesOrderWithItems,
+    userId?: string
+  ): Promise<void> {
+    console.log('[SalesOrderService] Sending notification for SO:', order.orderNumber);
+    try {
+      const { notificationService } = await import('@/features/notifications/services/notification.service');
+      await notificationService.notifySalesOrderCreated({
+        salesOrderId: order.id,
+        orderNumber: order.orderNumber,
+        customerName: order.customer?.name || 'Unknown Customer',
+        totalAmount: order.grandTotal,
+        createdBy: userId,
+      });
+      console.log('[SalesOrderService] Notification sent successfully for SO:', order.orderNumber);
+    } catch (error) {
+      console.error('[SalesOrderService] Failed to send notification:', error);
+      throw error;
     }
   },
 

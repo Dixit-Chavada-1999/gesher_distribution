@@ -153,6 +153,21 @@ export async function processShippingEmail(
       // Step 5b: Update shipment load_status for Operations Dashboard (with regression protection)
       await updateShipmentLoadStatus(shipment.id, extraction.detectedStatus);
 
+      // Step 5c: Send notification for shipment update (non-blocking)
+      try {
+        const { notificationService } = await import('@/features/notifications/services/notification.service');
+        notificationService.notifyShipmentUpdate({
+          shipmentId: shipment.id,
+          shipmentNumber: shipment.shipment_number,
+          status: extraction.detectedStatus || 'updated',
+          trackingNumber: extraction.containerNumber || undefined,
+          customerName: shipment.customer_name || undefined,
+          customerPoNumber: shipment.customer_po_number || undefined,
+        });
+      } catch (notifError) {
+        console.error('[Shipping] Failed to send notification:', notifError);
+      }
+
       // Step 6: Create status history entry (idempotent - skips duplicates)
       await shippingRepo.createStatusHistory({
         shipment_id: shipment.id,

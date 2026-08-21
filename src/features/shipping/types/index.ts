@@ -174,6 +174,8 @@ export interface ShipmentReference {
   shipment_number: string;
   sales_order_id?: string | null;
   order_number?: string;
+  customer_name?: string | null;
+  customer_po_number?: string | null;
 }
 
 // ============================================

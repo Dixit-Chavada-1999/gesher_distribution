@@ -8,7 +8,8 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Menu, Search, Bell, LogOut, User, Settings } from 'lucide-react';
+import { Menu, Search, LogOut, User, Settings } from 'lucide-react';
+import { NotificationBell } from '@/features/notifications/components';
 
 import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/components/ui/button';
@@ -134,14 +135,7 @@ export function Header({ className }: HeaderProps) {
         </Button>
 
         {/* Notifications */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="relative text-[hsl(var(--sidebar-foreground))] hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--foreground))]"
-        >
-          <Bell className="h-5 w-5" />
-          <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[hsl(var(--sidebar-primary))]" />
-        </Button>
+        <NotificationBell />
 
         {/* User Menu */}
         <DropdownMenu>

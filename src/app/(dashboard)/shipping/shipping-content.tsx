@@ -4,6 +4,7 @@
  * Shipping Content
  *
  * Client component for shipping tracking page.
+ * Permission-gated for different roles.
  */
 
 import { useEffect, useState } from 'react';
@@ -107,6 +108,11 @@ interface EmailPreview {
 }
 
 export function ShippingContent() {
+  // Note: Permission checks are handled by server actions
+  // UI-level gating can be added here when edit/link buttons are added
+  // const { hasPermission } = useAuthStore();
+  // const canEdit = hasPermission('shipments.edit');
+
   const [emails, setEmails] = useState<ShippingEmailWithInbound[]>([]);
   const [stats, setStats] = useState({
     total: 0,

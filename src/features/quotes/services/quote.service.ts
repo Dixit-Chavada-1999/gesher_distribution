@@ -201,6 +201,11 @@ export const quoteService = {
       // Create quote
       const quote = await quoteRepository.create(validation.data, userId);
 
+      // Send notification (async, non-blocking)
+      this.sendQuoteCreatedNotification(quote, userId).catch((err) => {
+        console.error('Failed to send quote created notification:', err);
+      });
+
       return {
         success: true,
         data: quote,
@@ -214,6 +219,23 @@ export const quoteService = {
         error: errorMessage,
       };
     }
+  },
+
+  /**
+   * Send notification for quote created (helper method)
+   */
+  async sendQuoteCreatedNotification(
+    quote: QuoteWithItems,
+    userId?: string
+  ): Promise<void> {
+    const { notificationService } = await import('@/features/notifications/services/notification.service');
+    await notificationService.notifyQuoteCreated({
+      quoteId: quote.id,
+      quoteNumber: quote.quoteNumber,
+      customerName: quote.customer?.name || 'Unknown Customer',
+      totalAmount: quote.grandTotal,
+      createdBy: userId,
+    });
   },
 
   /**

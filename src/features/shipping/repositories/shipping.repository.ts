@@ -233,10 +233,18 @@ export async function findShipmentByReference(
 
   // PRIORITY 1: Try SO number first (more reliable business identifier)
   if (soNumber) {
-    // First find the sales order
+    // First find the sales order with customer info
     const { data: salesOrder } = await supabase
       .from('sales_orders')
-      .select('id, order_number')
+      .select(`
+        id,
+        order_number,
+        customer_po_number,
+        customers!inner (
+          id,
+          name
+        )
+      `)
       .eq('order_number', soNumber)
       .is('deleted_at', null)
       .single();
@@ -252,11 +260,14 @@ export async function findShipmentByReference(
 
       if (shipment) {
         console.log(`[Shipping] Matched by SO number: ${soNumber} → ${shipment.shipment_number}`);
+        const customerData = salesOrder.customers as unknown as { id: string; name: string } | null;
         return {
           id: shipment.id,
           shipment_number: shipment.shipment_number,
           sales_order_id: shipment.sales_order_id,
           order_number: salesOrder.order_number,
+          customer_name: customerData?.name || null,
+          customer_po_number: salesOrder.customer_po_number || null,
         };
       }
     }
@@ -266,17 +277,37 @@ export async function findShipmentByReference(
   if (containerNumber) {
     const { data } = await supabase
       .from('shipments')
-      .select('id, shipment_number, sales_order_id')
+      .select(`
+        id,
+        shipment_number,
+        sales_order_id,
+        sales_orders (
+          order_number,
+          customer_po_number,
+          customers (
+            id,
+            name
+          )
+        )
+      `)
       .eq('container_number', containerNumber)
       .is('deleted_at', null)
       .single();
 
     if (data) {
       console.log(`[Shipping] Matched by container number: ${containerNumber} → ${data.shipment_number}`);
+      const salesOrderData = data.sales_orders as unknown as {
+        order_number: string;
+        customer_po_number: string | null;
+        customers: { id: string; name: string } | null;
+      } | null;
       return {
         id: data.id,
         shipment_number: data.shipment_number,
         sales_order_id: data.sales_order_id,
+        order_number: salesOrderData?.order_number,
+        customer_name: salesOrderData?.customers?.name || null,
+        customer_po_number: salesOrderData?.customer_po_number || null,
       };
     }
   }

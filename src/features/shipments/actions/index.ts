@@ -2,13 +2,15 @@
  * Shipments Server Actions
  *
  * Next.js server actions for Shipments feature.
+ * All mutating actions are permission-gated.
  */
 
 'use server';
 
 import { revalidatePath } from 'next/cache';
 import { shipmentService } from '../services/shipment.service';
-import { createClient } from '@/shared/lib/supabase/server';
+import { getCurrentUser, hasPermission } from '@/shared/lib/auth';
+import type { AppUser } from '@/shared/stores/auth.store';
 import type { ShipmentListParams } from '../types';
 import type {
   CreateShipmentInput,
@@ -16,35 +18,51 @@ import type {
 } from '../lib/schemas';
 
 // ============================================
-// HELPER: Get current user ID
+// TYPES
 // ============================================
 
-async function getCurrentUserId(): Promise<string | undefined> {
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {return undefined;}
-
-    const { data } = await supabase
-      .from('users')
-      .select('id')
-      .eq('auth_user_id', user.id)
-      .single();
-
-    return data?.id;
-  } catch {
-    return undefined;
-  }
+interface ActionResult<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
 }
+
+// ============================================
+// AUTHORIZATION HELPERS
+// ============================================
+
+type AuthorizeResult =
+  | { ok: true; user: AppUser }
+  | { ok: false; result: ActionResult<never> };
+
+/**
+ * Verify current user has the required permission
+ */
+async function authorize(permission: string): Promise<AuthorizeResult> {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return { ok: false, result: { success: false, error: 'Authentication required' } };
+  }
+
+  if (!hasPermission(user, permission)) {
+    return { ok: false, result: { success: false, error: `Permission denied: ${permission}` } };
+  }
+
+  return { ok: true, user };
+}
+
+// Note: getCurrentUserId removed - we now use authorize() which returns user.id
 
 // ============================================
 // LIST SHIPMENTS
 // ============================================
 
 export async function listShipments(params: ShipmentListParams = {}) {
+  // List is view-only, requires view_module permission
+  const auth = await authorize('shipments.view_module');
+  if (!auth.ok) return auth.result;
+
   const result = await shipmentService.list(params);
   return result;
 }
@@ -54,6 +72,10 @@ export async function listShipments(params: ShipmentListParams = {}) {
 // ============================================
 
 export async function getShipment(id: string) {
+  // Get detail requires view_detail permission
+  const auth = await authorize('shipments.view_detail');
+  if (!auth.ok) return auth.result;
+
   const result = await shipmentService.getById(id);
   return result;
 }
@@ -63,7 +85,10 @@ export async function getShipment(id: string) {
 // ============================================
 
 export async function createShipment(data: CreateShipmentInput) {
-  const userId = await getCurrentUserId();
+  const auth = await authorize('shipments.create');
+  if (!auth.ok) return auth.result;
+
+  const userId = auth.user.id;
   const result = await shipmentService.create(data, userId);
 
   if (result.success) {
@@ -78,7 +103,10 @@ export async function createShipment(data: CreateShipmentInput) {
 // ============================================
 
 export async function updateShipment(id: string, data: UpdateShipmentInput) {
-  const userId = await getCurrentUserId();
+  const auth = await authorize('shipments.edit');
+  if (!auth.ok) return auth.result;
+
+  const userId = auth.user.id;
   const result = await shipmentService.update(id, data, userId);
 
   if (result.success) {
@@ -94,7 +122,10 @@ export async function updateShipment(id: string, data: UpdateShipmentInput) {
 // ============================================
 
 export async function deleteShipment(id: string) {
-  const userId = await getCurrentUserId();
+  const auth = await authorize('shipments.delete');
+  if (!auth.ok) return auth.result;
+
+  const userId = auth.user.id;
   const result = await shipmentService.delete(id, userId);
 
   if (result.success) {
@@ -109,7 +140,10 @@ export async function deleteShipment(id: string) {
 // ============================================
 
 export async function markShipmentInTransit(id: string) {
-  const userId = await getCurrentUserId();
+  const auth = await authorize('shipments.update_status');
+  if (!auth.ok) return auth.result;
+
+  const userId = auth.user.id;
   const result = await shipmentService.markInTransit(id, userId);
 
   if (result.success) {
@@ -121,7 +155,10 @@ export async function markShipmentInTransit(id: string) {
 }
 
 export async function markShipmentDelivered(id: string) {
-  const userId = await getCurrentUserId();
+  const auth = await authorize('shipments.confirm_delivery');
+  if (!auth.ok) return auth.result;
+
+  const userId = auth.user.id;
   const result = await shipmentService.markDelivered(id, userId);
 
   if (result.success) {
@@ -133,7 +170,10 @@ export async function markShipmentDelivered(id: string) {
 }
 
 export async function markShipmentFailed(id: string) {
-  const userId = await getCurrentUserId();
+  const auth = await authorize('shipments.update_status');
+  if (!auth.ok) return auth.result;
+
+  const userId = auth.user.id;
   const result = await shipmentService.markFailed(id, userId);
 
   if (result.success) {

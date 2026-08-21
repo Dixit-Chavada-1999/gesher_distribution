@@ -4,9 +4,12 @@
  * Shipping Server Actions
  *
  * API layer for shipping tracking functionality.
+ * All actions are permission-gated using shipments permissions.
  */
 
 import { createClient } from '@/shared/lib/supabase/server';
+import { getCurrentUser, hasPermission } from '@/shared/lib/auth';
+import type { AppUser } from '@/shared/stores/auth.store';
 import * as shippingRepo from '../repositories/shipping.repository';
 import { reprocessShippingEmail as reprocessEmail } from '../services/shipping-processor.service';
 import type {
@@ -15,6 +18,31 @@ import type {
   ShipmentStatusHistory,
   ShippingEmailListResponse,
 } from '../types';
+
+// ============================================
+// AUTHORIZATION HELPERS
+// ============================================
+
+type AuthorizeResult =
+  | { ok: true; user: AppUser }
+  | { ok: false; result: ActionResult<never> };
+
+/**
+ * Verify current user has the required permission
+ */
+async function authorize(permission: string): Promise<AuthorizeResult> {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return { ok: false, result: { success: false, error: 'Authentication required' } };
+  }
+
+  if (!hasPermission(user, permission)) {
+    return { ok: false, result: { success: false, error: `Permission denied: ${permission}` } };
+  }
+
+  return { ok: true, user };
+}
 
 // ============================================
 // SHIPPING EMAILS
@@ -29,14 +57,9 @@ export async function getShippingEmails(params: {
   isProcessed?: boolean;
   hasIssue?: boolean;
 }): Promise<ActionResult<ShippingEmailListResponse>> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
+  // Uses shipments.view_module since shipping is part of shipment tracking
+  const auth = await authorize('shipments.view_module');
+  if (!auth.ok) return auth.result;
 
   const { page = 1, limit = 20 } = params;
   const result = await shippingRepo.getShippingEmails(params);
@@ -60,14 +83,8 @@ export async function getShippingEmails(params: {
 export async function getShippingEmail(
   id: string
 ): Promise<ActionResult<ShippingEmailWithInbound>> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
+  const auth = await authorize('shipments.view_detail');
+  if (!auth.ok) return auth.result;
 
   const email = await shippingRepo.getShippingEmailById(id);
 
@@ -91,14 +108,8 @@ export async function getShippingEmail(
 export async function getShipmentStatusHistory(
   shipmentId: string
 ): Promise<ActionResult<ShipmentStatusHistory[]>> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
+  const auth = await authorize('shipments.track');
+  if (!auth.ok) return auth.result;
 
   const history = await shippingRepo.getShipmentStatusHistory(shipmentId);
 
@@ -119,14 +130,9 @@ export async function linkEmailToShipment(
   shippingEmailId: string,
   shipmentId: string
 ): Promise<ActionResult<void>> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
+  // Linking requires edit permission
+  const auth = await authorize('shipments.edit');
+  if (!auth.ok) return auth.result;
 
   const success = await shippingRepo.linkShippingEmailToShipment(
     shippingEmailId,
@@ -146,14 +152,9 @@ export async function linkEmailToShipment(
 export async function reprocessShippingEmail(
   shippingEmailId: string
 ): Promise<ActionResult<{ matched: boolean; shipmentId?: string }>> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
+  // Reprocessing requires edit permission
+  const auth = await authorize('shipments.edit');
+  if (!auth.ok) return auth.result;
 
   const result = await reprocessEmail(shippingEmailId);
 
@@ -189,15 +190,10 @@ export async function getInboundEmailContent(
   text_body: string | null;
   html_body: string | null;
 }>> {
+  const auth = await authorize('shipments.view_detail');
+  if (!auth.ok) return auth.result;
+
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
-
   const { data, error } = await supabase
     .from('inbound_emails')
     .select('id, subject, from_email, from_name, to_email, received_at, text_body, html_body')
@@ -231,14 +227,10 @@ export async function getShippingStats(): Promise<
     withIssues: number;
   }>
 > {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const auth = await authorize('shipments.view_module');
+  if (!auth.ok) return auth.result;
 
-  if (!user) {
-    return { success: false, error: 'Authentication required' };
-  }
+  const supabase = await createClient();
 
   // Get counts using separate queries
   const [totalResult, processedResult, matchedResult, issuesResult] =

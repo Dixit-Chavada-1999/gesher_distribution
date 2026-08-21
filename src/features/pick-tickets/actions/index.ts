@@ -632,6 +632,28 @@ export async function createPickTicketFromSalesOrder(
         }
       }
 
+      // Send notification (async, non-blocking)
+      try {
+        const { data: warehouse } = await db
+          .from('locations')
+          .select('name')
+          .eq('id', finalWarehouseId)
+          .single();
+
+        const { notificationService } = await import('@/features/notifications/services/notification.service');
+        notificationService.notifyPickTicketCreated({
+          pickTicketId: result.data.id,
+          pickTicketNumber: result.data.pickTicketNumber,
+          salesOrderNumber: salesOrder.order_number,
+          warehouseName: warehouse?.name || 'Warehouse',
+          createdBy: userId,
+        }).catch((err) => {
+          console.error('[createPickTicketFromSalesOrder] Failed to send notification:', err);
+        });
+      } catch (notifError) {
+        console.error('[createPickTicketFromSalesOrder] Notification error:', notifError);
+      }
+
       revalidatePath('/pick-tickets');
       revalidatePath('/sales-orders');
       revalidatePath(`/sales-orders/${salesOrderId}`);

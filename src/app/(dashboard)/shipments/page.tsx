@@ -4,14 +4,16 @@
  * Shipments Page
  *
  * Main page for managing shipments.
+ * Permission-gated for different roles.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
 import { PageHeader } from '@/shared/components/layout/PageHeader';
+import { useAuthStore } from '@/shared/stores';
 import {
   Select,
   SelectContent,
@@ -40,6 +42,29 @@ import type { ShipmentListItem, ShipmentStatus, ShipmentWithItems } from '@/feat
 import { SHIPMENT_STATUS_LABELS } from '@/features/shipments/types';
 
 export default function ShipmentsPage() {
+  const { hasPermission } = useAuthStore();
+
+  // ----------------------------------------
+  // HYDRATION GUARD
+  // ----------------------------------------
+
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  // ----------------------------------------
+  // PERMISSIONS (only check after hydration)
+  // ----------------------------------------
+
+  const canCreate = hasMounted && hasPermission('shipments.create');
+  const canEdit = hasMounted && hasPermission('shipments.edit');
+  const canDelete = hasMounted && hasPermission('shipments.delete');
+  // These are available for future use when status update UI is added
+  // const canUpdateStatus = hasMounted && hasPermission('shipments.update_status');
+  // const canTrack = hasMounted && hasPermission('shipments.track');
+
   // ----------------------------------------
   // STATE
   // ----------------------------------------
@@ -155,10 +180,12 @@ export default function ShipmentsPage() {
             >
               <RefreshCw className={`h-4 w-4 ${isShipmentsLoading ? 'animate-spin' : ''}`} />
             </Button>
-            <Button onClick={handleCreateClick}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Shipment
-            </Button>
+            {canCreate && (
+              <Button onClick={handleCreateClick}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create Shipment
+              </Button>
+            )}
           </div>
         }
       />
@@ -169,8 +196,8 @@ export default function ShipmentsPage() {
         isLoading={isShipmentsLoading}
         onRowClick={handleRowClick}
         onView={handleView}
-        onEdit={handleEdit}
-        onDelete={handleDeleteClick}
+        onEdit={canEdit ? handleEdit : undefined}
+        onDelete={canDelete ? handleDeleteClick : undefined}
         toolbarContent={
           <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
             <SelectTrigger className="h-8 w-[150px]">

@@ -197,6 +197,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Default: PO email processing (existing behavior)
+    // Send notification for PO email received (async, non-blocking)
+    try {
+      const { notificationService } = await import('@/features/notifications/services/notification.service');
+      notificationService.notifyEmailPOReceived({
+        emailId: inboundEmail.id,
+        fromEmail: payload.FromFull?.Email || payload.From,
+        subject: payload.Subject || '(No Subject)',
+        attachmentCount: payload.Attachments?.length || 0,
+      }).catch((err) => {
+        console.error('[Postmark Webhook] Failed to send notification:', err);
+      });
+    } catch (notifError) {
+      console.error('[Postmark Webhook] Notification error:', notifError);
+    }
+
     // Return success response
     return NextResponse.json({
       success: true,

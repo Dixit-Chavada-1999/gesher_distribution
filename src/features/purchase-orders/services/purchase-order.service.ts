@@ -128,6 +128,11 @@ export const purchaseOrderService = {
 
       const po = await purchaseOrderRepository.create(validation.data, userId);
 
+      // Send notification (async, non-blocking)
+      this.sendPurchaseOrderCreatedNotification(po, userId).catch((err) => {
+        console.error('Failed to send purchase order created notification:', err);
+      });
+
       return {
         success: true,
         data: po,
@@ -139,6 +144,27 @@ export const purchaseOrderService = {
         error: 'Failed to create purchase order',
       };
     }
+  },
+
+  /**
+   * Send notification for purchase order created (helper method)
+   */
+  async sendPurchaseOrderCreatedNotification(
+    po: PurchaseOrderWithItems,
+    userId?: string
+  ): Promise<void> {
+    const { notificationService } = await import('@/features/notifications/services/notification.service');
+
+    // Get supplier name from items (supplier is at item level)
+    const supplierName = po.items?.[0]?.supplierName || 'Unknown Supplier';
+
+    await notificationService.notifyPurchaseOrderCreated({
+      purchaseOrderId: po.id,
+      poNumber: po.poNumber,
+      supplierName,
+      totalAmount: po.grandTotal,
+      createdBy: userId,
+    });
   },
 
   /**
