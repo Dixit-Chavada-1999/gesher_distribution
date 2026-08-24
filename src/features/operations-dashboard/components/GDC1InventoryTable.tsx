@@ -25,9 +25,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/shared/components/ui/table';
-import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import type { GDC1InventoryItem, SKUColumnInfo } from '../types';
+import { StatusBadge } from '../lib/status-badge';
 
 interface GDC1InventoryTableProps {
   data: GDC1InventoryItem[];
@@ -36,25 +36,6 @@ interface GDC1InventoryTableProps {
 }
 
 export function GDC1InventoryTable({ data, uniqueSkus, onEdit }: GDC1InventoryTableProps) {
-  const getStatusBadge = (status: string) => {
-    const statusConfig: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; className?: string; label: string }> = {
-      'AVAILABLE': { variant: 'default', className: 'bg-green-500', label: 'Available' },
-      'OPEN': { variant: 'outline', className: 'border-blue-500 text-blue-600', label: 'Open' },
-      'SOLD': { variant: 'secondary', className: 'bg-orange-500 text-white', label: 'Sold' },
-      'HOLD': { variant: 'outline', className: 'border-yellow-500 text-yellow-600', label: 'Hold' },
-      'IN_TRANSIT': { variant: 'outline', className: 'border-purple-500 text-purple-600', label: 'In Transit' },
-      'INVOICED': { variant: 'outline', className: 'border-green-500 text-green-600', label: 'Invoiced' },
-      'NOT_INVOICED': { variant: 'outline', className: 'border-amber-500 text-amber-600', label: 'Not Invoiced' },
-      'PARTIALLY_PAID': { variant: 'outline', className: 'border-cyan-500 text-cyan-600', label: 'Partially Paid' },
-      'PAID': { variant: 'default', className: 'bg-teal-500', label: 'Paid' },
-      'DISPUTED': { variant: 'destructive', label: 'Disputed' },
-      'PO_NEEDED': { variant: 'outline', className: 'border-pink-500 text-pink-600', label: 'PO Needed' },
-      'CLOSED': { variant: 'secondary', className: 'bg-gray-400 text-white', label: 'Closed' },
-    };
-    const config = statusConfig[status] || { variant: 'secondary' as const, label: status.replace('_', ' ') };
-    return <Badge variant={config.variant} className={config.className}>{config.label}</Badge>;
-  };
-
   const formatDate = (dateString: string | null) => {
     if (!dateString) { return '-'; }
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -216,7 +197,7 @@ export function GDC1InventoryTable({ data, uniqueSkus, onEdit }: GDC1InventoryTa
                   })}
                   <TableCell>{formatDate(item.payment50PercentDate)}</TableCell>
                   <TableCell>{formatDate(item.remaining50DueDate)}</TableCell>
-                  <TableCell>{getStatusBadge(item.status)}</TableCell>
+                  <TableCell><StatusBadge status={item.status} /></TableCell>
                   <TableCell className="max-w-[150px] text-xs text-muted-foreground truncate" title={item.actionRequired || ''}>
                     {item.actionRequired || '-'}
                   </TableCell>

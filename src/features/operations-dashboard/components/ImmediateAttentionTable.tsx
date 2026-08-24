@@ -9,10 +9,9 @@
  * - Overdue items highlighted in red
  */
 
-import { AlertTriangle, Truck, Pencil } from 'lucide-react';
+import { Truck, Pencil } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
-import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import {
   Table,
@@ -23,7 +22,8 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 
-import type { ImmediateAttentionItem, ShipmentStatus } from '../types';
+import type { ImmediateAttentionItem } from '../types';
+import { StatusBadge } from '../lib/status-badge';
 
 // ============================================
 // TYPES
@@ -50,44 +50,6 @@ function formatDate(dateString: string | null): string {
     day: 'numeric',
     year: 'numeric',
   });
-}
-
-function getStatusBadge(status: ShipmentStatus, isOverdue: boolean) {
-  if (isOverdue) {
-    return (
-      <Badge variant="destructive" className="gap-1">
-        <AlertTriangle className="h-3 w-3" />
-        DELAYED
-      </Badge>
-    );
-  }
-
-  const statusStyles: Record<ShipmentStatus, { variant: 'default' | 'secondary' | 'outline' | 'destructive'; className: string }> = {
-    // Common statuses
-    AVAILABLE: { variant: 'outline', className: 'bg-green-50 text-green-700 border-green-200' },
-    OPEN: { variant: 'outline', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-    HOLD: { variant: 'outline', className: 'bg-red-50 text-red-700 border-red-200' },
-    IN_TRANSIT: { variant: 'outline', className: 'bg-purple-50 text-purple-700 border-purple-200' },
-    SOLD: { variant: 'outline', className: 'bg-blue-50 text-blue-700 border-blue-200' },
-    CLOSED: { variant: 'outline', className: 'bg-gray-50 text-gray-700 border-gray-200' },
-    // Invoice/Payment statuses
-    INVOICED: { variant: 'outline', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-    NOT_INVOICED: { variant: 'outline', className: 'bg-orange-50 text-orange-700 border-orange-200' },
-    PARTIALLY_PAID: { variant: 'outline', className: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
-    PAID: { variant: 'outline', className: 'bg-teal-50 text-teal-700 border-teal-200' },
-    DISPUTED: { variant: 'destructive', className: 'bg-red-100 text-red-800 border-red-300' },
-    // Other statuses
-    PO_NEEDED: { variant: 'outline', className: 'bg-pink-50 text-pink-700 border-pink-200' },
-    DELIVERED: { variant: 'outline', className: 'bg-slate-50 text-slate-700 border-slate-200' },
-  };
-
-  const style = statusStyles[status] || statusStyles.OPEN;
-
-  return (
-    <Badge variant={style.variant} className={style.className}>
-      {status.replace('_', ' ')}
-    </Badge>
-  );
 }
 
 // ============================================
@@ -180,7 +142,7 @@ export function ImmediateAttentionTable({
                     <TableCell className="text-right">{item.qty}</TableCell>
                     <TableCell>{formatDate(item.etaPort)}</TableCell>
                     <TableCell>{formatDate(item.customerEtaDue)}</TableCell>
-                    <TableCell>{getStatusBadge(item.status, item.isOverdue)}</TableCell>
+                    <TableCell><StatusBadge status={item.status} isOverdue={item.isOverdue} /></TableCell>
                     <TableCell className="max-w-[200px] truncate">
                       {item.actionRequired || '-'}
                     </TableCell>

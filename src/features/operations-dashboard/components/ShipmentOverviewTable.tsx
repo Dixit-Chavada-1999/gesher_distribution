@@ -30,6 +30,7 @@ import {
 } from '@/shared/components/ui/table';
 import { Badge } from '@/shared/components/ui/badge';
 import type { ImmediateAttentionItem, CustomerCommitment } from '../types';
+import { StatusBadge } from '../lib/status-badge';
 
 interface ShipmentOverviewTableProps {
   inTransitItems: ImmediateAttentionItem[];
@@ -104,18 +105,6 @@ export function ShipmentOverviewTable({
       invoiceAmount,
     };
   }, [filteredItems, customerSummary]);
-
-  const getStatusBadge = (status: string) => {
-    const statusConfig: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; label: string }> = {
-      'IN_TRANSIT': { variant: 'default', label: 'In Transit' },
-      'OPEN': { variant: 'secondary', label: 'Open' },
-      'SOLD': { variant: 'outline', label: 'Sold' },
-      'INVOICED': { variant: 'outline', label: 'Invoiced' },
-      'DELIVERED': { variant: 'outline', label: 'Delivered' },
-    };
-    const config = statusConfig[status] || { variant: 'secondary' as const, label: status };
-    return <Badge variant={config.variant}>{config.label}</Badge>;
-  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -197,7 +186,7 @@ export function ShipmentOverviewTable({
                         {formatDate(item.customerEtaDue)}
                       </span>
                     </TableCell>
-                    <TableCell>{getStatusBadge(item.status)}</TableCell>
+                    <TableCell><StatusBadge status={item.status} /></TableCell>
                     <TableCell className="max-w-[250px]" title={item.actionRequired}>
                       <span className="line-clamp-2">{item.actionRequired}</span>
                     </TableCell>
@@ -251,7 +240,7 @@ export function ShipmentOverviewTable({
                         {formatDate(item.customerEtaDue)}
                       </span>
                     </TableCell>
-                    <TableCell>{getStatusBadge(item.status)}</TableCell>
+                    <TableCell><StatusBadge status={item.status} /></TableCell>
                     <TableCell className="max-w-[250px]" title={item.actionRequired}>
                       <span className="line-clamp-2">{item.actionRequired}</span>
                     </TableCell>
