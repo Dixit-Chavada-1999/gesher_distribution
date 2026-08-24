@@ -484,7 +484,8 @@ export async function getCustomerCommitments(productSource?: 'dropship' | 'wareh
 export async function getShipmentStatusMix(filters?: OperationsFilters): Promise<ShipmentStatusMix[]> {
   const supabase = await createClient();
 
-  // Get sales orders with items for status breakdown - same logic as KPIs
+  // Get sales orders with items AND linked shipments for status breakdown
+  // Using shipments.load_status when available for consistency
   let soQuery = supabase
     .from('sales_orders')
     .select(`
@@ -493,7 +494,8 @@ export async function getShipmentStatusMix(filters?: OperationsFilters): Promise
       product_source,
       customer_id,
       customer_po_number,
-      sales_order_items(quantity, product_id)
+      sales_order_items(quantity, product_id),
+      shipments(id, load_status, total_qty)
     `)
     .is('deleted_at', null)
     .neq('status', 'cancelled');
@@ -516,33 +518,43 @@ export async function getShipmentStatusMix(filters?: OperationsFilters): Promise
     throw soError;
   }
 
-  // Get shipments for additional statuses (HOLD, etc.)
-  // Join with sales_orders to enable customer filtering in JS
-  let shipQuery = supabase
-    .from('shipments')
-    .select(`
-      load_status,
-      total_qty,
-      sales_order_id,
-      sales_orders(customer_id, customer_po_number)
-    `)
-    .is('deleted_at', null);
-
-  // Apply sales_order_id filter directly (this works)
-  if (filters?.salesOrderId) {
-    shipQuery = shipQuery.eq('sales_order_id', filters.salesOrderId);
-  }
-
-  const { data: shipments, error: shipError } = await shipQuery;
-
-  if (shipError) {
-    console.error('Error fetching shipments for status mix:', shipError);
-  }
-
   // Initialize status counters
   const statusMap = new Map<ShipmentStatus, { loads: number; qty: number }>();
 
-  // Process sales orders - same logic as getOperationsStats()
+  // Helper to get SO status (fallback when no shipment)
+  const getSoDisplayStatus = (so: { status: string; product_source: string }): ShipmentStatus => {
+    const isWarehouse = so.product_source === 'warehouse';
+    const isDropship = so.product_source === 'dropship';
+
+    if (isWarehouse) {
+      // GDC1 Inventory
+      if (so.status === 'draft' || so.status === 'pending') {
+        return 'AVAILABLE';
+      } else if (so.status === 'confirmed' || so.status === 'processing') {
+        return 'SOLD';
+      } else if (so.status === 'shipped') {
+        return 'IN_TRANSIT';
+      } else if (so.status === 'delivered') {
+        return 'DELIVERED';
+      }
+      return 'OPEN';
+    } else if (isDropship) {
+      // Supplier Schedule (Galileo)
+      if (so.status === 'draft' || so.status === 'pending') {
+        return 'OPEN';
+      } else if (so.status === 'confirmed' || so.status === 'processing') {
+        return 'SOLD';
+      } else if (so.status === 'shipped') {
+        return 'IN_TRANSIT';
+      } else if (so.status === 'delivered') {
+        return 'DELIVERED';
+      }
+      return 'OPEN';
+    }
+    return 'OPEN';
+  };
+
+  // Process sales orders - use shipment status if available
   salesOrders?.forEach((so) => {
     const items = so.sales_order_items || [];
 
@@ -553,40 +565,19 @@ export async function getShipmentStatusMix(filters?: OperationsFilters): Promise
     }
 
     const totalQty = items.reduce((sum: number, item: { quantity: number }) => sum + (item.quantity || 0), 0);
-    const isWarehouse = so.product_source === 'warehouse';
-    const isDropship = so.product_source === 'dropship';
+
+    // Check if linked shipment exists - use its load_status for consistency
+    const shipments = so.shipments as { id: string; load_status: string; total_qty: number }[] | null;
+    const shipment = shipments && shipments.length > 0 ? shipments[0] : null;
 
     let displayStatus: ShipmentStatus;
 
-    // Map SO status to display status based on product source
-    if (isWarehouse) {
-      // GDC1 Inventory
-      if (so.status === 'draft' || so.status === 'pending') {
-        displayStatus = 'AVAILABLE';
-      } else if (so.status === 'confirmed' || so.status === 'processing') {
-        displayStatus = 'SOLD';
-      } else if (so.status === 'shipped') {
-        displayStatus = 'IN_TRANSIT';
-      } else if (so.status === 'delivered') {
-        displayStatus = 'DELIVERED';
-      } else {
-        displayStatus = 'OPEN';
-      }
-    } else if (isDropship) {
-      // Supplier Schedule (Galileo)
-      if (so.status === 'draft' || so.status === 'pending') {
-        displayStatus = 'OPEN';
-      } else if (so.status === 'confirmed' || so.status === 'processing') {
-        displayStatus = 'SOLD';
-      } else if (so.status === 'shipped') {
-        displayStatus = 'IN_TRANSIT';
-      } else if (so.status === 'delivered') {
-        displayStatus = 'DELIVERED';
-      } else {
-        displayStatus = 'OPEN';
-      }
+    if (shipment?.load_status) {
+      // Use shipment's load_status for consistent display across all tabs
+      displayStatus = mapLoadStatus(shipment.load_status);
     } else {
-      displayStatus = 'OPEN';
+      // Fallback to sales order status
+      displayStatus = getSoDisplayStatus(so);
     }
 
     if (!statusMap.has(displayStatus)) {
@@ -596,37 +587,6 @@ export async function getShipmentStatusMix(filters?: OperationsFilters): Promise
     const current = statusMap.get(displayStatus)!;
     current.loads += 1;
     current.qty += totalQty;
-  });
-
-  // Add HOLD status from shipments table if any
-  // Filter in JS since Supabase doesn't support filtering on joined tables directly
-  shipments?.forEach((s) => {
-    // Only process HOLD status shipments
-    if (s.load_status !== 'hold') return;
-
-    const salesOrder = s.sales_orders as { customer_id?: string; customer_po_number?: string } | null;
-
-    // Apply customer filter in JS - skip if filter is set and doesn't match
-    if (filters?.customerId) {
-      if (!salesOrder || salesOrder.customer_id !== filters.customerId) {
-        return;
-      }
-    }
-
-    // Apply customer PO filter in JS - skip if filter is set and doesn't match
-    if (filters?.customerPoNumber) {
-      if (!salesOrder || salesOrder.customer_po_number !== filters.customerPoNumber) {
-        return;
-      }
-    }
-
-    // Add to HOLD status count
-    if (!statusMap.has('HOLD')) {
-      statusMap.set('HOLD', { loads: 0, qty: 0 });
-    }
-    const current = statusMap.get('HOLD')!;
-    current.loads += 1;
-    current.qty += s.total_qty || 0;
   });
 
   // Convert to array
