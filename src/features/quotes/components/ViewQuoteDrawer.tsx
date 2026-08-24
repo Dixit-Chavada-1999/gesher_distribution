@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Loader2, MapPin, FileText, Calendar, User, Building2, ArrowRight, ExternalLink, Package, Pencil, X } from 'lucide-react';
+import { Loader2, MapPin, FileText, Calendar, User, Building2, ArrowRight, ExternalLink, Package, Pencil, X, Warehouse, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { useAuthStore } from '@/shared/stores';
@@ -40,6 +40,8 @@ import {
 import { toast } from 'sonner';
 
 import { getQuote, getPODocumentSignedUrl, updateQuoteProductSource } from '../actions';
+import { getInventoryByProductIds } from '@/features/inventory/actions';
+import type { InventoryListItem } from '@/features/inventory/types';
 import type { QuoteWithItems } from '../types';
 import { QUOTE_STATUS_LABELS, QUOTE_STATUS_COLORS } from '../types';
 
@@ -197,6 +199,11 @@ export function ViewQuoteDrawer({
   const [isEditingProductSource, setIsEditingProductSource] = useState(false);
   const [isUpdatingProductSource, setIsUpdatingProductSource] = useState(false);
 
+  // Inventory status
+  const [inventoryData, setInventoryData] = useState<InventoryListItem[]>([]);
+  const [isLoadingInventory, setIsLoadingInventory] = useState(false);
+  const [showInventory, setShowInventory] = useState(false);
+
   // ----------------------------------------
   // EFFECTS
   // ----------------------------------------
@@ -222,8 +229,41 @@ export function ViewQuoteDrawer({
     } else {
       setQuote(null);
       setError(null);
+      setInventoryData([]);
+      setShowInventory(false);
     }
   }, [open, quoteId]);
+
+  // Filter to ONLY inventory-type products (exclude service and non_inventory)
+  // Products with itemType = 'service' or 'non_inventory' should NOT appear in Inventory Status
+  const inventoryTypeItems = quote?.items?.filter(
+    (item) => item.itemType === 'inventory'
+  ) || [];
+
+  // Fetch inventory when showInventory is toggled or quote changes
+  useEffect(() => {
+    const fetchInventory = async () => {
+      if (!showInventory || inventoryTypeItems.length === 0) {
+        return;
+      }
+
+      setIsLoadingInventory(true);
+      try {
+        // Only fetch inventory for inventory-type products
+        const productIds = inventoryTypeItems.map((item) => item.productId);
+        const result = await getInventoryByProductIds(productIds);
+        if (result.success && result.data) {
+          setInventoryData(result.data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch inventory:', err);
+      } finally {
+        setIsLoadingInventory(false);
+      }
+    };
+
+    fetchInventory();
+  }, [showInventory, inventoryTypeItems.length]);
 
   // ----------------------------------------
   // DATA FETCHING
@@ -498,24 +538,164 @@ export function ViewQuoteDrawer({
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {quote.items.map((item) => (
-                          <TableRow key={item.id}>
-                            <TableCell>
-                              <div>
-                                <p className="font-medium text-foreground">{item.sku}</p>
-                                <p className="text-sm text-muted-foreground">{item.description}</p>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-right font-medium">{item.quantity}</TableCell>
-                            <TableCell className="text-right">{formatCurrency(item.unitPrice)}</TableCell>
-                            <TableCell className="text-right">{item.discountPercent}%</TableCell>
-                            <TableCell className="text-right font-semibold">{formatCurrency(item.lineTotal)}</TableCell>
-                          </TableRow>
-                        ))}
+                        {quote.items.map((item) => {
+                          const isServiceOrNonInventory = item.itemType === 'service' || item.itemType === 'non_inventory';
+                          return (
+                            <TableRow key={item.id}>
+                              <TableCell>
+                                <div>
+                                  <p className="font-medium text-foreground">{item.sku}</p>
+                                  <p className="text-sm text-muted-foreground">{item.description}</p>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right font-medium">
+                                {isServiceOrNonInventory ? '-' : item.quantity}
+                              </TableCell>
+                              <TableCell className="text-right">{formatCurrency(item.unitPrice)}</TableCell>
+                              <TableCell className="text-right">
+                                {isServiceOrNonInventory ? '-' : `${item.discountPercent}%`}
+                              </TableCell>
+                              <TableCell className="text-right font-semibold">{formatCurrency(item.lineTotal)}</TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>
                 </Section>
+
+                {/* Inventory Status - Show before selecting product source */}
+                {/* Only show if there are inventory-type products */}
+                {quote.status !== 'converted' && inventoryTypeItems.length > 0 && (
+                  <Section title="Inventory Status">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-muted-foreground">
+                          Check inventory availability before selecting product source
+                        </p>
+                        <Button
+                          variant={showInventory ? 'secondary' : 'outline'}
+                          size="sm"
+                          onClick={() => setShowInventory(!showInventory)}
+                          disabled={isLoadingInventory}
+                        >
+                          {isLoadingInventory ? (
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          ) : (
+                            <Warehouse className="h-4 w-4 mr-2" />
+                          )}
+                          {showInventory ? 'Hide Inventory' : 'Check Inventory'}
+                        </Button>
+                      </div>
+
+                      {showInventory && (
+                        <div className="rounded-md border overflow-hidden">
+                          {isLoadingInventory ? (
+                            <div className="flex items-center justify-center py-8">
+                              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                            </div>
+                          ) : inventoryData.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-8 text-center">
+                              <AlertTriangle className="h-8 w-8 text-amber-500 mb-2" />
+                              <p className="text-sm text-muted-foreground">No inventory records found</p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Consider using Dropship for this order
+                              </p>
+                            </div>
+                          ) : (
+                            <Table>
+                              <TableHeader>
+                                <TableRow className="bg-muted/50">
+                                  <TableHead className="font-semibold">Product</TableHead>
+                                  <TableHead className="font-semibold">Location</TableHead>
+                                  <TableHead className="text-right font-semibold">On Hand</TableHead>
+                                  <TableHead className="text-right font-semibold">Allocated</TableHead>
+                                  <TableHead className="text-right font-semibold">Available</TableHead>
+                                  <TableHead className="text-center font-semibold">Status</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {/* Only show inventory-type products */}
+                                {inventoryTypeItems.map((item) => {
+                                  const itemInventory = inventoryData.filter(
+                                    (inv) => inv.productId === item.productId
+                                  );
+
+                                  if (itemInventory.length === 0) {
+                                    return (
+                                      <TableRow key={item.id}>
+                                        <TableCell>
+                                          <div>
+                                            <p className="font-medium">{item.sku}</p>
+                                            <p className="text-xs text-muted-foreground">
+                                              Need: {item.quantity}
+                                            </p>
+                                          </div>
+                                        </TableCell>
+                                        <TableCell colSpan={4} className="text-center text-muted-foreground">
+                                          No inventory records
+                                        </TableCell>
+                                        <TableCell className="text-center">
+                                          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                                            Dropship
+                                          </Badge>
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  }
+
+                                  return itemInventory.map((inv, idx) => {
+                                    const canFulfill = inv.available >= item.quantity;
+                                    return (
+                                      <TableRow key={`${item.id}-${inv.id}`}>
+                                        {idx === 0 && (
+                                          <TableCell rowSpan={itemInventory.length}>
+                                            <div>
+                                              <p className="font-medium">{item.sku}</p>
+                                              <p className="text-xs text-muted-foreground">
+                                                Need: {item.quantity}
+                                              </p>
+                                            </div>
+                                          </TableCell>
+                                        )}
+                                        <TableCell>
+                                          <div className="flex items-center gap-2">
+                                            <Warehouse className="h-3.5 w-3.5 text-muted-foreground" />
+                                            <span className="text-sm">{inv.locationName}</span>
+                                          </div>
+                                        </TableCell>
+                                        <TableCell className="text-right font-medium">{inv.onHand}</TableCell>
+                                        <TableCell className="text-right text-muted-foreground">{inv.allocated}</TableCell>
+                                        <TableCell className="text-right font-semibold">
+                                          <span className={inv.available < item.quantity ? 'text-amber-600' : 'text-green-600'}>
+                                            {inv.available}
+                                          </span>
+                                        </TableCell>
+                                        <TableCell className="text-center">
+                                          {canFulfill ? (
+                                            <Badge className="bg-green-50 text-green-700 border-green-200 gap-1">
+                                              <CheckCircle2 className="h-3 w-3" />
+                                              Can Fulfill
+                                            </Badge>
+                                          ) : (
+                                            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 gap-1">
+                                              <AlertTriangle className="h-3 w-3" />
+                                              Partial ({inv.available}/{item.quantity})
+                                            </Badge>
+                                          )}
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  });
+                                })}
+                              </TableBody>
+                            </Table>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </Section>
+                )}
 
                 {/* Quote Totals */}
                 <Section title="Quote Summary">

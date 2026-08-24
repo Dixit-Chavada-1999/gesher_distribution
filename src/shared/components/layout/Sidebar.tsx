@@ -30,7 +30,7 @@ import {
   FileSignature,
   ClipboardList, // Purchase Orders
   BarChart3, // Operations dashboard
-  // Truck, // Shipments (commented out)
+  Truck, // Shipments (commented out)
   // Receipt, // Uncomment when Invoices module is enabled
   Factory, // Suppliers
   ClipboardCheck, // Pick Tickets
@@ -44,8 +44,11 @@ import { ScrollArea } from '@/shared/components/ui/scroll-area';
 import { useSidebarStore, useAuthStore } from '@/shared/stores';
 import { logoutAction } from '@/features/auth/actions';
 
-// Navigation configuration
+// Navigation configuration - Organized by business module
 const NAV_SECTIONS = [
+  // ============================================
+  // DASHBOARDS - Overview & Monitoring
+  // ============================================
   {
     title: 'Main',
     items: [
@@ -57,41 +60,27 @@ const NAV_SECTIONS = [
         permission: 'dashboard.view_module',
       },
       {
+        id: 'operations',
+        label: 'Operations',
+        href: '/operations',
+        icon: BarChart3,
+        permission: 'dashboard.view_module',
+      },
+      {
         id: 'inbox',
         label: 'Inbox',
         href: '/inbox',
         icon: Inbox,
-        permission: 'quotes.view_module', // Uses quotes permission for now
+        permission: 'quotes.view_module',
       },
     ],
   },
-  // Catalog section is temporarily hidden from the sidebar.
-  // The routes still work if visited directly — only the nav entries are gone.
-  // Uncomment this block to bring it back.
+  // ============================================
+  // CRM - Customer & Supplier Management
+  // ============================================
   {
-    title: 'Catalog',
+    title: 'CRM',
     items: [
-      {
-        id: 'products',
-        label: 'Products',
-        href: '/products',
-        icon: Package,
-        permission: 'products.view_module',
-      },
-      {
-        id: 'locations',
-        label: 'Locations',
-        href: '/locations',
-        icon: MapPin,
-        permission: 'locations.view_module',
-      },
-      {
-        id: 'inventory',
-        label: 'Inventory',
-        href: '/inventory',
-        icon: Warehouse,
-        permission: 'inventory.view_module',
-      },
       {
         id: 'customers',
         label: 'Customers',
@@ -106,15 +95,11 @@ const NAV_SECTIONS = [
         icon: Factory,
         permission: 'suppliers.view_module',
       },
-  //     {
-  //       id: 'pricing',
-  //       label: 'Pricing',
-  //       href: '/pricing',
-  //       icon: DollarSign,
-  //       permission: 'pricing.view_module',
-  //     },
     ],
   },
+  // ============================================
+  // SALES - Quote to Order Process
+  // ============================================
   {
     title: 'Sales',
     items: [
@@ -132,6 +117,14 @@ const NAV_SECTIONS = [
         icon: ShoppingCart,
         permission: 'orders.view_module',
       },
+    ],
+  },
+  // ============================================
+  // PURCHASING - Procurement from Suppliers
+  // ============================================
+  {
+    title: 'Purchasing',
+    items: [
       {
         id: 'purchase-orders',
         label: 'Purchase Orders',
@@ -139,25 +132,14 @@ const NAV_SECTIONS = [
         icon: ClipboardList,
         permission: 'purchase_orders.view_module',
       },
-      // {
-      //   id: 'invoices',
-      //   label: 'Invoices',
-      //   href: '/invoices',
-      //   icon: Receipt,
-      //   permission: 'invoices.view_module',
-      // },
     ],
   },
+  // ============================================
+  // FULFILLMENT - Warehouse & Shipping
+  // ============================================
   {
-    title: 'Operations',
+    title: 'Fulfillment',
     items: [
-      {
-        id: 'operations',
-        label: 'Operations',
-        href: '/operations',
-        icon: BarChart3,
-        permission: 'dashboard.view_module', // Uses dashboard permission for now
-      },
       {
         id: 'pick-tickets',
         label: 'Pick Tickets',
@@ -170,33 +152,58 @@ const NAV_SECTIONS = [
         label: 'Packing Lists',
         href: '/packing-lists',
         icon: PackageCheck,
-        permission: 'pick_tickets.view_module', // Uses same permission as pick tickets
+        permission: 'pick_tickets.view_module',
+      },
+      {
+        id: 'shipments',
+        label: 'Shipments',
+        href: '/shipments',
+        icon: Truck,
+        permission: 'shipments.view_module',
       },
       {
         id: 'shipping',
-        label: 'Shipping',
+        label: 'Shipping Tracking',
         href: '/shipping',
         icon: Ship,
-        permission: 'dashboard.view_module', // Uses dashboard permission for now
+        permission: 'dashboard.view_module',
       },
     ],
   },
-  // Shipments section is temporarily hidden from the sidebar.
-  // Uncomment this block when Shipments module is enabled.
-  // {
-  //   title: 'Shipments',
-  //   items: [
-  //     {
-  //       id: 'shipments',
-  //       label: 'Shipments',
-  //       href: '/shipments',
-  //       icon: Truck,
-  //       permission: 'shipments.view_module',
-  //     },
-  //   ],
-  // },
+  // ============================================
+  // INVENTORY - Stock & Locations
+  // ============================================
   {
-    title: 'Internal',
+    title: 'Inventory',
+    items: [
+      {
+        id: 'products',
+        label: 'Products',
+        href: '/products',
+        icon: Package,
+        permission: 'products.view_module',
+      },
+      {
+        id: 'inventory',
+        label: 'Stock Levels',
+        href: '/inventory',
+        icon: Warehouse,
+        permission: 'inventory.view_module',
+      },
+      {
+        id: 'locations',
+        label: 'Locations',
+        href: '/locations',
+        icon: MapPin,
+        permission: 'locations.view_module',
+      },
+    ],
+  },
+  // ============================================
+  // ADMIN - System Administration
+  // ============================================
+  {
+    title: 'Admin',
     items: [
       {
         id: 'users',
@@ -212,16 +219,6 @@ const NAV_SECTIONS = [
         icon: Shield,
         permission: 'roles.view_module',
       },
-      // Permissions is temporarily hidden from the sidebar.
-      // The route still works if visited directly — only the nav entry is gone.
-      // Uncomment this block (and the Key icon import) to bring it back.
-      // {
-      //   id: 'permissions',
-      //   label: 'Permissions',
-      //   href: '/permissions',
-      //   icon: Key,
-      //   permission: 'permissions.view_module',
-      // },
       {
         id: 'audit-logs',
         label: 'Audit Logs',
@@ -229,11 +226,6 @@ const NAV_SECTIONS = [
         icon: FileText,
         permission: 'audit.view_module',
       },
-    ],
-  },
-  {
-    title: 'Settings',
-    items: [
       {
         id: 'settings',
         label: 'Settings',

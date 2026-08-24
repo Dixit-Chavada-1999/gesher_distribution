@@ -184,6 +184,7 @@ export interface SalesOrderItem {
   batchNumber: string | null;
   serialNumber: string | null;
   sortOrder: number;
+  itemType?: 'inventory' | 'non_inventory' | 'service';
   createdAt: Date;
   updatedAt: Date;
   createdBy: string | null;
@@ -390,6 +391,7 @@ export interface Product {
   description: string;
   unitPrice: number; // dollars for display
   unitId: string;
+  itemType?: 'inventory' | 'non_inventory' | 'service';
 }
 
 export interface Warehouse {

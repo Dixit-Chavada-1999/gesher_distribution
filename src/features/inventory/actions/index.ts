@@ -66,6 +66,11 @@ export async function getInventoryByProductAndLocation(
   return result;
 }
 
+export async function getInventoryByProductIds(productIds: string[]) {
+  const result = await inventoryService.getByProductIds(productIds);
+  return result;
+}
+
 // ============================================
 // CREATE INVENTORY
 // ============================================

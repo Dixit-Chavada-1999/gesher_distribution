@@ -201,11 +201,22 @@ export async function extractPOFromImages(
       if (err.status === 401) {
         errorMessage = 'AI service authentication failed. Invalid API key.';
       } else if (err.status === 429) {
-        errorMessage = 'AI service rate limit exceeded. Please try again later.';
+        // Check if it's a credits issue vs rate limit
+        const errMsg = err.message || err.error?.message || '';
+        if (errMsg.toLowerCase().includes('no credits remaining') || errMsg.toLowerCase().includes('insufficient_quota')) {
+          errorMessage = 'OpenAI API credits exhausted. Please add credits at platform.openai.com/settings/organization/billing to continue using PO extraction.';
+        } else {
+          errorMessage = 'AI service rate limit exceeded. Please try again in a few minutes.';
+        }
       } else if (err.status === 503) {
         errorMessage = 'AI service is currently unavailable. Please try again.';
       } else if (err.message) {
-        errorMessage = err.message;
+        // Check for quota errors in message
+        if (err.message.toLowerCase().includes('no credits remaining') || err.message.toLowerCase().includes('insufficient_quota')) {
+          errorMessage = 'OpenAI API credits exhausted. Please add credits at platform.openai.com/settings/organization/billing to continue using PO extraction.';
+        } else {
+          errorMessage = err.message;
+        }
       } else if (err.error?.message) {
         errorMessage = err.error.message;
       }

@@ -77,4 +77,11 @@ export {
 export { getIcon, iconMap } from './lib/icons';
 
 // Actions
-export { getUnitsBySKUData, getChannelPerformanceData, getInventoryByLocationData, getDashboardStatsData, getMarginAnalysisData } from './actions';
+export {
+  getUnitsBySKUData,
+  getChannelPerformanceData,
+  getInventoryByLocationData,
+  getDashboardStatsData,
+  getMarginAnalysisData,
+  getRevenueTrendData,
+} from './actions';

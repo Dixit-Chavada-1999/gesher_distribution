@@ -94,6 +94,25 @@ export const inventoryService = {
   },
 
   /**
+   * Get inventory for multiple products across all locations
+   */
+  async getByProductIds(productIds: string[]): Promise<ServiceResult<InventoryListItem[]>> {
+    try {
+      const inventory = await inventoryRepository.findByProductIds(productIds);
+      return {
+        success: true,
+        data: inventory,
+      };
+    } catch (error) {
+      console.error('InventoryService.getByProductIds error:', error);
+      return {
+        success: false,
+        error: 'Failed to fetch inventory for products',
+      };
+    }
+  },
+
+  /**
    * Get inventory by product and location
    */
   async getByProductAndLocation(

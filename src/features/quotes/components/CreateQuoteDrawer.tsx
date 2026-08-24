@@ -52,12 +52,14 @@ interface MasterData {
     name: string;
     description: string | null;
     unitPrice: number;
+    itemType: 'inventory' | 'non_inventory' | 'service';
   }>;
   salesReps: Array<{
     id: string;
     name: string;
     email: string;
   }>;
+  currentUserId: string;
 }
 
 // ============================================
@@ -189,6 +191,7 @@ export function CreateQuoteDrawer({ open, onClose, onSuccess }: CreateQuoteDrawe
             ) : masterData ? (
               <QuoteForm
                 mode="create"
+                initialData={{ salesRepId: masterData.currentUserId }}
                 customers={masterData.customers}
                 products={masterData.products}
                 salesReps={masterData.salesReps}

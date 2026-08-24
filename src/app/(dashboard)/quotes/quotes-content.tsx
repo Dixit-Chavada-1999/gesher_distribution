@@ -64,7 +64,7 @@ import type { ProcessedPOData } from '@/features/quotes/types/po-extract.types';
 // ============================================
 
 export function QuotesPageContent() {
-  const { hasPermission } = useAuthStore();
+  const { hasPermission, appUser } = useAuthStore();
 
   // ----------------------------------------
   // HYDRATION GUARD
@@ -87,6 +87,14 @@ export function QuotesPageContent() {
   const canApprove = hasMounted && hasPermission('quotes.approve');
   const canSubmitForApproval = hasMounted && hasPermission('quotes.submit_for_approval');
   const canConvertToOrder = hasMounted && hasPermission('quotes.convert_to_order');
+
+  // ----------------------------------------
+  // ROLE-BASED DEFAULT FILTER
+  // ----------------------------------------
+
+  // Finance role should default to pending_approval quotes
+  const isFinanceRole = appUser?.role?.name?.toLowerCase() === 'finance';
+  const defaultStatusFilter: QuoteStatus | 'all' = isFinanceRole ? 'pending_approval' : 'all';
 
   // ----------------------------------------
   // STATE
@@ -119,8 +127,20 @@ export function QuotesPageContent() {
   const [quoteToApprove, setQuoteToApprove] = useState<QuoteListItem | QuoteWithItems | null>(null);
   const [approvalAction, setApprovalAction] = useState<'approve' | 'reject'>('approve');
 
-  // Filters
-  const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'all'>('all');
+  // Filters - use role-based default
+  const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'all'>(defaultStatusFilter);
+  const [hasSetInitialFilter, setHasSetInitialFilter] = useState(false);
+
+  // Set filter to pending_approval for Finance role once user is loaded
+  useEffect(() => {
+    if (!hasSetInitialFilter && appUser?.role?.name) {
+      const roleName = appUser.role.name.toLowerCase();
+      if (roleName === 'finance') {
+        setStatusFilter('pending_approval');
+      }
+      setHasSetInitialFilter(true);
+    }
+  }, [appUser?.role?.name, hasSetInitialFilter]);
 
   // ----------------------------------------
   // DATA HOOKS

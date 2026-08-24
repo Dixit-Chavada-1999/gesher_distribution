@@ -292,12 +292,17 @@ class QuoteRepositoryImpl {
   // ==========================================
 
   /**
-   * Find all items for a quote
+   * Find all items for a quote (with product item_type for inventory filtering)
    */
   async findItemsByQuoteId(quoteId: string): Promise<QuoteItem[]> {
     const { data, error } = await db
       .from('quote_items')
-      .select('*')
+      .select(`
+        *,
+        products:product_id (
+          item_type
+        )
+      `)
       .eq('quote_id', quoteId)
       .order('sort_order', { ascending: true });
 
@@ -305,7 +310,10 @@ class QuoteRepositoryImpl {
       throw new Error(`Failed to fetch quote items: ${error.message}`);
     }
 
-    return (data || []).map((row) => this.mapToQuoteItem(row as DbQuoteItem));
+    return (data || []).map((row) => {
+      const productData = row.products as { item_type: string } | null;
+      return this.mapToQuoteItem(row as DbQuoteItem, productData?.item_type);
+    });
   }
 
   /**
@@ -845,7 +853,7 @@ class QuoteRepositoryImpl {
     };
   }
 
-  private mapToQuoteItem(data: DbQuoteItem): QuoteItem {
+  private mapToQuoteItem(data: DbQuoteItem, itemType?: string): QuoteItem {
     return {
       id: data.id,
       quoteId: data.quote_id,
@@ -863,6 +871,7 @@ class QuoteRepositoryImpl {
       updatedAt: new Date(data.updated_at),
       createdBy: data.created_by,
       updatedBy: data.updated_by,
+      itemType: itemType as 'inventory' | 'non_inventory' | 'service' | undefined,
     };
   }
 

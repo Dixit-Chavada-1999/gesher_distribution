@@ -167,38 +167,47 @@ export function ViewPurchaseOrderDrawer({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {po.items.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium text-foreground">{item.sku}</p>
-                            {item.description && (
-                              <p className="text-sm text-muted-foreground">{item.description}</p>
+                    {po.items.map((item) => {
+                      const isServiceOrNonInventory = item.itemType === 'service' || item.itemType === 'non_inventory';
+                      return (
+                        <TableRow key={item.id}>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium text-foreground">{item.sku}</p>
+                              {item.description && (
+                                <p className="text-sm text-muted-foreground">{item.description}</p>
+                              )}
+                              {item.supplierId && (
+                                <Link
+                                  href={`/suppliers/${item.supplierId}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-xs inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors mt-1"
+                                >
+                                  <Building2 className="h-3 w-3" />
+                                  <span>{item.supplierName}</span>
+                                </Link>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {isServiceOrNonInventory ? (
+                              <span className="text-muted-foreground">-</span>
+                            ) : (
+                              <>
+                                <span className="font-medium">{item.quantityOrdered}</span>
+                                {item.quantityReceived > 0 && (
+                                  <p className="text-xs text-emerald-600">
+                                    {item.quantityReceived} received
+                                  </p>
+                                )}
+                              </>
                             )}
-                            {item.supplierId && (
-                              <Link
-                                href={`/suppliers/${item.supplierId}`}
-                                onClick={(e) => e.stopPropagation()}
-                                className="text-xs inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors mt-1"
-                              >
-                                <Building2 className="h-3 w-3" />
-                                <span>{item.supplierName}</span>
-                              </Link>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span className="font-medium">{item.quantityOrdered}</span>
-                          {item.quantityReceived > 0 && (
-                            <p className="text-xs text-emerald-600">
-                              {item.quantityReceived} received
-                            </p>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">${(item.unitPrice / 100).toFixed(2)}</TableCell>
-                        <TableCell className="text-right font-semibold">${(item.lineTotal / 100).toFixed(2)}</TableCell>
-                      </TableRow>
-                    ))}
+                          </TableCell>
+                          <TableCell className="text-right">${(item.unitPrice / 100).toFixed(2)}</TableCell>
+                          <TableCell className="text-right font-semibold">${(item.lineTotal / 100).toFixed(2)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>

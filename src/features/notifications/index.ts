@@ -16,6 +16,7 @@ export type {
   PurchaseOrderCreatedPayload,
   EmailPOReceivedPayload,
   ShipmentUpdatePayload,
+  SupplierPOAssignedPayload,
 } from './types';
 export { NOTIFICATION_PERMISSION_MAP, NOTIFICATION_CONFIG } from './types';
 

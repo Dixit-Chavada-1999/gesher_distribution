@@ -656,20 +656,27 @@ const handleReleaseHold = async () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {order.items.map((item) => (
-                          <TableRow key={item.id}>
-                            <TableCell>
-                              <div>
-                                <p className="font-medium text-foreground">{item.sku}</p>
-                                <p className="text-sm text-muted-foreground">{item.description}</p>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-right font-medium">{item.quantity}</TableCell>
-                            <TableCell className="text-right">{formatCurrency(item.unitPrice)}</TableCell>
-                            <TableCell className="text-right">{item.discountPercent}%</TableCell>
-                            <TableCell className="text-right font-semibold">{formatCurrency(item.lineTotal)}</TableCell>
-                          </TableRow>
-                        ))}
+                        {order.items.map((item) => {
+                          const isServiceOrNonInventory = item.itemType === 'service' || item.itemType === 'non_inventory';
+                          return (
+                            <TableRow key={item.id}>
+                              <TableCell>
+                                <div>
+                                  <p className="font-medium text-foreground">{item.sku}</p>
+                                  <p className="text-sm text-muted-foreground">{item.description}</p>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right font-medium">
+                                {isServiceOrNonInventory ? '-' : item.quantity}
+                              </TableCell>
+                              <TableCell className="text-right">{formatCurrency(item.unitPrice)}</TableCell>
+                              <TableCell className="text-right">
+                                {isServiceOrNonInventory ? '-' : `${item.discountPercent}%`}
+                              </TableCell>
+                              <TableCell className="text-right font-semibold">{formatCurrency(item.lineTotal)}</TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>

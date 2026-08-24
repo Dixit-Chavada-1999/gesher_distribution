@@ -7,10 +7,11 @@
  */
 
 import { useState } from 'react';
-import { Menu, Bell } from 'lucide-react';
+import { Menu } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { SupplierSidebar } from './SupplierSidebar';
+import { NotificationBell } from '@/features/notifications';
 
 interface SupplierLayoutProps {
   children: React.ReactNode;
@@ -60,13 +61,9 @@ export function SupplierLayout({ children, supplierName }: SupplierLayoutProps) 
             <h1 className="text-lg font-semibold">Supplier Portal</h1>
           </div>
 
-          {/* Right side */}
+          {/* Right side - Notifications */}
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-5 w-5" />
-              {/* Notification dot */}
-              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500" />
-            </Button>
+            <NotificationBell />
           </div>
         </header>
 

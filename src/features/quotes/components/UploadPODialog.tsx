@@ -421,7 +421,11 @@ export function UploadPODialog({
           }
         }
 
-        throw new Error(errorMessage);
+        // Set error state directly instead of throwing (avoids Next.js error overlay)
+        setError(errorMessage);
+        setDialogState('error');
+        setProgress('');
+        return;
       }
 
       // Step 3: Show extracted data for review
@@ -429,7 +433,8 @@ export function UploadPODialog({
       setDialogState('reviewing');
       setProgress('');
     } catch (err) {
-      console.error('Extraction error:', err);
+      // Log to console.warn instead of console.error to avoid Next.js error overlay
+      console.warn('Extraction error:', err instanceof Error ? err.message : err);
       setError(err instanceof Error ? err.message : 'Failed to extract PO data');
       setDialogState('error');
       setProgress('');

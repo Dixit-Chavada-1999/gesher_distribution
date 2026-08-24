@@ -250,6 +250,8 @@ class NotificationRepositoryImpl {
   /**
    * Get all user IDs that have any of the specified permissions
    * Used for targeting notifications based on permissions
+   * IMPORTANT: This excludes supplier portal users (users with supplier_id)
+   * to prevent cross-supplier notification leakage
    */
   async getUsersWithPermissions(permissions: string[]): Promise<string[]> {
     const matchingUserIds: Set<string> = new Set();
@@ -260,13 +262,14 @@ class NotificationRepositoryImpl {
 
     console.log(`[NotificationRepo] Found ${superAdminIds.length} super admin users`);
 
-    // Step 2: If no specific permissions required, return all active users
+    // Step 2: If no specific permissions required, return all active internal users
     if (permissions.length === 0) {
       const { data, error } = await db
         .from('users')
         .select('id')
         .eq('status', 'active')
-        .is('deleted_at', null);
+        .is('deleted_at', null)
+        .is('supplier_id', null); // Exclude supplier portal users
 
       if (error) {
         throw new Error(`Failed to fetch users: ${error.message}`);
@@ -276,7 +279,8 @@ class NotificationRepositoryImpl {
       return Array.from(matchingUserIds);
     }
 
-    // Step 3: Get users with specific permissions through role_permissions
+    // Step 3: Get internal users with specific permissions through role_permissions
+    // Excludes supplier portal users to prevent cross-supplier notification leakage
     try {
       const { data, error } = await db
         .from('users')
@@ -295,7 +299,8 @@ class NotificationRepositoryImpl {
           )
         `)
         .eq('status', 'active')
-        .is('deleted_at', null);
+        .is('deleted_at', null)
+        .is('supplier_id', null);
 
       if (error) {
         console.error('[NotificationRepo] Error fetching users with permissions:', error);
@@ -334,6 +339,26 @@ class NotificationRepositoryImpl {
 
     console.log(`[NotificationRepo] Total recipients for permissions [${permissions.join(', ')}]: ${matchingUserIds.size}`);
     return Array.from(matchingUserIds);
+  }
+
+  /**
+   * Get user IDs by supplier ID
+   * Used for targeting supplier users when a PO is assigned
+   */
+  async getUserIdsBySupplierId(supplierId: string): Promise<string[]> {
+    const { data, error } = await db
+      .from('users')
+      .select('id')
+      .eq('supplier_id', supplierId)
+      .eq('status', 'active')
+      .is('deleted_at', null);
+
+    if (error) {
+      console.error(`[NotificationRepo] Error fetching users by supplier: ${error.message}`);
+      return [];
+    }
+
+    return (data || []).map((u) => u.id);
   }
 
   /**

@@ -283,7 +283,7 @@ export function InboxContent() {
                 Send an email to your inbound address to get started
               </p>
               <code className="mt-4 px-4 py-2 bg-muted rounded-md text-sm">
-                anything@inbound.gesher.dev-build.in
+                gesher_dev@inbound.gesher.dev-build.in
               </code>
             </div>
           ) : (

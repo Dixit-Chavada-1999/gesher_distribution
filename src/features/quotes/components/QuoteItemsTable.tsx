@@ -44,6 +44,7 @@ interface Product {
   name: string;
   description: string | null;
   unitPrice: number;
+  itemType: 'inventory' | 'non_inventory' | 'service';
 }
 
 interface QuoteItem {
@@ -140,6 +141,10 @@ const QuoteItemRow = memo(function QuoteItemRow({
   onItemChange,
   onRemove,
 }: QuoteItemRowProps) {
+  // Get the selected product's itemType
+  const selectedProduct = products.find((p) => p.id === item.productId);
+  const isServiceOrNonInventory = selectedProduct?.itemType === 'service' || selectedProduct?.itemType === 'non_inventory';
+
   const handleProductChange = useCallback(
     (value: string) => onItemChange(index, 'productId', value),
     [index, onItemChange]
@@ -220,20 +225,26 @@ const QuoteItemRow = memo(function QuoteItemRow({
         />
       </TableCell>
 
-      {/* Quantity */}
+      {/* Quantity - Hidden for service/non_inventory products */}
       <TableCell>
-        <div className="space-y-1">
-          <Input
-            type="number"
-            min="1"
-            value={item.quantity}
-            onChange={handleQuantityChange}
-            className={`h-9 text-right ${rowErrors.quantity ? 'border-destructive' : ''}`}
-          />
-          {rowErrors.quantity && (
-            <p className="text-xs text-destructive">{rowErrors.quantity}</p>
-          )}
-        </div>
+        {isServiceOrNonInventory ? (
+          <div className="h-9 flex items-center justify-end text-sm text-muted-foreground">
+            -
+          </div>
+        ) : (
+          <div className="space-y-1">
+            <Input
+              type="number"
+              min="1"
+              value={item.quantity}
+              onChange={handleQuantityChange}
+              className={`h-9 text-right ${rowErrors.quantity ? 'border-destructive' : ''}`}
+            />
+            {rowErrors.quantity && (
+              <p className="text-xs text-destructive">{rowErrors.quantity}</p>
+            )}
+          </div>
+        )}
       </TableCell>
 
       {/* Unit Price */}
@@ -253,17 +264,23 @@ const QuoteItemRow = memo(function QuoteItemRow({
         </div>
       </TableCell>
 
-      {/* Discount */}
+      {/* Discount - Hidden for service/non_inventory products */}
       <TableCell>
-        <Input
-          type="number"
-          step="0.1"
-          min="0"
-          max="100"
-          value={item.discountPercent}
-          onChange={handleDiscountChange}
-          className="h-9 text-right"
-        />
+        {isServiceOrNonInventory ? (
+          <div className="h-9 flex items-center justify-end text-sm text-muted-foreground">
+            -
+          </div>
+        ) : (
+          <Input
+            type="number"
+            step="0.1"
+            min="0"
+            max="100"
+            value={item.discountPercent}
+            onChange={handleDiscountChange}
+            className="h-9 text-right"
+          />
+        )}
       </TableCell>
 
       {/* Line Total */}
@@ -325,11 +342,18 @@ function QuoteItemsTableComponent({
 
       // When product is selected, trigger callback
       if (field === 'productId' && typeof value === 'string') {
+        const product = products.find((p) => p.id === value);
+
+        // For service/non_inventory products, auto-set qty=1 and discount=0
+        if (product && (product.itemType === 'service' || product.itemType === 'non_inventory')) {
+          updatedItem.quantity = 1;
+          updatedItem.discountPercent = 0;
+        }
+
         if (onProductSelect) {
           onProductSelect(index, value);
         } else {
           // Fallback to local product data
-          const product = products.find((p) => p.id === value);
           if (product) {
             updatedItem.sku = product.sku;
             updatedItem.description = product.name;

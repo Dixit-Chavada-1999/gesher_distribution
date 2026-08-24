@@ -46,6 +46,7 @@ interface Product {
   name: string;
   description: string | null;
   unitPrice: number;
+  itemType: 'inventory' | 'non_inventory' | 'service';
 }
 
 interface SalesRep {

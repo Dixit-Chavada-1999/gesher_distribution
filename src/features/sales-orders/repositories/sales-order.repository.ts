@@ -340,7 +340,7 @@ class SalesOrderRepositoryImpl {
   async findItemsByOrderId(orderId: string): Promise<SalesOrderItem[]> {
     const { data, error } = await db
       .from('sales_order_items')
-      .select('*')
+      .select(`*, products:product_id (item_type)`)
       .eq('sales_order_id', orderId)
       .order('sort_order', { ascending: true });
 
@@ -348,7 +348,12 @@ class SalesOrderRepositoryImpl {
       throw new Error(`Failed to fetch order items: ${error.message}`);
     }
 
-    return (data || []).map((row) => this.mapToSalesOrderItem(row as DbSalesOrderItem));
+    return (data || []).map((row) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rowData = row as any;
+      const itemType = rowData.products?.item_type as 'inventory' | 'non_inventory' | 'service' | undefined;
+      return this.mapToSalesOrderItem(rowData as DbSalesOrderItem, itemType);
+    });
   }
 
   /**
@@ -977,7 +982,10 @@ class SalesOrderRepositoryImpl {
     };
   }
 
-  private mapToSalesOrderItem(data: DbSalesOrderItem): SalesOrderItem {
+  private mapToSalesOrderItem(
+    data: DbSalesOrderItem,
+    itemType?: 'inventory' | 'non_inventory' | 'service'
+  ): SalesOrderItem {
     return {
       id: data.id,
       salesOrderId: data.sales_order_id,
@@ -994,6 +1002,7 @@ class SalesOrderRepositoryImpl {
       batchNumber: data.batch_number,
       serialNumber: data.serial_number,
       sortOrder: data.sort_order,
+      itemType,
       createdAt: new Date(data.created_at),
       updatedAt: new Date(data.updated_at),
       createdBy: data.created_by,

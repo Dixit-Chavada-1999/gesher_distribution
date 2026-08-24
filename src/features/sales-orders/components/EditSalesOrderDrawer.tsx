@@ -192,7 +192,7 @@ export function EditSalesOrderDrawer({
 
   return (
     <Dialog open={open} onOpenChange={handleCancel}>
-      <DialogContent className="flex max-h-[90vh] h-[90vh] w-full max-w-6xl flex-col overflow-hidden p-0">
+      <DialogContent className="flex max-h-[90vh] h-[90vh] w-full max-w-[1400px] flex-col overflow-hidden p-0">
         {/* Header */}
         <DialogHeader className="flex-shrink-0 border-b px-6 py-4">
           <DialogTitle className="text-xl font-semibold">

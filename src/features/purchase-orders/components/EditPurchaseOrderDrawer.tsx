@@ -421,41 +421,46 @@ export function EditPurchaseOrderDrawer({
                           </tr>
                         </thead>
                         <tbody className="divide-y">
-                          {po.items.map((item) => (
-                            <tr key={item.id} className="hover:bg-muted/30">
-                              <td className="p-3">
-                                <p className="font-medium">{item.sku}</p>
-                                {item.description && (
-                                  <p className="text-xs text-muted-foreground">{item.description}</p>
-                                )}
-                              </td>
-                              <td className="p-3">{item.quantityOrdered}</td>
-                              <td className="p-3 text-right">${(item.unitPrice / 100).toFixed(2)}</td>
-                              {!useSingleSupplier && (
+                          {po.items.map((item) => {
+                            const isServiceOrNonInventory = item.itemType === 'service' || item.itemType === 'non_inventory';
+                            return (
+                              <tr key={item.id} className="hover:bg-muted/30">
                                 <td className="p-3">
-                                  <Select
-                                    value={itemSuppliers[item.id] || ''}
-                                    onValueChange={(value) => handleItemSupplierChange(item.id, value)}
-                                    disabled={isLoadingSuppliers}
-                                  >
-                                    <SelectTrigger className="w-[160px]">
-                                      <SelectValue placeholder="Select supplier" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {suppliers.map((supplier) => (
-                                        <SelectItem key={supplier.id} value={supplier.id}>
-                                          {supplier.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
+                                  <p className="font-medium">{item.sku}</p>
+                                  {item.description && (
+                                    <p className="text-xs text-muted-foreground">{item.description}</p>
+                                  )}
                                 </td>
-                              )}
-                              <td className="p-3 text-right font-medium">
-                                ${(item.lineTotal / 100).toFixed(2)}
-                              </td>
-                            </tr>
-                          ))}
+                                <td className="p-3">
+                                  {isServiceOrNonInventory ? '-' : item.quantityOrdered}
+                                </td>
+                                <td className="p-3 text-right">${(item.unitPrice / 100).toFixed(2)}</td>
+                                {!useSingleSupplier && (
+                                  <td className="p-3">
+                                    <Select
+                                      value={itemSuppliers[item.id] || ''}
+                                      onValueChange={(value) => handleItemSupplierChange(item.id, value)}
+                                      disabled={isLoadingSuppliers}
+                                    >
+                                      <SelectTrigger className="w-[160px]">
+                                        <SelectValue placeholder="Select supplier" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {suppliers.map((supplier) => (
+                                          <SelectItem key={supplier.id} value={supplier.id}>
+                                            {supplier.name}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </td>
+                                )}
+                                <td className="p-3 text-right font-medium">
+                                  ${(item.lineTotal / 100).toFixed(2)}
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>

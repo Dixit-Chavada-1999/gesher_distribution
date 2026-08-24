@@ -54,6 +54,7 @@ interface MasterData {
     name: string;
     description: string | null;
     unitPrice: number;
+    itemType: 'inventory' | 'non_inventory' | 'service';
   }>;
   salesReps: Array<{
     id: string;

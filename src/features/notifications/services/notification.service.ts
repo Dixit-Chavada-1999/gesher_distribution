@@ -17,6 +17,7 @@ import {
   type PurchaseOrderCreatedPayload,
   type EmailPOReceivedPayload,
   type ShipmentUpdatePayload,
+  type SupplierPOAssignedPayload,
   type SupplierPOConfirmedPayload,
   type SupplierPORejectedPayload,
   type SupplierProductionUpdatePayload,
@@ -290,6 +291,45 @@ export const notificationService = {
       console.log(`[NotificationService] Purchase order created notification sent to ${recipientIds.length} users`);
     } catch (error) {
       console.error('[NotificationService] notifyPurchaseOrderCreated error:', error);
+    }
+  },
+
+  /**
+   * Notify supplier user when a PO is assigned to their supplier
+   * This directly targets the supplier user, not based on permissions
+   */
+  async notifySupplierPOAssigned(payload: SupplierPOAssignedPayload): Promise<void> {
+    try {
+      // Get users linked to this supplier
+      const supplierUserIds = await notificationRepository.getUserIdsBySupplierId(payload.supplierId);
+
+      if (supplierUserIds.length === 0) {
+        console.log(`[NotificationService] No users found for supplier ${payload.supplierId}`);
+        return;
+      }
+
+      await notificationRepository.createWithRecipients(
+        {
+          type: 'supplier_po_assigned',
+          title: 'New Purchase Order Assigned',
+          message: `PO ${payload.poNumber} has been assigned to you (${payload.itemCount} items, ${formatCurrency(payload.totalAmount)})`,
+          link: `/supplier-portal/purchase-orders?id=${payload.poId}`,
+          entityType: 'purchase_order',
+          entityId: payload.poId,
+          metadata: {
+            poNumber: payload.poNumber,
+            supplierId: payload.supplierId,
+            totalAmount: payload.totalAmount,
+            itemCount: payload.itemCount,
+          },
+        },
+        supplierUserIds,
+        payload.createdBy
+      );
+
+      console.log(`[NotificationService] Supplier PO assigned notification sent to ${supplierUserIds.length} supplier users`);
+    } catch (error) {
+      console.error('[NotificationService] notifySupplierPOAssigned error:', error);
     }
   },
 

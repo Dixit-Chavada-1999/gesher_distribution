@@ -73,14 +73,21 @@ export async function loginAction(data: LoginFormData): Promise<LoginResult | vo
   // Get the authenticated user
   const { data: { user } } = await supabase.auth.getUser();
 
+  let redirectUrl = '/dashboard';
+
   if (user) {
     // Fetch and cache user profile for fast page loads
     const appUser = await getAppUserByAuthId(user.id);
     if (appUser) {
       await setCachedProfile(appUser);
+
+      // Check if user is a supplier - redirect to supplier portal
+      if (appUser.supplierId) {
+        redirectUrl = '/supplier-portal';
+      }
     }
   }
 
-  // Success - redirect to dashboard
-  redirect('/dashboard');
+  // Success - redirect based on user type
+  redirect(redirectUrl);
 }

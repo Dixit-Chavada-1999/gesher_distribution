@@ -152,6 +152,8 @@ export interface QuoteItem {
   updatedAt: Date;
   createdBy: string | null;
   updatedBy: string | null;
+  // Product type - only 'inventory' type products should show in inventory status
+  itemType?: 'inventory' | 'non_inventory' | 'service';
 }
 
 /**

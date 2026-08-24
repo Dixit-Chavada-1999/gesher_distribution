@@ -129,11 +129,26 @@ export async function processShippingEmail(
     if (shipment) {
       console.log(`[Shipping] Matched to shipment: ${shipment.shipment_number}`);
 
+      // Determine the active container number
+      // For transload scenarios, prefer the NEW container as the active one
+      let activeContainerNumber = extraction.containerNumber;
+      let originalContainerNumber: string | undefined;
+
+      if (extraction.isTransload && extraction.newContainerNumber) {
+        // Transload: new container is the active one
+        activeContainerNumber = extraction.newContainerNumber;
+        // Keep original container for reference
+        originalContainerNumber = extraction.containerNumber || undefined;
+        console.log(
+          `[Shipping] Transload detected: ${originalContainerNumber} → ${activeContainerNumber}`
+        );
+      }
+
       // Step 5: Update shipment with tracking info (with regression protection)
       await shippingRepo.updateShipmentTracking(
         shipment.id,
         {
-          container_number: extraction.containerNumber || undefined,
+          container_number: activeContainerNumber || undefined,
           mbl_number: extraction.mblNumber || undefined,
           vessel_name: extraction.vesselName || undefined,
           voyage_number: extraction.voyageNumber || undefined,
@@ -145,6 +160,7 @@ export async function processShippingEmail(
           issue_type: extraction.issueType || undefined,
           issue_description: extraction.issueDescription || undefined,
           transload_container: extraction.newContainerNumber || undefined,
+          original_container_number: originalContainerNumber,
           is_transloaded: extraction.isTransload,
         },
         eventTimestamp // Pass event timestamp for ETA comparison

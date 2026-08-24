@@ -172,6 +172,50 @@ class InventoryRepositoryImpl {
   }
 
   /**
+   * Find inventory for multiple products across all locations
+   * Returns inventory records grouped by product
+   */
+  async findByProductIds(productIds: string[]): Promise<InventoryListItem[]> {
+    if (productIds.length === 0) {
+      return [];
+    }
+
+    const { data, error } = await db
+      .from('inventory')
+      .select(
+        `
+        id,
+        product_id,
+        location_id,
+        on_hand,
+        allocated,
+        reorder_point,
+        reorder_qty,
+        created_at,
+        updated_at,
+        products!inner (
+          id,
+          sku,
+          name
+        ),
+        locations!inner (
+          id,
+          location_code,
+          name
+        )
+      `
+      )
+      .in('product_id', productIds)
+      .order('product_id', { ascending: true });
+
+    if (error) {
+      throw new Error(`Failed to fetch inventory by product IDs: ${error.message}`);
+    }
+
+    return (data || []).map((row) => this.mapToListItem(row));
+  }
+
+  /**
    * Find inventory by product and location
    */
   async findByProductAndLocation(

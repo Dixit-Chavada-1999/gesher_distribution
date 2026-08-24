@@ -54,9 +54,16 @@ IMPORTANT CONTEXT:
 - MBL format: SEAOTB##### or similar shipping line formats
 - SO numbers format: SO-YYYY-NNNNN (e.g., SO-2026-00003) - Gesher's Sales Order reference. Keep the dashes!
 
+CRITICAL - TRANSLOAD HANDLING:
+- Look for "NEW CONT#", "NEW CONTAINER", "new container" in subject or body
+- If transload occurred, the NEW container number is the CURRENT/ACTIVE one
+- Set containerNumber to the NEW container (the one goods are currently in)
+- Set isTransload to true
+- Put the ORIGINAL container in the statusDescription for reference
+
 EXTRACT THE FOLLOWING:
 
-1. Container Number (CRITICAL - check subject line first, then email body)
+1. Container Number (CRITICAL - if transload, use the NEW container number!)
 2. MBL Number (Master Bill of Lading)
 3. SO Number (Sales Order - Gesher's reference, usually in subject)
 4. Vessel Name & Voyage Number
@@ -219,8 +226,42 @@ function fallbackExtraction(
 ): ShippingEmailExtraction {
   const fullText = subject + ' ' + body;
 
-  // Container number: 4 letters + 7 digits
-  const containerMatch = fullText.match(/\b([A-Z]{4}\d{7})\b/);
+  // Check for transload scenario - look for NEW CONT# or NEW CONTAINER patterns
+  const isTransload = /transload|trans-load|new\s*cont(ainer)?#?/i.test(fullText);
+
+  // Extract NEW container number first (for transload scenarios)
+  // Patterns: "NEW CONT# CMAU9623325", "NEW CONTAINER CMAU9623325", "new container CMAU9623325"
+  const newContainerMatch = fullText.match(/NEW\s*CONT(?:AINER)?#?\s*([A-Z]{4}\d{7})/i);
+
+  // Extract original container number (CNTR # or CONTAINER #)
+  const originalContainerMatch = fullText.match(/CNTR\s*#?\s*([A-Z]{4}\d{7})/i);
+
+  // Fallback: find any container number
+  const anyContainerMatch = fullText.match(/\b([A-Z]{4}\d{7})\b/);
+
+  // Determine which container to use as primary
+  // If transload, prefer NEW container; otherwise use original or any found
+  let primaryContainer: string | null = null;
+  let newContainerNumber: string | null = null;
+
+  if (isTransload && newContainerMatch?.[1]) {
+    // Transload: NEW container is the active one
+    primaryContainer = newContainerMatch[1];
+    newContainerNumber = newContainerMatch[1];
+  } else if (originalContainerMatch?.[1]) {
+    primaryContainer = originalContainerMatch[1];
+  } else if (anyContainerMatch?.[1]) {
+    primaryContainer = anyContainerMatch[1];
+  }
+
+  // If we found a new container but primary is still original, swap them
+  if (newContainerMatch?.[1] && primaryContainer !== newContainerMatch[1]) {
+    newContainerNumber = newContainerMatch[1];
+    // For transload completed emails, use new container as primary
+    if (/transload.*completed|completed.*transload/i.test(fullText)) {
+      primaryContainer = newContainerMatch[1];
+    }
+  }
 
   // MBL number: Various formats
   const mblMatch = fullText.match(/\b(SEAOTB\d+|[A-Z]{6,}\d{5,})\b/i);
@@ -234,11 +275,22 @@ function fallbackExtraction(
   const dates = fullText.match(datePattern) || [];
 
   // Detect status and issues from keywords
-  const detectedStatus = detectStatusFromKeywords(fullText) || 'in_transit';
+  let detectedStatus = detectStatusFromKeywords(fullText) || 'in_transit';
   const detectedIssue = detectIssueFromKeywords(fullText);
 
+  // If transload completed, update status
+  if (/transload.*completed|completed.*transload/i.test(fullText)) {
+    detectedStatus = 'at_ramp'; // Transload typically happens at ramp
+  }
+
+  // Build status description
+  let statusDescription = 'Extracted via fallback method - manual review recommended';
+  if (isTransload && originalContainerMatch?.[1] && newContainerMatch?.[1]) {
+    statusDescription = `Transloaded from ${originalContainerMatch[1]} to ${newContainerMatch[1]}`;
+  }
+
   return {
-    containerNumber: containerMatch?.[1] || null,
+    containerNumber: primaryContainer,
     mblNumber: mblMatch?.[1] || null,
     soNumber: soMatch?.[1]?.toUpperCase() || null,
     vesselName: null,
@@ -248,15 +300,21 @@ function fallbackExtraction(
     lfdDate: null,
     deliveryDate: null,
     detectedStatus,
-    statusDescription: 'Extracted via fallback method - manual review recommended',
+    statusDescription,
     currentLocation: null,
-    hasIssue: detectedIssue !== null,
-    issueType: detectedIssue,
-    issueDescription: detectedIssue ? `Detected: ${detectedIssue}` : null,
-    isTransload: fullText.toLowerCase().includes('transload'),
-    newContainerNumber: null,
-    confidence: 0.4,
-    keyPoints: ['Fallback extraction used', 'Manual review recommended'],
+    hasIssue: detectedIssue !== null || isTransload,
+    issueType: isTransload ? 'transload_required' : detectedIssue,
+    issueDescription: isTransload
+      ? `Transload: Original ${originalContainerMatch?.[1] || 'unknown'} → New ${newContainerMatch?.[1] || 'unknown'}`
+      : (detectedIssue ? `Detected: ${detectedIssue}` : null),
+    isTransload,
+    newContainerNumber,
+    confidence: 0.5, // Slightly higher confidence with better extraction
+    keyPoints: [
+      'Fallback extraction used',
+      isTransload ? `Transload detected: ${newContainerNumber || 'new container'}` : null,
+      'Manual review recommended',
+    ].filter(Boolean) as string[],
   };
 }
 

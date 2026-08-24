@@ -305,29 +305,35 @@ export function CreatePurchaseOrderDrawer({
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {items.map((item, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between p-3 bg-muted rounded-lg"
-                    >
-                      <div>
-                        <p className="font-medium">{item.sku}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Qty: {item.quantityOrdered} @ ${(item.unitPrice / 100).toFixed(2)}
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setItems(items.filter((_, i) => i !== index));
-                        }}
+                  {items.map((item, index) => {
+                    const isServiceOrNonInventory = item.itemType === 'service' || item.itemType === 'non_inventory';
+                    return (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between p-3 bg-muted rounded-lg"
                       >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
+                        <div>
+                          <p className="font-medium">{item.sku}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {isServiceOrNonInventory
+                              ? `@ ${(item.unitPrice / 100).toFixed(2)}`
+                              : `Qty: ${item.quantityOrdered} @ ${(item.unitPrice / 100).toFixed(2)}`
+                            }
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setItems(items.filter((_, i) => i !== index));
+                          }}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

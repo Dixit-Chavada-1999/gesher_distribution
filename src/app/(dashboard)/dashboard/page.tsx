@@ -3,14 +3,14 @@
  *
  * Role-based dashboard rendering:
  * - Operations Manager: Shows Jenny's Operations Dashboard
- * - Other roles: Shows executive dashboard with KPIs, charts, and activity
+ * - Other roles: Shows executive dashboard with KPIs, charts, and inventory
  *
  * Permission-based rendering:
  * - dashboard.view_module: Access to dashboard page
  * - dashboard.view_analytics: Stats Grid (KPIs) and Charts
- * - dashboard.view_activity: Recent Activity list
- * - dashboard.view_financials: AR/AP summary (requires finance role)
  * - dashboard.view_inventory: Inventory overview
+ *
+ * Data: All data is fetched from database (no mock data fallback)
  */
 
 import { Metadata } from 'next';
@@ -19,26 +19,15 @@ import { redirect } from 'next/navigation';
 import {
   DashboardHeader,
   DashboardStatsGrid,
-  DashboardActivityList,
   DashboardChartsGrid,
   InventoryOverview,
-  ARAPSummary,
-  // Mock data (to be replaced with dynamic data)
-  dashboardStats,
-  recentActivities,
-  revenueChartData,
-  unitsBySKUData,
-  channelPerformanceData,
-  marginChartData,
-  inventoryByLocation,
-  arAgingData,
-  apSummaryData,
-  // Actions
+  // Actions - fetch real data from database
   getUnitsBySKUData,
   getChannelPerformanceData,
   getInventoryByLocationData,
   getDashboardStatsData,
   getMarginAnalysisData,
+  getRevenueTrendData,
 } from '@/features/dashboard';
 import { getCurrentUser, hasPermission } from '@/shared/lib/auth';
 
@@ -108,41 +97,26 @@ export default async function DashboardPage() {
 
   // Permission checks for sub-sections (for executive dashboard)
   const canViewAnalytics = hasPermission(user, 'dashboard.view_analytics');
-  const canViewActivity = hasPermission(user, 'dashboard.view_activity');
-  const canViewFinancials = hasPermission(user, 'dashboard.view_financials');
   const canViewInventory = hasPermission(user, 'dashboard.view_inventory');
 
-  // Fetch dynamic data for charts and KPIs
-  const [unitsBySKUResult, channelResult, inventoryResult, statsResult, marginResult] = await Promise.all([
+  // Fetch real data from database (no mock data fallback)
+  const [unitsBySKUResult, channelResult, inventoryResult, statsResult, marginResult, revenueResult] = await Promise.all([
     getUnitsBySKUData(),
     getChannelPerformanceData(),
     getInventoryByLocationData(),
     getDashboardStatsData(),
     getMarginAnalysisData(),
+    getRevenueTrendData(),
   ]);
 
-  const dynamicUnitsBySKU = unitsBySKUResult.success && unitsBySKUResult.data?.data?.length
-    ? unitsBySKUResult.data.data
-    : unitsBySKUData; // Fallback to mock data if no real data
-  const unitsProducts = unitsBySKUResult.success && unitsBySKUResult.data?.products?.length
-    ? unitsBySKUResult.data.products
-    : undefined; // Use default products if no real data
-
-  const dynamicChannelData = channelResult.success && channelResult.data?.length
-    ? channelResult.data
-    : channelPerformanceData; // Fallback to mock data if no real data
-
-  const dynamicInventory = inventoryResult.success && inventoryResult.data?.length
-    ? inventoryResult.data
-    : inventoryByLocation; // Fallback to mock data if no real data
-
-  const dynamicStats = statsResult.success && statsResult.data?.length
-    ? statsResult.data
-    : dashboardStats; // Fallback to mock data if no real data
-
-  const dynamicMarginData = marginResult.success && marginResult.data?.length
-    ? marginResult.data
-    : marginChartData; // Fallback to mock data if no real data
+  // Use real data only - empty arrays if no data
+  const dynamicUnitsBySKU = unitsBySKUResult.success ? unitsBySKUResult.data?.data || [] : [];
+  const unitsProducts = unitsBySKUResult.success ? unitsBySKUResult.data?.products : undefined;
+  const dynamicChannelData = channelResult.success ? channelResult.data || [] : [];
+  const dynamicInventory = inventoryResult.success ? inventoryResult.data || [] : [];
+  const dynamicStats = statsResult.success ? statsResult.data || [] : [];
+  const dynamicMarginData = marginResult.success ? marginResult.data || [] : [];
+  const dynamicRevenueData = revenueResult.success ? revenueResult.data || [] : [];
 
   return (
     <div className="space-y-6">
@@ -157,7 +131,7 @@ export default async function DashboardPage() {
       {/* Charts Grid - requires dashboard.view_analytics */}
       {canViewAnalytics && (
         <DashboardChartsGrid
-          revenueData={revenueChartData}
+          revenueData={dynamicRevenueData}
           unitsData={dynamicUnitsBySKU}
           unitsProducts={unitsProducts}
           channelData={dynamicChannelData}
@@ -165,19 +139,9 @@ export default async function DashboardPage() {
         />
       )}
 
-      {/* Financial Section - requires dashboard.view_financials */}
-      {canViewFinancials && (
-        <ARAPSummary arData={arAgingData} apData={apSummaryData} />
-      )}
-
       {/* Inventory Overview - requires dashboard.view_inventory */}
       {canViewInventory && (
         <InventoryOverview byLocation={dynamicInventory} />
-      )}
-
-      {/* Recent Activity - requires dashboard.view_activity */}
-      {canViewActivity && (
-        <DashboardActivityList activities={recentActivities} />
       )}
     </div>
   );

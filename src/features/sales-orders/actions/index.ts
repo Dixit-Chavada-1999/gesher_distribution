@@ -901,6 +901,7 @@ export async function getSalesOrderMasterData(): Promise<ActionResult<{
     name: string;
     description: string | null;
     unitPrice: number;
+    itemType: 'inventory' | 'non_inventory' | 'service';
   }>;
   warehouses: Array<{
     id: string;
@@ -926,7 +927,7 @@ export async function getSalesOrderMasterData(): Promise<ActionResult<{
     const [customersResult, productsResult, warehousesResult, usersResult] = await Promise.all([
       customerService.getForDropdown(),
       db.from('products')
-        .select('id, sku, name, description, base_price')
+        .select('id, sku, name, description, base_price, item_type')
         .eq('status', 'active')
         .eq('is_sellable', true)
         .is('deleted_at', null)
@@ -965,6 +966,7 @@ export async function getSalesOrderMasterData(): Promise<ActionResult<{
           name: p.name,
           description: p.description,
           unitPrice: p.base_price,
+          itemType: (p.item_type as 'inventory' | 'non_inventory' | 'service') || 'inventory',
         })),
         warehouses: (warehousesResult.data || []).map((w) => ({
           id: w.id,

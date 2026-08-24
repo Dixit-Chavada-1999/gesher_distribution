@@ -275,6 +275,7 @@ export async function findShipmentByReference(
 
   // PRIORITY 2: Try container number (fallback if SO doesn't match)
   if (containerNumber) {
+    // Try current container_number first
     const { data } = await supabase
       .from('shipments')
       .select(`
@@ -305,6 +306,44 @@ export async function findShipmentByReference(
         id: data.id,
         shipment_number: data.shipment_number,
         sales_order_id: data.sales_order_id,
+        order_number: salesOrderData?.order_number,
+        customer_name: salesOrderData?.customers?.name || null,
+        customer_po_number: salesOrderData?.customer_po_number || null,
+      };
+    }
+
+    // PRIORITY 3: Try original_container_number (for transload scenarios)
+    // The shipment may have been updated with new container, but email refers to original
+    const { data: transloadMatch } = await supabase
+      .from('shipments')
+      .select(`
+        id,
+        shipment_number,
+        sales_order_id,
+        sales_orders (
+          order_number,
+          customer_po_number,
+          customers (
+            id,
+            name
+          )
+        )
+      `)
+      .eq('original_container_number', containerNumber)
+      .is('deleted_at', null)
+      .single();
+
+    if (transloadMatch) {
+      console.log(`[Shipping] Matched by ORIGINAL container number: ${containerNumber} → ${transloadMatch.shipment_number}`);
+      const salesOrderData = transloadMatch.sales_orders as unknown as {
+        order_number: string;
+        customer_po_number: string | null;
+        customers: { id: string; name: string } | null;
+      } | null;
+      return {
+        id: transloadMatch.id,
+        shipment_number: transloadMatch.shipment_number,
+        sales_order_id: transloadMatch.sales_order_id,
         order_number: salesOrderData?.order_number,
         customer_name: salesOrderData?.customers?.name || null,
         customer_po_number: salesOrderData?.customer_po_number || null,
@@ -342,6 +381,7 @@ export async function updateShipmentTracking(
     issue_type?: string;
     issue_description?: string;
     transload_container?: string;
+    original_container_number?: string;
     is_transloaded?: boolean;
   },
   eventTimestamp?: string
@@ -361,6 +401,19 @@ export async function updateShipmentTracking(
   }
 
   const updateData: Record<string, unknown> = { ...data };
+
+  // MAP SHIPPING FIELDS TO STANDARD SHIPMENT FIELDS
+  // So they show in the Shipments list UI
+  if (data.container_number) {
+    updateData.tracking_number = data.container_number; // Container # = Tracking #
+  }
+  if (data.vessel_name) {
+    updateData.carrier = data.vessel_name; // Vessel name as carrier
+  }
+  // If no vessel but we have container, set carrier to SEAIR Global (freight forwarder)
+  if (!data.vessel_name && data.container_number) {
+    updateData.carrier = 'SEAIR Global';
+  }
 
   // STATUS REGRESSION PROTECTION
   // Only allow status to move forward in the progression order

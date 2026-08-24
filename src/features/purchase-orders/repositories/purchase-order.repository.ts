@@ -218,7 +218,7 @@ class PurchaseOrderRepositoryImpl {
   async findItemsByPOId(poId: string): Promise<PurchaseOrderItem[]> {
     const { data, error } = await db
       .from('purchase_order_items')
-      .select('*')
+      .select(`*, products:product_id (item_type)`)
       .eq('purchase_order_id', poId)
       .order('sort_order', { ascending: true });
 
@@ -226,7 +226,12 @@ class PurchaseOrderRepositoryImpl {
       throw new Error(`Failed to fetch PO items: ${error.message}`);
     }
 
-    return (data || []).map((row) => this.mapToPOItem(row as DbPOItem));
+    return (data || []).map((row) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rowData = row as any;
+      const itemType = rowData.products?.item_type as 'inventory' | 'non_inventory' | 'service' | undefined;
+      return this.mapToPOItem(rowData as DbPOItem, itemType);
+    });
   }
 
   /**
@@ -599,7 +604,10 @@ class PurchaseOrderRepositoryImpl {
     };
   }
 
-  private mapToPOItem(data: DbPOItem): PurchaseOrderItem {
+  private mapToPOItem(
+    data: DbPOItem,
+    itemType?: 'inventory' | 'non_inventory' | 'service'
+  ): PurchaseOrderItem {
     return {
       id: data.id,
       purchaseOrderId: data.purchase_order_id,
@@ -616,6 +624,7 @@ class PurchaseOrderRepositoryImpl {
       sortOrder: data.sort_order,
       supplierId: data.supplier_id,
       supplierName: data.supplier_name,
+      itemType,
       createdAt: new Date(data.created_at),
       updatedAt: new Date(data.updated_at),
       createdBy: data.created_by,

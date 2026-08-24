@@ -1107,12 +1107,14 @@ export async function getQuoteMasterData(): Promise<ActionResult<{
     name: string;
     description: string | null;
     unitPrice: number;
+    itemType: 'inventory' | 'non_inventory' | 'service';
   }>;
   salesReps: Array<{
     id: string;
     name: string;
     email: string;
   }>;
+  currentUserId: string; // Current logged-in user ID for default sales rep
 }>> {
   const auth = await authorize('quotes.view_module');
   if (!auth.ok) {
@@ -1127,7 +1129,7 @@ export async function getQuoteMasterData(): Promise<ActionResult<{
     const [customersResult, productsResult, usersResult] = await Promise.all([
       customerService.getForDropdown(),
       db.from('products')
-        .select('id, sku, name, description, base_price')
+        .select('id, sku, name, description, base_price, item_type')
         .eq('status', 'active')
         .eq('is_sellable', true)
         .is('deleted_at', null)
@@ -1159,12 +1161,14 @@ export async function getQuoteMasterData(): Promise<ActionResult<{
           name: p.name,
           description: p.description,
           unitPrice: p.base_price,
+          itemType: (p.item_type as 'inventory' | 'non_inventory' | 'service') || 'inventory',
         })),
         salesReps: (usersResult.data || []).map((u) => ({
           id: u.id,
           name: `${u.first_name} ${u.last_name}`,
           email: u.email,
         })),
+        currentUserId: auth.user.id, // Return current user ID for default selection
       },
     };
   } catch (error) {

@@ -17,6 +17,7 @@ export type NotificationType =
   | 'shipment_update'
   | 'inventory_low_stock'
   | 'approval_required'
+  | 'supplier_po_assigned'
   | 'supplier_po_confirmed'
   | 'supplier_po_rejected'
   | 'supplier_production_update'
@@ -126,6 +127,7 @@ export const NOTIFICATION_PERMISSION_MAP: Record<NotificationType, string[]> = {
   shipment_update: ['orders.view_module', 'operations.view_module'],
   inventory_low_stock: ['inventory.view_module'],
   approval_required: ['quotes.approve', 'orders.approve'],
+  supplier_po_assigned: [], // Directly targets supplier user, not permission-based
   supplier_po_confirmed: ['purchase_orders.view_module', 'operations.view_module'],
   supplier_po_rejected: ['purchase_orders.view_module', 'operations.view_module'],
   supplier_production_update: ['purchase_orders.view_module', 'operations.view_module'],
@@ -182,6 +184,11 @@ export const NOTIFICATION_CONFIG: Record<NotificationType, {
     icon: 'CheckCircle',
     color: 'text-red-600',
     bgColor: 'bg-red-100',
+  },
+  supplier_po_assigned: {
+    icon: 'FileBox',
+    color: 'text-blue-600',
+    bgColor: 'bg-blue-100',
   },
   supplier_po_confirmed: {
     icon: 'CheckCircle',
@@ -264,6 +271,15 @@ export interface ShipmentUpdatePayload {
 }
 
 // Supplier Portal Payloads
+export interface SupplierPOAssignedPayload {
+  poId: string;
+  poNumber: string;
+  supplierId: string;
+  totalAmount: number;
+  itemCount: number;
+  createdBy?: string;
+}
+
 export interface SupplierPOConfirmedPayload {
   poId: string;
   poNumber: string;

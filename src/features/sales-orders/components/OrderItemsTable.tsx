@@ -73,6 +73,10 @@ const OrderItemRow = memo(function OrderItemRow({
   // Item ID is required for all handlers
   const itemId = item.id || '';
 
+  // Check if product is service or non_inventory
+  const selectedProduct = products.find((p) => p.id === item.productId);
+  const isServiceOrNonInventory = selectedProduct?.itemType === 'service' || selectedProduct?.itemType === 'non_inventory';
+
   // Memoized handlers
   const handleProductChange = useCallback(
     (value: string) => onItemChange(itemId, 'productId', value),
@@ -145,24 +149,29 @@ const OrderItemRow = memo(function OrderItemRow({
       </TableCell>
 
       {/* Description */}
-      <TableCell className="max-w-[200px]">
+      <TableCell className="max-w-[140px]">
         <Input
           value={item.description || ''}
           onChange={handleDescriptionChange}
           className="h-9 w-full truncate"
           placeholder="Description"
+          title={item.description || ''}
         />
       </TableCell>
 
       {/* Quantity */}
-      <TableCell>
-        <Input
-          type="number"
-          min={1}
-          value={item.quantity || ''}
-          onChange={handleQuantityChange}
-          className="h-9 text-right w-full"
-        />
+      <TableCell className="w-[80px]">
+        {isServiceOrNonInventory ? (
+          <div className="h-9 flex items-center justify-end text-sm text-muted-foreground">-</div>
+        ) : (
+          <Input
+            type="number"
+            min={1}
+            value={item.quantity || ''}
+            onChange={handleQuantityChange}
+            className="h-9 text-right w-full"
+          />
+        )}
       </TableCell>
 
       {/* Unit */}
@@ -198,14 +207,18 @@ const OrderItemRow = memo(function OrderItemRow({
 
       {/* Discount % */}
       <TableCell>
-        <Input
-          type="number"
-          min={0}
-          max={100}
-          value={item.discountPercent}
-          onChange={handleDiscountChange}
-          className="h-9 text-right"
-        />
+        {isServiceOrNonInventory ? (
+          <div className="h-9 flex items-center justify-end text-sm text-muted-foreground">-</div>
+        ) : (
+          <Input
+            type="number"
+            min={0}
+            max={100}
+            value={item.discountPercent}
+            onChange={handleDiscountChange}
+            className="h-9 text-right"
+          />
+        )}
       </TableCell>
 
       {/* Tax Rate */}
@@ -291,12 +304,19 @@ function OrderItemsTableComponent({
 
         // When product is selected, trigger callback for server-side price lookup
         if (field === 'productId' && typeof value === 'string') {
+          const product = products.find((p) => p.id === value);
+
+          // Auto-set qty=1 and discount=0 for service/non_inventory products
+          if (product && (product.itemType === 'service' || product.itemType === 'non_inventory')) {
+            updatedItem.quantity = 1;
+            updatedItem.discountPercent = 0;
+          }
+
           if (onProductSelect) {
             // Let the parent handle the product data fetch
             onProductSelect(index, value);
           } else {
             // Fallback to local product data (mock behavior)
-            const product = products.find((p) => p.id === value);
             if (product) {
               updatedItem.sku = product.sku;
               updatedItem.description = product.description;
@@ -352,13 +372,13 @@ function OrderItemsTableComponent({
           <TableHeader>
             <TableRow className="bg-muted/50">
               <TableHead className="w-[180px]">Product</TableHead>
-              <TableHead className="w-[130px]">SKU</TableHead>
-              <TableHead className="min-w-[150px]">Description</TableHead>
-              <TableHead className="w-[70px] text-right">Qty</TableHead>
+              <TableHead className="w-[110px]">SKU</TableHead>
+              <TableHead className="w-[140px]">Description</TableHead>
+              <TableHead className="w-[80px] text-right">Qty</TableHead>
               <TableHead className="w-[70px]">Unit</TableHead>
               <TableHead className="w-[100px] text-right">Unit Price</TableHead>
               <TableHead className="w-[70px] text-right">Disc %</TableHead>
-              <TableHead className="w-[130px]">Tax</TableHead>
+              <TableHead className="w-[140px]">Tax</TableHead>
               <TableHead className="w-[110px] text-right">Line Total</TableHead>
               <TableHead className="w-[50px]" />
             </TableRow>

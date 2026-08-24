@@ -138,6 +138,7 @@ export interface PurchaseOrderItem {
   // Per-item supplier (optional override)
   supplierId: string | null;
   supplierName: string | null;
+  itemType?: 'inventory' | 'non_inventory' | 'service';
   createdAt: Date;
   updatedAt: Date;
   createdBy: string | null;
@@ -200,6 +201,8 @@ export interface CreatePOItemDTO {
   // Per-item supplier (optional)
   supplierId?: string | null;
   supplierName?: string | null;
+  // Product type for display purposes
+  itemType?: 'inventory' | 'non_inventory' | 'service';
 }
 
 export interface CreatePurchaseOrderDTO {

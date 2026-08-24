@@ -158,6 +158,7 @@ export const purchaseOrderService = {
     // Get supplier name from items (supplier is at item level)
     const supplierName = po.items?.[0]?.supplierName || 'Unknown Supplier';
 
+    // Notify internal users about PO creation
     await notificationService.notifyPurchaseOrderCreated({
       purchaseOrderId: po.id,
       poNumber: po.poNumber,
@@ -165,6 +166,27 @@ export const purchaseOrderService = {
       totalAmount: po.grandTotal,
       createdBy: userId,
     });
+
+    // Notify supplier users about PO assignment
+    // Get unique supplier IDs from items
+    const supplierIds = [...new Set(
+      po.items
+        ?.map(item => item.supplierId)
+        .filter((id): id is string => !!id) || []
+    )];
+
+    // Send notification to each supplier
+    for (const supplierId of supplierIds) {
+      const supplierItems = po.items?.filter(item => item.supplierId === supplierId) || [];
+      await notificationService.notifySupplierPOAssigned({
+        poId: po.id,
+        poNumber: po.poNumber,
+        supplierId,
+        totalAmount: po.grandTotal,
+        itemCount: supplierItems.length,
+        createdBy: userId,
+      });
+    }
   },
 
   /**
