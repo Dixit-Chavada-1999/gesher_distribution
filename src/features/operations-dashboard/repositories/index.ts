@@ -967,6 +967,7 @@ export async function getSupplierShipmentSchedule(filters?: OperationsFilters): 
   };
 
   // Get Sales Orders where product_source = 'dropship' (Supplier/Galileo)
+  // Also fetch linked shipments to get load_status for consistent status display
   let soQuery = supabase
     .from('sales_orders')
     .select(`
@@ -989,6 +990,10 @@ export async function getSupplierShipmentSchedule(filters?: OperationsFilters): 
       customers(
         id,
         name
+      ),
+      shipments(
+        id,
+        load_status
       )
     `)
     .is('deleted_at', null)
@@ -1071,6 +1076,7 @@ export async function getSupplierShipmentSchedule(filters?: OperationsFilters): 
   });
 
   // Map Sales Order status to ShipmentStatus for Supplier Schedule
+  // Used as fallback when no shipment exists
   const mapSalesOrderStatusToSupplier = (status: string): ShipmentStatus => {
     switch (status) {
       case 'draft':
@@ -1086,6 +1092,19 @@ export async function getSupplierShipmentSchedule(filters?: OperationsFilters): 
       default:
         return 'OPEN';
     }
+  };
+
+  // Get status from shipment if exists, otherwise from sales order
+  // This ensures consistent status display across all tabs
+  const getDisplayStatus = (so: { status: string; shipments?: unknown }): ShipmentStatus => {
+    // Check if linked shipment exists with load_status
+    const shipment = toOne(so.shipments) as { load_status?: string } | null;
+    if (shipment?.load_status) {
+      // Use shipment's load_status for consistency with Executive Summary
+      return mapLoadStatus(shipment.load_status);
+    }
+    // Fallback to sales order status
+    return mapSalesOrderStatusToSupplier(so.status);
   };
 
   const result: ShipmentScheduleItem[] = [];
@@ -1134,7 +1153,7 @@ export async function getSupplierShipmentSchedule(filters?: OperationsFilters): 
       // Prices are dynamic per product via items[].unitPrice
       payment50PercentDate: null,  // 50% Payment Date
       remaining50DueDate: null,    // Remaining 50% Due Date
-      status: mapSalesOrderStatusToSupplier(so.status),
+      status: getDisplayStatus(so),  // Use shipment status if exists, else SO status
       actionRequired: so.internal_notes || '',  // Action Required / Notes (from internal_notes)
       ankurNotes: '',  // Ankur Comments (separate field - TODO: add to DB if needed)
     });
@@ -1182,6 +1201,7 @@ export async function getGDC1Inventory(filters?: OperationsFilters): Promise<{ d
   };
 
   // Get Sales Orders where product_source = 'warehouse'
+  // Also fetch linked shipments to get load_status for consistent status display
   let soQuery = supabase
     .from('sales_orders')
     .select(`
@@ -1204,6 +1224,10 @@ export async function getGDC1Inventory(filters?: OperationsFilters): Promise<{ d
       customers(
         id,
         name
+      ),
+      shipments(
+        id,
+        load_status
       )
     `)
     .is('deleted_at', null)
@@ -1286,7 +1310,8 @@ export async function getGDC1Inventory(filters?: OperationsFilters): Promise<{ d
   });
 
   // Map Sales Order status to GDC1 status
-  const mapSalesOrderStatus = (status: string): ShipmentStatus => {
+  // Used as fallback when no shipment exists
+  const mapSalesOrderStatusToGDC1 = (status: string): ShipmentStatus => {
     switch (status) {
       case 'draft':
       case 'pending':
@@ -1300,6 +1325,19 @@ export async function getGDC1Inventory(filters?: OperationsFilters): Promise<{ d
       default:
         return 'OPEN';
     }
+  };
+
+  // Get status from shipment if exists, otherwise from sales order
+  // This ensures consistent status display across all tabs
+  const getGDC1DisplayStatus = (so: { status: string; shipments?: unknown }): ShipmentStatus => {
+    // Check if linked shipment exists with load_status
+    const shipment = toOne(so.shipments) as { load_status?: string } | null;
+    if (shipment?.load_status) {
+      // Use shipment's load_status for consistency with Executive Summary
+      return mapLoadStatus(shipment.load_status);
+    }
+    // Fallback to sales order status mapping for GDC1
+    return mapSalesOrderStatusToGDC1(so.status);
   };
 
   const result: GDC1InventoryItem[] = [];
@@ -1367,7 +1405,7 @@ export async function getGDC1Inventory(filters?: OperationsFilters): Promise<{ d
       // Prices are dynamic per product via items[].unitPrice
       payment50PercentDate: null,  // 50% Payment Date
       remaining50DueDate: null,    // Remaining 50% Due Date
-      status: mapSalesOrderStatus(so.status),
+      status: getGDC1DisplayStatus(so),  // Use shipment status if exists, else SO status
       actionRequired: so.internal_notes || '',  // Action Required / Notes (from internal_notes)
       ankurNotes: '',  // Ankur Comments (separate field - TODO: add to DB if needed)
     });
