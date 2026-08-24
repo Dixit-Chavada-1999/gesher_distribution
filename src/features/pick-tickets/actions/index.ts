@@ -523,9 +523,10 @@ export async function createPickTicketFromSalesOrder(
       };
     }
 
-    // Prepare items for pick ticket
+    // Prepare items for pick ticket - ONLY include physical inventory items
+    // Service and non-inventory items don't need to be picked from warehouse
     // Note: Supabase returns products as array due to join, so we access first element
-    const items = salesOrder.sales_order_items?.map((item: {
+    const allItems = salesOrder.sales_order_items?.map((item: {
       id: string;
       product_id: string | null;
       sku: string;
@@ -545,15 +546,23 @@ export async function createPickTicketFromSalesOrder(
       };
     }) || [];
 
+    // Filter to only include physical inventory items (exclude service and non_inventory)
+    const items = allItems.filter((item) => {
+      if (item.itemType === 'service' || item.itemType === 'non_inventory') {
+        console.log(`[createPickTicketFromSalesOrder] Excluding ${item.sku} from pick ticket (${item.itemType} - not a physical item)`);
+        return false;
+      }
+      return true;
+    });
+
     if (items.length === 0) {
       return {
         success: false,
-        error: 'Sales order has no items',
+        error: 'Sales order has no physical inventory items to pick',
       };
     }
 
     // Allocate inventory for each item before creating pick ticket
-    // Skip service and non-inventory items (they don't have physical inventory)
     const { inventoryService } = await import('@/features/inventory/services/inventory.service');
     const finalWarehouseId = warehouseId || salesOrder.warehouse_id;
     const allocationErrors: string[] = [];
@@ -561,12 +570,6 @@ export async function createPickTicketFromSalesOrder(
     for (const item of items) {
       if (!item.productId) {
         continue; // Skip items without product ID
-      }
-
-      // Skip service and non-inventory items - they don't have physical inventory
-      if (item.itemType === 'service' || item.itemType === 'non_inventory') {
-        console.log(`[createPickTicketFromSalesOrder] Skipping inventory allocation for ${item.sku} (${item.itemType})`);
-        continue;
       }
 
       const allocResult = await inventoryService.allocateByProductLocation(
@@ -651,14 +654,11 @@ export async function createPickTicketFromSalesOrder(
             requiredDate: salesOrder.requested_delivery_date,
             customerPoNumber: salesOrder.customer_po_number,
             notes: specialInstructions || salesOrder.internal_notes,
-            items: (salesOrder.sales_order_items || []).map((item: {
-              sku: string;
-              description: string | null;
-              quantity: number;
-            }) => ({
+            // Only include physical inventory items in email (same as pick ticket)
+            items: items.map((item) => ({
               sku: item.sku,
               productName: item.description || item.sku,
-              quantity: item.quantity,
+              quantity: item.quantityToPick,
               uom: 'EA',
             })),
           });
