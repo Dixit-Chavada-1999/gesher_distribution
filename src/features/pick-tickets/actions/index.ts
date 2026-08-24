@@ -304,6 +304,7 @@ export async function completePicking(id: string) {
 /**
  * Helper: Ship inventory for completed pick ticket
  * Reduces on_hand and allocated for each picked item
+ * Skips service and non-inventory items (they don't have physical inventory)
  */
 async function shipInventoryForPickTicket(
   pickTicket: PickTicketWithItems,
@@ -317,8 +318,33 @@ async function shipInventoryForPickTicket(
     number: pickTicket.pickTicketNumber,
   };
 
+  // Fetch product item_type for all products in the pick ticket
+  const productIds = (pickTicket.items || [])
+    .map((item) => item.productId)
+    .filter((id): id is string => !!id);
+
+  let productItemTypes: Record<string, string> = {};
+  if (productIds.length > 0) {
+    const { data: products } = await db
+      .from('products')
+      .select('id, item_type')
+      .in('id', productIds);
+
+    productItemTypes = (products || []).reduce((acc, p) => {
+      acc[p.id] = p.item_type || 'inventory';
+      return acc;
+    }, {} as Record<string, string>);
+  }
+
   for (const item of pickTicket.items || []) {
     if (!item.productId || !pickTicket.warehouseId) {
+      continue;
+    }
+
+    // Skip service and non-inventory items - they don't have physical inventory
+    const itemType = productItemTypes[item.productId] || 'inventory';
+    if (itemType === 'service' || itemType === 'non_inventory') {
+      console.log(`[shipInventoryForPickTicket] Skipping inventory ship for ${item.sku} (${itemType})`);
       continue;
     }
 
@@ -427,7 +453,7 @@ export async function createPickTicketFromSalesOrder(
   const userId = auth.user.id;
 
   try {
-    // Fetch sales order with items and customer info
+    // Fetch sales order with items and customer info (including product item_type)
     const { data: salesOrder, error: soError } = await db
       .from('sales_orders')
       .select(`
@@ -447,7 +473,10 @@ export async function createPickTicketFromSalesOrder(
           product_id,
           sku,
           description,
-          quantity
+          quantity,
+          products (
+            item_type
+          )
         )
       `)
       .eq('id', salesOrderId)
@@ -495,19 +524,26 @@ export async function createPickTicketFromSalesOrder(
     }
 
     // Prepare items for pick ticket
+    // Note: Supabase returns products as array due to join, so we access first element
     const items = salesOrder.sales_order_items?.map((item: {
       id: string;
       product_id: string | null;
       sku: string;
       description: string | null;
       quantity: number;
-    }) => ({
-      salesOrderItemId: item.id,
-      productId: item.product_id || '',
-      sku: item.sku,
-      description: item.description,
-      quantityToPick: item.quantity,
-    })) || [];
+      products: { item_type: string }[] | { item_type: string } | null;
+    }) => {
+      // Handle both array (Supabase default) and single object cases
+      const productData = Array.isArray(item.products) ? item.products[0] : item.products;
+      return {
+        salesOrderItemId: item.id,
+        productId: item.product_id || '',
+        sku: item.sku,
+        description: item.description,
+        quantityToPick: item.quantity,
+        itemType: productData?.item_type || 'inventory', // Default to inventory if not set
+      };
+    }) || [];
 
     if (items.length === 0) {
       return {
@@ -517,6 +553,7 @@ export async function createPickTicketFromSalesOrder(
     }
 
     // Allocate inventory for each item before creating pick ticket
+    // Skip service and non-inventory items (they don't have physical inventory)
     const { inventoryService } = await import('@/features/inventory/services/inventory.service');
     const finalWarehouseId = warehouseId || salesOrder.warehouse_id;
     const allocationErrors: string[] = [];
@@ -524,6 +561,12 @@ export async function createPickTicketFromSalesOrder(
     for (const item of items) {
       if (!item.productId) {
         continue; // Skip items without product ID
+      }
+
+      // Skip service and non-inventory items - they don't have physical inventory
+      if (item.itemType === 'service' || item.itemType === 'non_inventory') {
+        console.log(`[createPickTicketFromSalesOrder] Skipping inventory allocation for ${item.sku} (${item.itemType})`);
+        continue;
       }
 
       const allocResult = await inventoryService.allocateByProductLocation(
