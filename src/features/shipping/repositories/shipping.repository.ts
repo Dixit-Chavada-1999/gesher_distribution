@@ -218,12 +218,52 @@ export async function getShippingEmailById(
 }
 
 // ============================================
+// SO NUMBER NORMALIZATION
+// ============================================
+
+/**
+ * Normalize SO number to all possible formats for matching
+ * Handles both formats:
+ * - SO2600012 (compact: SO + 7 digits)
+ * - SO-2026-00012 (expanded: SO-YYYY-NNNNN)
+ *
+ * Returns array of possible formats to try
+ */
+function normalizeSoNumber(soNumber: string): string[] {
+  const formats: string[] = [soNumber.toUpperCase()]; // Always include original
+
+  // Pattern 1: SO2600012 (compact) -> SO-2026-00012 (expanded)
+  const compactMatch = soNumber.match(/^SO(\d{2})(\d{5})$/i);
+  if (compactMatch && compactMatch[1] && compactMatch[2]) {
+    const yearShort = compactMatch[1]; // "26"
+    const seqNum = compactMatch[2]; // "00012"
+    const yearFull = `20${yearShort}`; // "2026"
+    formats.push(`SO-${yearFull}-${seqNum}`);
+  }
+
+  // Pattern 2: SO-2026-00012 (expanded) -> SO2600012 (compact)
+  const expandedMatch = soNumber.match(/^SO-(\d{4})-(\d{5})$/i);
+  if (expandedMatch && expandedMatch[1] && expandedMatch[2]) {
+    const yearFull = expandedMatch[1]; // "2026"
+    const seqNum = expandedMatch[2]; // "00012"
+    const yearShort = yearFull.slice(2); // "26"
+    formats.push(`SO${yearShort}${seqNum}`);
+  }
+
+  return [...new Set(formats)]; // Remove duplicates
+}
+
+// ============================================
 // SHIPMENT MATCHING
 // ============================================
 
 /**
  * Find shipment by SO number or container number
  * Priority: SO number FIRST (business identifier), then container number (can be shared)
+ *
+ * NOTE: SO number matching handles both formats:
+ * - SO2600012 (compact)
+ * - SO-2026-00012 (expanded)
  */
 export async function findShipmentByReference(
   containerNumber?: string | null,
@@ -233,7 +273,11 @@ export async function findShipmentByReference(
 
   // PRIORITY 1: Try SO number first (more reliable business identifier)
   if (soNumber) {
-    // First find the sales order with customer info
+    // Get all possible SO number formats
+    const soFormats = normalizeSoNumber(soNumber);
+    console.log(`[Shipping] Trying SO formats: ${soFormats.join(', ')}`);
+
+    // First find the sales order with customer info (try all formats)
     const { data: salesOrder } = await supabase
       .from('sales_orders')
       .select(`
@@ -245,8 +289,9 @@ export async function findShipmentByReference(
           name
         )
       `)
-      .eq('order_number', soNumber)
+      .in('order_number', soFormats)
       .is('deleted_at', null)
+      .limit(1)
       .single();
 
     if (salesOrder) {

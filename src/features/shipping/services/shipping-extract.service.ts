@@ -52,7 +52,7 @@ IMPORTANT CONTEXT:
 - These are emails between SEAIR Global (freight forwarder), Galileo (supplier in India), and Gesher Distribution (importer in USA)
 - Container numbers format: 4 letters + 7 digits (e.g., TCLU8042633, SEGU4010515, CMAU9623325)
 - MBL format: SEAOTB##### or similar shipping line formats
-- SO numbers format: SO-YYYY-NNNNN (e.g., SO-2026-00003) - Gesher's Sales Order reference. Keep the dashes!
+- SO numbers format: Either SO-YYYY-NNNNN (e.g., SO-2026-00003) OR SO####### (e.g., SO2600012) - Gesher's Sales Order reference. Preserve the original format from email!
 
 CRITICAL - TRANSLOAD HANDLING:
 - Look for "NEW CONT#", "NEW CONTAINER", "new container" in subject or body
