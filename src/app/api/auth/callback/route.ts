@@ -2,6 +2,7 @@
  * Auth Callback Route
  *
  * Handles OAuth callbacks and email confirmation redirects from Supabase.
+ * Supports: login, signup, password reset (recovery), and email change.
  */
 
 import { NextResponse } from 'next/server';
@@ -10,7 +11,8 @@ import { createClient } from '@/shared/lib/supabase/server';
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
-  const next = searchParams.get('next') ?? '/dashboard';
+  const type = searchParams.get('type'); // Supabase sends: recovery, signup, invite, magiclink
+  const next = searchParams.get('next');
   const error_description = searchParams.get('error_description');
 
   // Handle Supabase error redirects (e.g., expired or invalid link)
@@ -25,8 +27,17 @@ export async function GET(request: Request) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      // Successful authentication
-      return NextResponse.redirect(`${origin}${next}`);
+      // Determine redirect based on type or next parameter
+      let redirectTo = '/dashboard'; // default
+
+      // Password reset flow - redirect to reset password page
+      if (type === 'recovery') {
+        redirectTo = '/reset-password';
+      } else if (next) {
+        redirectTo = next;
+      }
+
+      return NextResponse.redirect(`${origin}${redirectTo}`);
     }
 
     // Log the specific error for debugging
