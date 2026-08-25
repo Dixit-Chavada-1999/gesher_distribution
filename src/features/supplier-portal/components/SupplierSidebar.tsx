@@ -73,7 +73,10 @@ export function SupplierSidebar({
 }: SupplierSidebarProps) {
   const [hasMounted, setHasMounted] = useState(false);
   const pathname = usePathname();
-  const { hasPermission, logout } = useAuthStore();
+  const { hasPermission, logout, appUser } = useAuthStore();
+
+  // Supplier users always have access to supplier portal
+  const isSupplierUser = !!appUser?.supplierId;
 
   useEffect(() => {
     setHasMounted(true);
@@ -133,7 +136,9 @@ export function SupplierSidebar({
         ) : (
           <nav className="space-y-1">
             {NAV_ITEMS.map((item) => {
-              if (!hasPermission(item.permission)) {
+              // Supplier users always have access to supplier portal navigation
+              // Otherwise check explicit permissions
+              if (!isSupplierUser && !hasPermission(item.permission)) {
                 return null;
               }
 

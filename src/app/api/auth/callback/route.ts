@@ -9,11 +9,22 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/shared/lib/supabase/server';
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const url = new URL(request.url);
+  const { searchParams, origin } = url;
+
+  // Log all parameters for debugging
+  console.log('=== Auth Callback Debug ===');
+  console.log('Full URL:', url.toString());
+  console.log('All params:', Object.fromEntries(searchParams.entries()));
+
   const code = searchParams.get('code');
   const type = searchParams.get('type'); // Supabase sends: recovery, signup, invite, magiclink
   const next = searchParams.get('next');
   const error_description = searchParams.get('error_description');
+
+  console.log('Parsed - code:', code ? 'present' : 'missing');
+  console.log('Parsed - type:', type);
+  console.log('Parsed - next:', next);
 
   // Handle Supabase error redirects (e.g., expired or invalid link)
   if (error_description) {
@@ -24,19 +35,39 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+
+    console.log('Code exchange result - error:', error?.message);
+    console.log('Code exchange result - session:', data?.session ? 'present' : 'missing');
+
+    // Check if this is a recovery session from the user's aal (authenticator assurance level)
+    // or from the session's amr (authentication methods reference)
+    if (data?.session) {
+      const amr = data.session.user?.amr;
+      console.log('Session AMR:', JSON.stringify(amr));
+      console.log('Session user app_metadata:', JSON.stringify(data.session.user?.app_metadata));
+    }
 
     if (!error) {
       // Determine redirect based on type or next parameter
       let redirectTo = '/dashboard'; // default
 
       // Password reset flow - redirect to reset password page
-      if (type === 'recovery') {
+      // Check multiple ways to detect recovery:
+      // 1. type parameter from URL
+      // 2. AMR (Authentication Methods Reference) contains 'recovery'
+      const isRecovery = type === 'recovery' ||
+        data?.session?.user?.amr?.some((m: { method: string }) => m.method === 'recovery');
+
+      console.log('Is recovery flow:', isRecovery);
+
+      if (isRecovery) {
         redirectTo = '/reset-password';
       } else if (next) {
         redirectTo = next;
       }
 
+      console.log('Redirecting to:', redirectTo);
       return NextResponse.redirect(`${origin}${redirectTo}`);
     }
 

@@ -94,11 +94,12 @@ async function fetchAppUserByAuthId(authUserId: string): Promise<AppUser | null>
           .select('id, name, is_system_role')
           .eq('id', user.role_id)
           .single(),
-        // Get permissions
+        // Get permissions (only active ones)
         db
           .from('role_permissions')
           .select('permissions:permission_id (name)')
-          .eq('role_id', user.role_id),
+          .eq('role_id', user.role_id)
+          .eq('is_active', true),
       ]);
 
       if (roleResult.error) {
