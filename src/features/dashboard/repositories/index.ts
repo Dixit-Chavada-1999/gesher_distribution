@@ -36,6 +36,7 @@ export async function getUnitsBySKU(): Promise<UnitsBySKUChartData> {
   sixMonthsAgo.setDate(1); // Start of that month
 
   // Query sales_order_items joined with sales_orders and products
+  // Only include inventory products (exclude service and non_inventory)
   const { data, error } = await supabase
     .from('sales_order_items')
     .select(`
@@ -47,15 +48,17 @@ export async function getUnitsBySKU(): Promise<UnitsBySKUChartData> {
         status,
         deleted_at
       ),
-      products (
+      products!inner (
         id,
         sku,
-        name
+        name,
+        item_type
       )
     `)
     .gte('sales_orders.order_date', sixMonthsAgo.toISOString().split('T')[0])
     .is('sales_orders.deleted_at', null)
-    .in('sales_orders.status', ['confirmed', 'processing', 'shipped', 'delivered']);
+    .in('sales_orders.status', ['confirmed', 'processing', 'shipped', 'delivered'])
+    .eq('products.item_type', 'inventory');
 
   if (error) {
     console.error('Error fetching units by SKU:', error);

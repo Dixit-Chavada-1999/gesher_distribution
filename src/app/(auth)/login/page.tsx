@@ -5,6 +5,7 @@
  * Uses AuthLayout for consistent styling.
  */
 
+import { Suspense } from 'react';
 import { Metadata } from 'next';
 import { AuthLayout } from '@/shared/components/layout';
 import { LoginForm } from '@/features/auth/components/LoginForm';
@@ -28,7 +29,9 @@ export default function LoginPage() {
       title="Welcome back"
       description="Enter your credentials to access your account"
     >
-      <LoginForm />
+      <Suspense fallback={<div className="h-96 flex items-center justify-center">Loading...</div>}>
+        <LoginForm />
+      </Suspense>
     </AuthLayout>
   );
 }

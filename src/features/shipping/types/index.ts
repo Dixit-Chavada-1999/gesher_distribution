@@ -2,7 +2,11 @@
  * Shipping Types
  *
  * Types for shipping tracking AI agent - email extraction and status management.
+ * Also includes CMA CGM API integration types.
  */
+
+// Re-export CMA CGM types
+export * from './cma-cgm.types';
 
 // ============================================
 // ENUMS (matching database enums)

@@ -23,7 +23,6 @@ import { ImmediateAttentionTable } from '@/features/operations-dashboard/compone
 import { SKUBreakdown } from '@/features/operations-dashboard/components/SKUBreakdown';
 import { CustomerCommitments } from '@/features/operations-dashboard/components/CustomerCommitments';
 import { ShipmentStatusMix } from '@/features/operations-dashboard/components/ShipmentStatusMix';
-import { RimInstallationRequired } from '@/features/operations-dashboard/components/RimInstallationRequired';
 import { StoryInBrief } from '@/features/operations-dashboard/components/StoryInBrief';
 import { ShipmentOverviewTable } from '@/features/operations-dashboard/components/ShipmentOverviewTable';
 import { SupplierShipmentScheduleTable } from '@/features/operations-dashboard/components/SupplierShipmentScheduleTable';
@@ -349,9 +348,6 @@ export default function OperationsPage() {
 
           {/* Customer Commitments */}
           <CustomerCommitments data={data.customerCommitments} />
-
-          {/* Rim Installation Required - Action Items */}
-          <RimInstallationRequired data={data.rimInstallationRequired} uniqueSkus={data.rimInstallationSkus || []} />
         </TabsContent>
 
         {/* Tab 2: Shipment Overview */}
