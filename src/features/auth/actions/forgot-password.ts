@@ -45,8 +45,9 @@ export async function forgotPasswordAction(
   // Supabase appends a one-time `code` that must be exchanged for a session
   // before the password can be changed. Pointing at /reset-password directly
   // skipped that exchange, so every submit failed with "Auth session missing".
+  // Use path-based redirect (Supabase strips query params from redirect URLs)
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${origin}/api/auth/callback?next=/reset-password`,
+    redirectTo: `${origin}/api/auth/callback/recovery`,
   });
 
   if (error) {
