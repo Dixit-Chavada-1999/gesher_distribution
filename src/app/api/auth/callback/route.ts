@@ -40,24 +40,13 @@ export async function GET(request: Request) {
     console.log('Code exchange result - error:', error?.message);
     console.log('Code exchange result - session:', data?.session ? 'present' : 'missing');
 
-    // Check if this is a recovery session from the user's aal (authenticator assurance level)
-    // or from the session's amr (authentication methods reference)
-    if (data?.session) {
-      const amr = data.session.user?.amr;
-      console.log('Session AMR:', JSON.stringify(amr));
-      console.log('Session user app_metadata:', JSON.stringify(data.session.user?.app_metadata));
-    }
-
     if (!error) {
       // Determine redirect based on type or next parameter
       let redirectTo = '/dashboard'; // default
 
       // Password reset flow - redirect to reset password page
-      // Check multiple ways to detect recovery:
-      // 1. type parameter from URL
-      // 2. AMR (Authentication Methods Reference) contains 'recovery'
-      const isRecovery = type === 'recovery' ||
-        data?.session?.user?.amr?.some((m: { method: string }) => m.method === 'recovery');
+      // Supabase sends type=recovery for password reset links
+      const isRecovery = type === 'recovery';
 
       console.log('Is recovery flow:', isRecovery);
 
