@@ -450,6 +450,8 @@ export const PackingListRepository = {
 
   /**
    * Link packing list to shipment
+   * Note: This only links the shipment_id, does NOT change status.
+   * Status should be managed through transitionStatus in the service layer.
    */
   async linkToShipment(
     id: string,
@@ -460,7 +462,6 @@ export const PackingListRepository = {
       .from('packing_lists')
       .update({
         shipment_id: shipmentId,
-        status: 'shipped' as PackingListStatus,
         updated_at: new Date().toISOString(),
         updated_by: userId || null,
       })

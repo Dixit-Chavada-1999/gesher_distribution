@@ -92,7 +92,7 @@ export function GDC1InventoryTable({ data, uniqueSkus, onEdit }: GDC1InventoryTa
   return (
     <Card>
       <CardHeader>
-        <CardTitle>GDC1 Warehouse Inventory</CardTitle>
+        <CardTitle>GDC 1 Warehouse Inventory</CardTitle>
         <CardDescription>
           {data.length} loads | Total: {totals.total} units |
           Available: {statusSummary['AVAILABLE'] || 0} |
@@ -106,7 +106,8 @@ export function GDC1InventoryTable({ data, uniqueSkus, onEdit }: GDC1InventoryTa
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[50px]">No.</TableHead>
-                <TableHead className="min-w-[120px] whitespace-nowrap">Load #</TableHead>
+                <TableHead className="min-w-[120px] whitespace-nowrap">PO #</TableHead>
+                <TableHead className="min-w-[100px] whitespace-nowrap">SO #</TableHead>
                 {/* Dynamic SKU columns - shows full product name from database */}
                 {uniqueSkus.map((skuInfo) => (
                   <TableHead key={skuInfo.sku} className="text-center text-xs whitespace-nowrap min-w-[100px]" title={skuInfo.sku}>
@@ -115,7 +116,6 @@ export function GDC1InventoryTable({ data, uniqueSkus, onEdit }: GDC1InventoryTa
                 ))}
                 <TableHead className="text-right whitespace-nowrap">Total Qty</TableHead>
                 <TableHead className="whitespace-nowrap min-w-[130px]">Customer</TableHead>
-                <TableHead className="whitespace-nowrap min-w-[90px]">PO</TableHead>
                 <TableHead className="whitespace-nowrap">ETA to US Port</TableHead>
                 <TableHead className="whitespace-nowrap min-w-[150px]">Delivery Address</TableHead>
                 <TableHead className="whitespace-nowrap">Confirmed ETA</TableHead>
@@ -154,7 +154,8 @@ export function GDC1InventoryTable({ data, uniqueSkus, onEdit }: GDC1InventoryTa
                   }
                 >
                   <TableCell className="font-medium">{item.no}</TableCell>
-                  <TableCell className="font-mono text-sm whitespace-nowrap">{item.loadNumber}</TableCell>
+                  <TableCell className="font-mono text-sm whitespace-nowrap">{item.po || '-'}</TableCell>
+                  <TableCell className="font-mono text-sm whitespace-nowrap">{item.loadNumber || '-'}</TableCell>
                   {/* Dynamic SKU quantity columns - product names from database */}
                   {uniqueSkus.map((skuInfo) => {
                     const qty = getSkuQty(item.items, skuInfo.sku);
@@ -165,8 +166,7 @@ export function GDC1InventoryTable({ data, uniqueSkus, onEdit }: GDC1InventoryTa
                     );
                   })}
                   <TableCell className="text-right font-semibold">{item.totalQty}</TableCell>
-                  <TableCell>{item.customer || '-'}</TableCell>
-                  <TableCell className="font-mono text-xs">{item.po || '-'}</TableCell>
+                  <TableCell>{item.customer || 'Unallocated'}</TableCell>
                   <TableCell>{formatDate(item.etaToUsPort)}</TableCell>
                   <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate" title={item.deliveryAddress || ''}>
                     {item.deliveryAddress || '-'}
@@ -221,6 +221,7 @@ export function GDC1InventoryTable({ data, uniqueSkus, onEdit }: GDC1InventoryTa
               <TableRow className="bg-muted/50 font-semibold border-t-2">
                 <TableCell></TableCell>
                 <TableCell>TOTAL</TableCell>
+                <TableCell></TableCell>
                 {/* Dynamic SKU quantity totals */}
                 {uniqueSkus.map((skuInfo) => (
                   <TableCell key={skuInfo.sku} className="text-center">
@@ -228,8 +229,7 @@ export function GDC1InventoryTable({ data, uniqueSkus, onEdit }: GDC1InventoryTa
                   </TableCell>
                 ))}
                 <TableCell className="text-right">{totals.total}</TableCell>
-                {/* Empty cells: Customer, PO, ETA to US Port, Delivery Address, Confirmed ETA, Customer Expected, Actual Delivery */}
-                <TableCell></TableCell>
+                {/* Empty cells: Customer, ETA to US Port, Delivery Address, Confirmed ETA, Customer Expected, Actual Delivery */}
                 <TableCell></TableCell>
                 <TableCell></TableCell>
                 <TableCell></TableCell>

@@ -18,7 +18,7 @@
  * - Memoized computed values with useMemo
  */
 
-import { useState, useMemo, useEffect, useCallback, memo } from 'react';
+import { useState, useMemo, useEffect, useCallback, memo, useRef } from 'react';
 import { useForm, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
@@ -117,6 +117,11 @@ function SalesOrderFormComponent({
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
   const [_isCreditOverridden, setIsCreditOverridden] = useState(false);
 
+  // Track if this is the initial load (for edit mode)
+  // Skip price updates on initial load to preserve existing prices
+  const isInitialLoad = useRef(!!initialData);
+  const previousCustomerId = useRef(customerId);
+
   // ----------------------------------------
   // AUTO-FILL: Customer Addresses
   // ----------------------------------------
@@ -162,9 +167,30 @@ function SalesOrderFormComponent({
   // Effect to auto-fill addresses and update product prices when customer changes
   useEffect(() => {
     if (customerId) {
-      handleCustomerChange(customerId);
+      // Check if this is initial load OR customer hasn't actually changed
+      const customerChanged = previousCustomerId.current !== customerId;
+      previousCustomerId.current = customerId;
+
+      // Only fill addresses on initial load or when customer changes
+      if (isInitialLoad.current || customerChanged) {
+        handleCustomerChange(customerId);
+      }
+
       // Reset credit override when customer changes
-      setIsCreditOverridden(false);
+      if (customerChanged) {
+        setIsCreditOverridden(false);
+      }
+
+      // Skip price updates on initial load (preserve existing prices when editing)
+      if (isInitialLoad.current) {
+        isInitialLoad.current = false;
+        return;
+      }
+
+      // Only re-fetch prices when customer actually changes (not on initial load)
+      if (!customerChanged) {
+        return;
+      }
 
       // Re-fetch prices for existing items based on new customer's channel
       const updateItemPrices = async () => {
@@ -173,6 +199,19 @@ function SalesOrderFormComponent({
           const updatedItems = await Promise.all(
             currentItems.map(async (item) => {
               if (!item.productId) { return item; }
+
+              // Find the product to check its item type
+              const product = masterData.products.find(p => p.id === item.productId);
+
+              // Skip price updates for service/non_inventory items that already have a price
+              // These items typically have manually entered prices that shouldn't be overwritten
+              if (product && (product.itemType === 'service' || product.itemType === 'non_inventory')) {
+                const currentPrice = Number(item.unitPrice) || 0;
+                if (currentPrice > 0) {
+                  // Keep the existing manually-entered price
+                  return item;
+                }
+              }
 
               try {
                 const result = await getProductPrice(item.productId, customerId, Number(item.quantity) || 1);
@@ -200,7 +239,7 @@ function SalesOrderFormComponent({
       };
       updateItemPrices();
     }
-  }, [customerId, handleCustomerChange, methods, setValue]);
+  }, [customerId, handleCustomerChange, methods, setValue, masterData.products]);
 
   // Credit check handlers
   const handleCreditOverridden = useCallback(() => {
@@ -257,7 +296,12 @@ function SalesOrderFormComponent({
   // ----------------------------------------
 
   const orderSummary = useMemo(() => {
-    const subtotal = items.reduce((sum, item) => sum + Number(item.lineTotal ?? 0), 0);
+    // Calculate pre-tax subtotal (qty × price - discount, before tax)
+    const subtotal = items.reduce((sum, item) => {
+      const itemSubtotal = Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0);
+      const discountAmount = itemSubtotal * (Number(item.discountPercent ?? 0) / 100);
+      return sum + (itemSubtotal - discountAmount);
+    }, 0);
 
     // Calculate discount total
     const discountTotal = items.reduce((sum, item) => {
@@ -269,11 +313,15 @@ function SalesOrderFormComponent({
     const taxTotal = items.reduce((sum, item) => {
       const taxRate = masterData.taxRates.find((t) => t.id === item.taxRateId);
       const rate = taxRate?.rate ?? 0;
-      return sum + Number(item.lineTotal ?? 0) * (rate / 100);
+      const itemSubtotal = Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0);
+      const discountAmount = itemSubtotal * (Number(item.discountPercent ?? 0) / 100);
+      const subtotalAfterDiscount = itemSubtotal - discountAmount;
+      return sum + subtotalAfterDiscount * (rate / 100);
     }, 0);
 
     const shippingCost = 0; // Will be set by shipping method selection
 
+    // Grand total = subtotal + tax (lineTotal already includes tax, so we use subtotal + tax)
     const grandTotal = subtotal + taxTotal + shippingCost;
 
     return {

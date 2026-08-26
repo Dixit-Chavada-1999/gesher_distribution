@@ -85,7 +85,7 @@ export function RimInstallationRequired({ data, uniqueSkus }: RimInstallationReq
           <Table>
             <TableHeader>
               <TableRow className="bg-amber-100/50">
-                <TableHead>GDC1 No.</TableHead>
+                <TableHead>GDC 1 No.</TableHead>
                 <TableHead>Load #</TableHead>
                 {/* Dynamic SKU columns */}
                 {uniqueSkus.map((skuInfo) => (

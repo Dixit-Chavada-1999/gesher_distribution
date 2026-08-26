@@ -11,11 +11,13 @@
  * - Memoized callbacks with useCallback
  */
 
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useFormContext, Controller } from 'react-hook-form';
+import { Wand2 } from 'lucide-react';
 
 import { Label } from '@/shared/components/ui/label';
 import { Input } from '@/shared/components/ui/input';
+import { Button } from '@/shared/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -26,6 +28,7 @@ import {
 import { Separator } from '@/shared/components/ui/separator';
 
 import type { QuoteFormInput } from '../lib/schemas';
+import { getNextQuoteNumber } from '../actions';
 
 // ============================================
 // TYPES
@@ -60,12 +63,28 @@ function QuoteInfoSectionComponent({
   salesReps,
   onCustomerChange,
 }: QuoteInfoSectionProps) {
-  const { register, control, formState: { errors } } = useFormContext<QuoteFormInput>();
+  const { register, control, setValue, formState: { errors } } = useFormContext<QuoteFormInput>();
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // Memoized customer change handler
   const handleCustomerChange = useCallback((value: string) => {
     onCustomerChange?.(value);
   }, [onCustomerChange]);
+
+  // Auto-generate quote number handler
+  const handleAutoGenerate = useCallback(async () => {
+    setIsGenerating(true);
+    try {
+      const result = await getNextQuoteNumber();
+      if (result.success && result.data) {
+        setValue('quoteNumber', result.data);
+      }
+    } catch (error) {
+      console.error('Failed to generate quote number:', error);
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [setValue]);
 
   return (
     <div className="space-y-6">
@@ -86,13 +105,30 @@ function QuoteInfoSectionComponent({
         {/* Quote Number */}
         <div className="space-y-2">
           <Label htmlFor="quoteNumber">Quote Number</Label>
-          <Input
-            id="quoteNumber"
-            placeholder="Auto-generated"
-            disabled
-            className="bg-muted"
-            {...register('quoteNumber')}
-          />
+          <div className="flex gap-2">
+            <Input
+              id="quoteNumber"
+              placeholder="Enter or auto-generate"
+              className={errors.quoteNumber ? 'border-destructive' : ''}
+              {...register('quoteNumber')}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={handleAutoGenerate}
+              disabled={isGenerating}
+              title="Auto-generate quote number"
+            >
+              <Wand2 className={`h-4 w-4 ${isGenerating ? 'animate-pulse' : ''}`} />
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Enter a custom number or click the wand to auto-generate
+          </p>
+          {errors.quoteNumber && (
+            <p className="text-sm text-destructive">{errors.quoteNumber.message}</p>
+          )}
         </div>
 
         {/* Quote Date */}

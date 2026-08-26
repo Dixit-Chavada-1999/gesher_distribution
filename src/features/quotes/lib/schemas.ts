@@ -95,6 +95,7 @@ export const quoteItemFormSchema = z.object({
 // ============================================
 
 export const createQuoteSchema = z.object({
+  quoteNumber: z.string().max(50).optional(), // Optional: if not provided, auto-generated
   quoteDate: z.coerce.date({
     required_error: 'Quote date is required.',
     invalid_type_error: 'Please enter a valid date.',
@@ -198,6 +199,7 @@ export type AddressFormInput = z.infer<typeof addressFormSchema>;
  */
 export function formToCreateDTO(form: QuoteFormInput) {
   return {
+    quoteNumber: form.quoteNumber?.trim() || undefined, // Optional: if empty, will be auto-generated
     quoteDate: new Date(form.quoteDate),
     validUntil: form.validUntil ? new Date(form.validUntil) : null,
     customerId: form.customerId,

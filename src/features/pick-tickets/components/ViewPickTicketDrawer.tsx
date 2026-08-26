@@ -25,6 +25,7 @@ import {
   ClipboardList,
   Loader2,
 } from 'lucide-react';
+import { Input } from '@/shared/components/ui/input';
 import { cn } from '@/shared/lib/utils';
 import { usePickTicket } from '../hooks/usePickTicket';
 import { createPackingListFromPickTicket } from '../actions/packing-list.actions';
@@ -161,6 +162,15 @@ export function ViewPickTicketDrawer({
 
   const handlePickAll = async (itemId: string, quantityToPick: number) => {
     await handlePickItem(itemId, 0, quantityToPick, quantityToPick);
+  };
+
+  const handleDirectInput = async (itemId: string, value: string, quantityToPick: number) => {
+    const newQuantity = parseInt(value, 10);
+    if (isNaN(newQuantity) || newQuantity < 0) {
+      return;
+    }
+    const clampedQuantity = Math.min(newQuantity, quantityToPick);
+    await handlePickItem(itemId, 0, quantityToPick, clampedQuantity);
   };
 
   // Check if picking is active (can pick items)
@@ -336,7 +346,7 @@ export function ViewPickTicketDrawer({
                                 <Button
                                   variant="outline"
                                   size="icon"
-                                  className="h-6 w-6"
+                                  className="h-7 w-7"
                                   onClick={() => handlePickItem(item.id, item.quantityPicked, item.quantityToPick, -1)}
                                   disabled={item.quantityPicked === 0 || pickingItemId === item.id}
                                 >
@@ -345,17 +355,42 @@ export function ViewPickTicketDrawer({
                                 <Button
                                   variant="outline"
                                   size="icon"
-                                  className="h-6 w-6"
+                                  className="h-7 w-7"
                                   onClick={() => handlePickItem(item.id, item.quantityPicked, item.quantityToPick, 1)}
                                   disabled={item.quantityPicked >= item.quantityToPick || pickingItemId === item.id}
                                 >
                                   +
                                 </Button>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  max={item.quantityToPick}
+                                  defaultValue={item.quantityPicked}
+                                  key={`${item.id}-${item.quantityPicked}`}
+                                  className="h-7 w-16 text-center text-sm px-1"
+                                  disabled={pickingItemId === item.id}
+                                  onChange={(e) => {
+                                    const val = parseInt(e.target.value, 10);
+                                    if (!isNaN(val) && val > item.quantityToPick) {
+                                      e.target.value = String(item.quantityToPick);
+                                    }
+                                    if (!isNaN(val) && val < 0) {
+                                      e.target.value = '0';
+                                    }
+                                  }}
+                                  onBlur={(e) => handleDirectInput(item.id, e.target.value, item.quantityToPick)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      handleDirectInput(item.id, (e.target as HTMLInputElement).value, item.quantityToPick);
+                                    }
+                                  }}
+                                />
+                                <span className="text-sm text-muted-foreground">/ {item.quantityToPick}</span>
                                 {!isPicked && (
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    className="h-6 text-xs"
+                                    className="h-7 text-xs"
                                     onClick={() => handlePickAll(item.id, item.quantityToPick)}
                                     disabled={pickingItemId === item.id}
                                   >
@@ -364,16 +399,18 @@ export function ViewPickTicketDrawer({
                                 )}
                               </div>
                             )}
-                            <p className={cn(
-                              'text-sm font-medium min-w-[50px]',
-                              isPicked ? 'text-emerald-600' : ''
-                            )}>
-                              {pickingItemId === item.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin inline" />
-                              ) : (
-                                `${item.quantityPicked} / ${item.quantityToPick}`
-                              )}
-                            </p>
+                            {!canPickItems && (
+                              <p className={cn(
+                                'text-sm font-medium min-w-[50px]',
+                                isPicked ? 'text-emerald-600' : ''
+                              )}>
+                                {pickingItemId === item.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin inline" />
+                                ) : (
+                                  `${item.quantityPicked} / ${item.quantityToPick}`
+                                )}
+                              </p>
+                            )}
                           </div>
                         </div>
                       </div>

@@ -395,6 +395,11 @@ export async function getDashboardStats(): Promise<DashboardStat[]> {
   const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
 
+  // Year-to-date dates
+  const currentYearStart = new Date(now.getFullYear(), 0, 1); // Jan 1 of current year
+  const lastYearStart = new Date(now.getFullYear() - 1, 0, 1); // Jan 1 of last year
+  const lastYearSameDay = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()); // Same day last year
+
   // Fetch current month orders
   const { data: currentMonthOrders } = await supabase
     .from('sales_orders')
@@ -409,6 +414,23 @@ export async function getDashboardStats(): Promise<DashboardStat[]> {
     .select('id, grand_total, subtotal')
     .gte('order_date', lastMonthStart.toISOString().split('T')[0])
     .lte('order_date', lastMonthEnd.toISOString().split('T')[0])
+    .is('deleted_at', null)
+    .in('status', ['confirmed', 'processing', 'shipped', 'delivered']);
+
+  // Fetch YTD orders (Jan 1 to today)
+  const { data: ytdOrders } = await supabase
+    .from('sales_orders')
+    .select('id, grand_total, subtotal')
+    .gte('order_date', currentYearStart.toISOString().split('T')[0])
+    .is('deleted_at', null)
+    .in('status', ['confirmed', 'processing', 'shipped', 'delivered']);
+
+  // Fetch last year same period orders for YTD comparison
+  const { data: lastYearYtdOrders } = await supabase
+    .from('sales_orders')
+    .select('id, grand_total, subtotal')
+    .gte('order_date', lastYearStart.toISOString().split('T')[0])
+    .lte('order_date', lastYearSameDay.toISOString().split('T')[0])
     .is('deleted_at', null)
     .in('status', ['confirmed', 'processing', 'shipped', 'delivered']);
 
@@ -461,6 +483,83 @@ export async function getDashboardStats(): Promise<DashboardStat[]> {
     }
   }
 
+  // Fetch YTD items for units and margin calculation
+  const ytdOrderIds = ytdOrders?.map(o => o.id) || [];
+  let ytdUnits = 0;
+  let ytdUnits38 = 0;
+  let ytdUnits24 = 0;
+  let ytdTotalRevenue = 0;
+  let ytdTotalCost = 0;
+
+  if (ytdOrderIds.length > 0) {
+    const { data: ytdItemsData } = await supabase
+      .from('sales_order_items')
+      .select(`
+        quantity,
+        unit_price,
+        products (
+          rim_size,
+          name,
+          base_cost
+        )
+      `)
+      .in('sales_order_id', ytdOrderIds);
+
+    if (ytdItemsData) {
+      for (const item of ytdItemsData) {
+        const quantity = item.quantity || 0;
+        const unitPrice = item.unit_price || 0;
+        const product = item.products as unknown as { rim_size: string | null; name: string | null; base_cost: number | null } | null;
+        const baseCost = product?.base_cost || 0;
+
+        ytdUnits += quantity;
+        ytdTotalRevenue += unitPrice * quantity;
+        ytdTotalCost += baseCost * quantity;
+
+        const rimSize = product?.rim_size?.replace(/"/g, '').trim() || '';
+        const name = product?.name?.toLowerCase() || '';
+
+        if (rimSize.includes('38') || name.includes('38')) {
+          ytdUnits38 += quantity;
+        } else if (rimSize.includes('24') || name.includes('24')) {
+          ytdUnits24 += quantity;
+        }
+      }
+    }
+  }
+
+  // Fetch last year YTD items for units and margin comparison
+  const lastYearYtdOrderIds = lastYearYtdOrders?.map(o => o.id) || [];
+  let lastYearYtdUnits = 0;
+  let lastYearYtdTotalRevenue = 0;
+  let lastYearYtdTotalCost = 0;
+
+  if (lastYearYtdOrderIds.length > 0) {
+    const { data: lastYearYtdItemsData } = await supabase
+      .from('sales_order_items')
+      .select(`
+        quantity,
+        unit_price,
+        products (
+          base_cost
+        )
+      `)
+      .in('sales_order_id', lastYearYtdOrderIds);
+
+    if (lastYearYtdItemsData) {
+      for (const item of lastYearYtdItemsData) {
+        const quantity = item.quantity || 0;
+        const unitPrice = item.unit_price || 0;
+        const product = item.products as unknown as { base_cost: number | null } | null;
+        const baseCost = product?.base_cost || 0;
+
+        lastYearYtdUnits += quantity;
+        lastYearYtdTotalRevenue += unitPrice * quantity;
+        lastYearYtdTotalCost += baseCost * quantity;
+      }
+    }
+  }
+
   // Fetch open orders count
   const { count: openOrdersCount } = await supabase
     .from('sales_orders')
@@ -489,10 +588,20 @@ export async function getDashboardStats(): Promise<DashboardStat[]> {
   const currentRevenue = currentMonthOrders?.reduce((sum, o) => sum + (o.grand_total || 0), 0) || 0;
   const lastRevenue = lastMonthOrders?.reduce((sum, o) => sum + (o.grand_total || 0), 0) || 0;
 
-  // Calculate margin (estimate: assuming 32% base margin)
-  const currentSubtotal = currentMonthOrders?.reduce((sum, o) => sum + (o.subtotal || 0), 0) || 0;
-  const estimatedCost = currentSubtotal * 0.68; // Estimate 68% cost = 32% margin
-  const blendedMargin = currentSubtotal > 0 ? ((currentSubtotal - estimatedCost) / currentSubtotal) * 100 : 32;
+  // Calculate YTD metrics
+  const ytdRevenue = ytdOrders?.reduce((sum, o) => sum + (o.grand_total || 0), 0) || 0;
+  const lastYearYtdRevenue = lastYearYtdOrders?.reduce((sum, o) => sum + (o.grand_total || 0), 0) || 0;
+  const ytdRevenueChange = lastYearYtdRevenue > 0 ? ((ytdRevenue - lastYearYtdRevenue) / lastYearYtdRevenue) * 100 : 0;
+  const ytdUnitsChange = lastYearYtdUnits > 0 ? ((ytdUnits - lastYearYtdUnits) / lastYearYtdUnits) * 100 : 0;
+
+  // Calculate YTD Blended Margin (real data from products.base_cost)
+  const ytdBlendedMargin = ytdTotalRevenue > 0
+    ? ((ytdTotalRevenue - ytdTotalCost) / ytdTotalRevenue) * 100
+    : 0;
+  const lastYearYtdBlendedMargin = lastYearYtdTotalRevenue > 0
+    ? ((lastYearYtdTotalRevenue - lastYearYtdTotalCost) / lastYearYtdTotalRevenue) * 100
+    : 0;
+  const marginChange = ytdBlendedMargin - lastYearYtdBlendedMargin; // Absolute difference in margin %
 
   // Calculate changes
   const revenueChange = lastRevenue > 0 ? ((currentRevenue - lastRevenue) / lastRevenue) * 100 : 0;
@@ -518,7 +627,17 @@ export async function getDashboardStats(): Promise<DashboardStat[]> {
       trend: revenueChange >= 0 ? 'up' : 'down',
       icon: 'dollar-sign',
       color: 'bg-emerald-500',
-      target: 'Target: $220,000',
+      target: '$220,000',
+    },
+    {
+      id: 'revenue-ytd',
+      title: 'Revenue (YTD)',
+      value: formatCurrency(ytdRevenue),
+      change: `${ytdRevenueChange >= 0 ? '+' : ''}${ytdRevenueChange.toFixed(1)}%`,
+      trend: ytdRevenueChange >= 0 ? 'up' : 'down',
+      icon: 'trending-up',
+      color: 'bg-teal-500',
+      subtitle: 'vs same period last year',
     },
     {
       id: 'units-sold',
@@ -531,14 +650,25 @@ export async function getDashboardStats(): Promise<DashboardStat[]> {
       subtitle: `38": ${currentMonthUnits38} | 24": ${currentMonthUnits24}`,
     },
     {
+      id: 'units-sold-ytd',
+      title: 'Units Sold (YTD)',
+      value: ytdUnits.toLocaleString(),
+      change: `${ytdUnitsChange >= 0 ? '+' : ''}${ytdUnitsChange.toFixed(1)}%`,
+      trend: ytdUnitsChange >= 0 ? 'up' : 'down',
+      icon: 'package',
+      color: 'bg-indigo-500',
+      subtitle: `38": ${ytdUnits38} | 24": ${ytdUnits24}`,
+    },
+    {
       id: 'blended-margin',
-      title: 'Blended Margin',
-      value: `${blendedMargin.toFixed(1)}%`,
-      change: '+2.1%',
-      trend: 'up',
+      title: 'Blended Margin (YTD)',
+      value: `${ytdBlendedMargin.toFixed(1)}%`,
+      change: `${marginChange >= 0 ? '+' : ''}${marginChange.toFixed(1)}%`,
+      trend: marginChange >= 0 ? 'up' : 'down',
       icon: 'percent',
       color: 'bg-violet-500',
-      target: 'Target: 30%',
+      subtitle: 'vs same period last year',
+      target: '30%',
     },
     {
       id: 'open-orders',

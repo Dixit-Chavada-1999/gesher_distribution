@@ -126,7 +126,7 @@ export function OperationsDashboardContent() {
           <TabsTrigger value="executive-summary">Executive Summary</TabsTrigger>
           <TabsTrigger value="shipment-overview">Shipment Overview</TabsTrigger>
           <TabsTrigger value="supplier-schedule">Supplier Schedule</TabsTrigger>
-          <TabsTrigger value="gdc1-inventory">GDC1 Inventory</TabsTrigger>
+          <TabsTrigger value="gdc1-inventory">GDC 1 Inventory</TabsTrigger>
         </TabsList>
 
         {/* Tab 1: Executive Summary */}

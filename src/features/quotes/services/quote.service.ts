@@ -172,9 +172,10 @@ export const quoteService = {
       };
     } catch (error) {
       console.error('QuoteService.createFromForm error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create quote';
       return {
         success: false,
-        error: 'Failed to create quote',
+        error: errorMessage,
       };
     }
   },

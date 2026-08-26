@@ -223,6 +223,7 @@ export interface UpdateQuoteItemDTO {
 }
 
 export interface CreateQuoteDTO {
+  quoteNumber?: string; // Optional: if not provided, auto-generated
   quoteDate: Date;
   validUntil?: Date | null;
   customerId: string;

@@ -6,8 +6,8 @@
  * Client component with inventory table, filters, and actions.
  */
 
-import { useState, useCallback } from 'react';
-import { Search, Filter, AlertTriangle, RefreshCw, Plus } from 'lucide-react';
+import { useState, useCallback, useEffect } from 'react';
+import { Search, Filter, AlertTriangle, RefreshCw, Plus, Package, Truck } from 'lucide-react';
 
 import { Input } from '@/shared/components/ui/input';
 import { Button } from '@/shared/components/ui/button';
@@ -26,6 +26,7 @@ import { ViewInventoryDrawer } from './ViewInventoryDrawer';
 import { AddInventoryDrawer } from './AddInventoryDrawer';
 import { AdjustInventoryDialog } from './AdjustInventoryDialog';
 import { useInventory } from '../hooks/useInventory';
+import { getInventoryStats, type InventoryStats } from '../actions';
 import type { InventoryListItem, InventoryListParams } from '../types';
 
 export function InventoryPageContent() {
@@ -41,9 +42,21 @@ export function InventoryPageContent() {
   const [isAddDrawerOpen, setIsAddDrawerOpen] = useState(false);
   const [isAdjustDialogOpen, setIsAdjustDialogOpen] = useState(false);
   const [selectedItemForAdjust, setSelectedItemForAdjust] = useState<InventoryListItem | null>(null);
+  const [inventoryStats, setInventoryStats] = useState<InventoryStats>({ onOrder: 0, inTransit: 0 });
 
   // Data fetching
   const { data, meta, isLoading, error, refetch } = useInventory(params);
+
+  // Fetch On Order and In Transit stats
+  useEffect(() => {
+    async function fetchStats() {
+      const result = await getInventoryStats();
+      if (result.success && result.data) {
+        setInventoryStats(result.data);
+      }
+    }
+    fetchStats();
+  }, []);
 
   // Handlers
   const handleSearch = useCallback((value: string) => {
@@ -89,6 +102,40 @@ export function InventoryPageContent() {
 
   return (
     <div className="space-y-6">
+      {/* On Order & In Transit Cards - Prominent at Top */}
+      <div className="grid grid-cols-2 gap-4">
+        <Card className="bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800">
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-purple-100 dark:bg-purple-900/50 rounded-lg">
+                <Package className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                  {inventoryStats.onOrder.toLocaleString()}
+                </div>
+                <p className="text-xs text-purple-600/70 dark:text-purple-400/70">On Order (from POs)</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
+                <Truck className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                  {inventoryStats.inTransit.toLocaleString()}
+                </div>
+                <p className="text-xs text-blue-600/70 dark:text-blue-400/70">In Transit (Shipments)</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card>

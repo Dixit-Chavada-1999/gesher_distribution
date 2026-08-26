@@ -267,7 +267,7 @@ export async function exportTabToPDF(
     'executive-summary': 'Executive Summary Report',
     'shipment-overview': 'Shipment Overview Report',
     'supplier-schedule': 'Supplier Schedule Report',
-    'gdc1-inventory': 'GDC1 Inventory Report',
+    'gdc1-inventory': 'GDC 1 Inventory Report',
   };
 
   await exportElementToPDF(tabContent, {

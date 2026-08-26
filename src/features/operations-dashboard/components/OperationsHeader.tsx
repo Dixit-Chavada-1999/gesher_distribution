@@ -112,13 +112,14 @@ export function OperationsHeader({
               <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />
               Shipment Overview (Excel)
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onExport?.('supplier-schedule')}>
+            {/* HIDDEN: Supplier Schedule export - per Ankur/Jenny feedback Aug 26, 2025 */}
+            {/* <DropdownMenuItem onClick={() => onExport?.('supplier-schedule')}>
               <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />
               Supplier Schedule (Excel)
-            </DropdownMenuItem>
+            </DropdownMenuItem> */}
             <DropdownMenuItem onClick={() => onExport?.('gdc1-inventory')}>
               <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />
-              GDC1 Inventory (Excel)
+              GDC 1 Inventory (Excel)
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => onExport?.('all')}>

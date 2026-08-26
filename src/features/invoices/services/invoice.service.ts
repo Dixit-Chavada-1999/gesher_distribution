@@ -20,9 +20,12 @@ import type {
   InvoiceListParams,
   InvoiceStatus,
   InvoicePayment,
+  CreateInvoiceDTO,
+  CreateInvoiceItemDTO,
 } from '../types';
 import { INVOICE_STATUS_TRANSITIONS } from '../types';
 import { creditCheckService } from '@/features/customers/services/credit-check.service';
+import { salesOrderService } from '@/features/sales-orders/services/sales-order.service';
 
 // ============================================
 // TYPES
@@ -65,6 +68,105 @@ function isValidStatusTransition(currentStatus: InvoiceStatus, newStatus: Invoic
 // ============================================
 
 export const invoiceService = {
+  /**
+   * Create invoice from a Sales Order
+   * Maps all SO data to invoice format
+   */
+  async createFromSalesOrder(
+    salesOrderId: string,
+    options: {
+      dueDate?: Date;
+      paymentTerms?: string;
+    } = {},
+    userId?: string
+  ): Promise<ServiceResult<InvoiceWithItems>> {
+    try {
+      // Fetch the sales order with items
+      const soResult = await salesOrderService.getById(salesOrderId);
+
+      if (!soResult.success || !soResult.data) {
+        return {
+          success: false,
+          error: soResult.error || 'Sales order not found',
+        };
+      }
+
+      const salesOrder = soResult.data;
+
+      // Check if invoice already exists for this SO
+      const existingResult = await invoiceRepository.findMany({
+        salesOrderId: salesOrderId,
+        limit: 1,
+      });
+
+      if (existingResult.data.length > 0) {
+        return {
+          success: false,
+          error: 'An invoice already exists for this sales order',
+        };
+      }
+
+      // Validate SO status - only allow invoicing for shipped or delivered orders
+      const allowedStatuses = ['shipped', 'delivered', 'confirmed', 'processing'];
+      if (!allowedStatuses.includes(salesOrder.status)) {
+        return {
+          success: false,
+          error: `Cannot create invoice for order in '${salesOrder.status}' status. Order must be confirmed, processing, shipped, or delivered.`,
+        };
+      }
+
+      // Map SO items to invoice items
+      const invoiceItems: CreateInvoiceItemDTO[] = salesOrder.items.map((item) => ({
+        productId: item.productId,
+        salesOrderItemId: item.id,
+        shipmentItemId: null,
+        sku: item.sku,
+        description: item.description,
+        quantity: item.quantity,
+        unitCode: item.unitCode,
+        unitPrice: item.unitPrice,
+        discountPercent: item.discountPercent,
+        taxRate: item.taxRate,
+      }));
+
+      // Create invoice DTO
+      const invoiceDTO: CreateInvoiceDTO = {
+        invoiceDate: new Date(),
+        dueDate: options.dueDate || null,
+        customerId: salesOrder.customerId,
+        salesOrderId: salesOrder.id,
+        shipmentId: null,
+        currencyCode: salesOrder.currencyCode,
+        status: 'draft',
+        paymentTerms: options.paymentTerms || null,
+        billingAddress: {
+          street: salesOrder.billingAddressStreet,
+          city: salesOrder.billingAddressCity,
+          state: salesOrder.billingAddressState,
+          postalCode: salesOrder.billingAddressPostalCode,
+          country: salesOrder.billingAddressCountry,
+        },
+        items: invoiceItems,
+        customerNotes: salesOrder.customerNotes,
+        internalNotes: `Created from Sales Order ${salesOrder.orderNumber}`,
+      };
+
+      // Create the invoice
+      const invoice = await invoiceRepository.create(invoiceDTO, userId);
+
+      return {
+        success: true,
+        data: invoice,
+      };
+    } catch (error) {
+      console.error('InvoiceService.createFromSalesOrder error:', error);
+      return {
+        success: false,
+        error: 'Failed to create invoice from sales order',
+      };
+    }
+  },
+
   /**
    * Get paginated list of invoices
    */

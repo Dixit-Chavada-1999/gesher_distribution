@@ -299,7 +299,8 @@ class PickTicketRepositoryImpl {
         items:pick_ticket_items(*),
         sales_orders(id, order_number, status, customers(name)),
         locations(id, location_code, name),
-        users!pick_tickets_assigned_to_fkey(id, first_name, last_name, email)
+        users!pick_tickets_assigned_to_fkey(id, first_name, last_name, email),
+        packing_lists(id, packing_list_number, status)
       `
       )
       .eq('id', id)
@@ -322,6 +323,9 @@ class PickTicketRepositoryImpl {
     const customer = salesOrder?.customers as Record<string, unknown>;
     const warehouse = data.locations as Record<string, unknown>;
     const user = data.users as Record<string, unknown>;
+    const packingListsRaw = data.packing_lists;
+    // packing_lists returns an array, get the first one (there should only be one per pick ticket)
+    const packingListData = Array.isArray(packingListsRaw) ? packingListsRaw[0] : packingListsRaw;
 
     const pickTicket = mapToPickTicket(data as unknown as DbPickTicket);
     const items = ((data.items as DbPickTicketItem[]) || []).map(mapToPickTicketItem);
@@ -350,6 +354,13 @@ class PickTicketRepositoryImpl {
             firstName: user.first_name as string,
             lastName: user.last_name as string,
             email: user.email as string,
+          }
+        : undefined,
+      packingList: packingListData
+        ? {
+            id: (packingListData as Record<string, unknown>).id as string,
+            packingListNumber: (packingListData as Record<string, unknown>).packing_list_number as string,
+            status: (packingListData as Record<string, unknown>).status as import('../types').PackingListStatus,
           }
         : undefined,
     };

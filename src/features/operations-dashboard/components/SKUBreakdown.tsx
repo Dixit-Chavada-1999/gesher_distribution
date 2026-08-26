@@ -57,7 +57,7 @@ export function SKUBreakdown({ data }: SKUBreakdownProps) {
           <div>
             <CardTitle className="text-base flex items-center gap-2">
               <Package className="h-4 w-4" />
-              SKU Quantity Breakdown - Supplier + GDC1 Inventory
+              SKU Quantity Breakdown - Supplier + GDC 1 Inventory
             </CardTitle>
             <CardDescription>Combined inventory across locations</CardDescription>
           </div>
@@ -75,7 +75,7 @@ export function SKUBreakdown({ data }: SKUBreakdownProps) {
             <TableRow className="bg-muted/50">
               <TableHead>Product/SKU</TableHead>
               <TableHead className="text-right">Supplier Outstanding</TableHead>
-              <TableHead className="text-right">GDC1 Available</TableHead>
+              <TableHead className="text-right">GDC 1 Available</TableHead>
               <TableHead className="text-right">Combined Qty</TableHead>
               <TableHead className="text-right w-[150px]">Share of Combined</TableHead>
             </TableRow>

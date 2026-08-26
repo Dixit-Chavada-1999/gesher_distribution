@@ -41,7 +41,7 @@ function SalesOrderInfoSectionComponent({
   warehouses,
   currencies,
 }: SalesOrderInfoSectionProps) {
-  const { register, control } = useFormContext<SalesOrderFormInput>();
+  const { register, control, formState: { errors } } = useFormContext<SalesOrderFormInput>();
 
   // Memoized order statuses
   const orderStatuses = useMemo<OrderStatus[]>(() => [
@@ -88,8 +88,12 @@ function SalesOrderInfoSectionComponent({
           <Input
             id="orderDate"
             type="date"
+            className={errors.orderDate ? 'border-destructive' : ''}
             {...register('orderDate')}
           />
+          {errors.orderDate && (
+            <p className="text-sm text-destructive">{errors.orderDate.message}</p>
+          )}
         </div>
 
         {/* Requested Delivery Date */}
@@ -98,8 +102,12 @@ function SalesOrderInfoSectionComponent({
           <Input
             id="requestedDeliveryDate"
             type="date"
+            className={errors.requestedDeliveryDate ? 'border-destructive' : ''}
             {...register('requestedDeliveryDate')}
           />
+          {errors.requestedDeliveryDate && (
+            <p className="text-sm text-destructive">{errors.requestedDeliveryDate.message}</p>
+          )}
         </div>
 
         {/* Customer */}
@@ -110,7 +118,7 @@ function SalesOrderInfoSectionComponent({
             control={control}
             render={({ field }) => (
               <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger id="customerId">
+                <SelectTrigger id="customerId" className={errors.customerId ? 'border-destructive' : ''}>
                   <SelectValue placeholder="Select customer" />
                 </SelectTrigger>
                 <SelectContent>
@@ -123,6 +131,9 @@ function SalesOrderInfoSectionComponent({
               </Select>
             )}
           />
+          {errors.customerId && (
+            <p className="text-sm text-destructive">{errors.customerId.message}</p>
+          )}
         </div>
 
         {/* Sales Representative */}

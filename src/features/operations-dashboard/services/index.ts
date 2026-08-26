@@ -29,13 +29,14 @@ import type { OperationsData, OperationsFilters, FilterOptions } from '../types'
  */
 export async function getOperationsData(filters?: OperationsFilters): Promise<OperationsData> {
   // Fetch all data in parallel for better performance
+  // HIDDEN: Supplier Schedule skipped - per Ankur/Jenny feedback Aug 26, 2025
   const [
     stats,
     skuBreakdown,
     customerCommitments,
     shipmentStatusMix,
     immediateAttention,
-    supplierScheduleResult,
+    // supplierScheduleResult, // HIDDEN: Supplier Schedule
     gdc1InventoryResult,
     rimInstallationResult,
   ] = await Promise.all([
@@ -44,10 +45,13 @@ export async function getOperationsData(filters?: OperationsFilters): Promise<Op
     getCustomerCommitments(undefined, filters),
     getShipmentStatusMix(filters),
     getImmediateAttention(filters),
-    getSupplierShipmentSchedule(filters),
+    // getSupplierShipmentSchedule(filters), // HIDDEN: Supplier Schedule - skipped to save API time
     getGDC1Inventory(filters),
     getRimInstallationRequired(filters),
   ]);
+
+  // HIDDEN: Supplier Schedule - return empty data
+  const supplierScheduleResult = { data: [], uniqueSkus: [] };
 
   // Extract data and unique SKUs from results
   const supplierShipmentSchedule = supplierScheduleResult.data;

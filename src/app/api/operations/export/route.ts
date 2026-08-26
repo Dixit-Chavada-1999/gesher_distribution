@@ -193,14 +193,14 @@ function createExecutiveSummarySheet(
   // Section header
   mergeAndStyle(
     ws, currentRow, 1, currentRow, 5,
-    'SKU QUANTITY BREAKDOWN - GALILEO + GDC1 INVENTORY',
+    'SKU QUANTITY BREAKDOWN - GALILEO + GDC 1 INVENTORY',
     FONTS.sectionHeader,
     COLORS.green
   );
   ws.getRow(currentRow).height = 22;
   currentRow++;
 
-  const skuHeaders = ['SKU', 'Galileo Outstanding Qty', 'GDC1 Available Inventory', 'Combined Qty', 'Share of Combined'];
+  const skuHeaders = ['SKU', 'Galileo Outstanding Qty', 'GDC 1 Available Inventory', 'Combined Qty', 'Share of Combined'];
   skuHeaders.forEach((header, index) => {
     const cell = ws.getCell(currentRow, index + 1);
     cell.value = header;
@@ -422,7 +422,7 @@ function createExecutiveSummarySheet(
     currentRow++;
 
     // Build dynamic headers
-    const rimHeaders = ['GDC1 No.', 'Load #', ...rimSkus.map(s => s.productName), 'Total Qty', 'Status'];
+    const rimHeaders = ['GDC 1 No.', 'Load #', ...rimSkus.map(s => s.productName), 'Total Qty', 'Status'];
     rimHeaders.forEach((header, index) => {
       const cell = ws.getCell(currentRow, index + 1);
       cell.value = header;
@@ -709,9 +709,10 @@ function createShipmentOverviewSheet(workbook: ExcelJS.Workbook, data: Operation
 }
 
 // ============================================
-// SUPPLIER SCHEDULE SHEET
+// HIDDEN: SUPPLIER SCHEDULE SHEET - per Ankur/Jenny feedback Aug 26, 2025
 // ============================================
 
+/*
 function createSupplierScheduleSheet(workbook: ExcelJS.Workbook, data: OperationsData): void {
   const ws = workbook.addWorksheet('Shipment Schedule Galileo');
 
@@ -826,9 +827,10 @@ function createSupplierScheduleSheet(workbook: ExcelJS.Workbook, data: Operation
     currentRow++;
   });
 }
+*/
 
 // ============================================
-// GDC1 INVENTORY SHEET
+// GDC 1 INVENTORY SHEET
 // ============================================
 
 function createGDC1InventorySheet(workbook: ExcelJS.Workbook, data: OperationsData): void {
@@ -854,7 +856,7 @@ function createGDC1InventorySheet(workbook: ExcelJS.Workbook, data: OperationsDa
   let currentRow = 1;
   const totalColumns = startWidths.length + qtyWidths.length + midWidths.length + priceWidths.length + endWidths.length;
 
-  mergeAndStyle(ws, currentRow, 1, currentRow, totalColumns, 'GDC1 Inventory', FONTS.headerTitle, COLORS.darkBlue);
+  mergeAndStyle(ws, currentRow, 1, currentRow, totalColumns, 'GDC 1 Inventory', FONTS.headerTitle, COLORS.darkBlue);
   ws.getRow(currentRow).height = 35;
   currentRow++;
 
@@ -1008,7 +1010,7 @@ export async function GET(request: NextRequest) {
       console.log(`  ${i + 1}. ${item.loadNumber} | ${item.customer} | ${item.status}`);
     });
     console.log('');
-    console.log('--- GDC1 Inventory (Warehouse) ---');
+    console.log('--- GDC 1 Inventory (Warehouse) ---');
     console.log('Total items:', data.gdc1Inventory?.length || 0);
     data.gdc1Inventory?.forEach((item, i) => {
       console.log(`  ${i + 1}. ${item.loadNumber} | ${item.customer} | ${item.status}`);
@@ -1029,9 +1031,10 @@ export async function GET(request: NextRequest) {
       createShipmentOverviewSheet(workbook, data);
     }
 
-    if (exportType === 'all' || exportType === 'supplier-schedule') {
-      createSupplierScheduleSheet(workbook, data);
-    }
+    // HIDDEN: Supplier Schedule sheet - per Ankur/Jenny feedback Aug 26, 2025
+    // if (exportType === 'all' || exportType === 'supplier-schedule') {
+    //   createSupplierScheduleSheet(workbook, data);
+    // }
 
     if (exportType === 'all' || exportType === 'gdc1-inventory') {
       createGDC1InventorySheet(workbook, data);

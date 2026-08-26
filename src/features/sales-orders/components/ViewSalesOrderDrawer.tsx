@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useState, useTransition } from 'react';
-import { Loader2, MapPin, Package, FileText, Calendar, User, Building2, Truck, AlertTriangle, ShieldCheck, CheckCircle, XCircle, ClipboardList, Check, ChevronsUpDown } from 'lucide-react';
+import { Loader2, MapPin, Package, FileText, Calendar, User, Building2, Truck, AlertTriangle, ShieldCheck, CheckCircle, XCircle, ClipboardList, Check, ChevronsUpDown, Receipt } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { useAuthStore } from '@/shared/stores';
@@ -52,6 +52,7 @@ import {
 
 import { getSalesOrder, releaseSalesOrderHold, confirmSalesOrder, cancelSalesOrder, getSalesOrderMasterData } from '../actions';
 import { createPickTicketFromSalesOrder } from '@/features/pick-tickets/actions';
+import { createInvoiceFromSalesOrder } from '@/features/invoices/actions';
 import { getActiveLocationContacts } from '@/features/locations/actions/location-contacts';
 import type { LocationContact } from '@/features/locations/repositories/location-contacts.repository';
 import type { SalesOrderWithItems } from '../types';
@@ -212,11 +213,13 @@ const [isReleasingHold, setIsReleasingHold] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showPickTicketDialog, setShowPickTicketDialog] = useState(false);
+  const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
   const [warehouses, setWarehouses] = useState<Array<{ id: string; code: string; name: string }>>([]);
   const [locationContacts, setLocationContacts] = useState<LocationContact[]>([]);
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
   const [contactsPopoverOpen, setContactsPopoverOpen] = useState(false);
   const [specialInstructions, setSpecialInstructions] = useState('');
@@ -312,6 +315,20 @@ const [isReleasingHold, setIsReleasingHold] = useState(false);
   const handleEdit = () => {
     if (order) {
       onEdit?.(order);
+    }
+  };
+
+  const handleViewPdf = async () => {
+    if (!order) { return; }
+
+    setIsGeneratingPdf(true);
+    try {
+      // Open PDF in new tab
+      window.open(`/api/sales-orders/${order.id}/pdf`, '_blank');
+    } catch (error) {
+      console.error('Failed to generate PDF:', error);
+    } finally {
+      setIsGeneratingPdf(false);
     }
   };
 
@@ -420,6 +437,27 @@ const handleReleaseHold = async () => {
     });
   };
 
+  const handleCreateInvoice = () => {
+    if (!order) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const result = await createInvoiceFromSalesOrder(order.id);
+        if (result.success) {
+          toast.success(`Invoice created for ${order.orderNumber}`);
+          setShowInvoiceDialog(false);
+        } else {
+          toast.error(result.error || 'Failed to create invoice');
+        }
+      } catch (error) {
+        console.error('Error creating invoice:', error);
+        toast.error('Failed to create invoice');
+      }
+    });
+  };
+
   // Toggle contact selection
   const handleContactToggle = (contactId: string) => {
     setSelectedContactIds(prev =>
@@ -462,6 +500,11 @@ const handleReleaseHold = async () => {
     ['confirmed', 'processing'].includes(order.status) &&
     order.productSource === 'warehouse' &&
     !hasPickTicket &&
+    canEditPermission;
+
+  // Can create invoice for confirmed, processing, shipped, or delivered orders
+  const canCreateInvoice = order &&
+    ['confirmed', 'processing', 'shipped', 'delivered'].includes(order.status) &&
     canEditPermission;
 
   // Check if order is on credit hold
@@ -652,12 +695,16 @@ const handleReleaseHold = async () => {
                           <TableHead className="text-right font-semibold">Qty</TableHead>
                           <TableHead className="text-right font-semibold">Unit Price</TableHead>
                           <TableHead className="text-right font-semibold">Disc %</TableHead>
+                          <TableHead className="text-right font-semibold">Tax</TableHead>
                           <TableHead className="text-right font-semibold">Total</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {order.items.map((item) => {
                           const isServiceOrNonInventory = item.itemType === 'service' || item.itemType === 'non_inventory';
+                          // Calculate line total with tax included
+                          const taxAmount = item.lineTotal * (item.taxRate / 100);
+                          const lineTotalWithTax = item.lineTotal + taxAmount;
                           return (
                             <TableRow key={item.id}>
                               <TableCell>
@@ -673,7 +720,8 @@ const handleReleaseHold = async () => {
                               <TableCell className="text-right">
                                 {isServiceOrNonInventory ? '-' : `${item.discountPercent}%`}
                               </TableCell>
-                              <TableCell className="text-right font-semibold">{formatCurrency(item.lineTotal)}</TableCell>
+                              <TableCell className="text-right">{item.taxRate}%</TableCell>
+                              <TableCell className="text-right font-semibold">{formatCurrency(lineTotalWithTax)}</TableCell>
                             </TableRow>
                           );
                         })}
@@ -755,11 +803,12 @@ const handleReleaseHold = async () => {
         {/* Footer */}
         {order && (
           <div className="flex-shrink-0 border-t bg-muted/30 px-6 py-4">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex gap-2">
                 {canCancel && (
                   <Button
                     variant="outline"
+                    size="sm"
                     className="text-destructive hover:text-destructive"
                     onClick={() => setShowCancelDialog(true)}
                     disabled={isPending}
@@ -769,18 +818,28 @@ const handleReleaseHold = async () => {
                   </Button>
                 )}
               </div>
-              <div className="flex gap-3">
-                <Button variant="outline" onClick={onClose}>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={onClose}>
                   Close
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleViewPdf}
+                  disabled={isGeneratingPdf}
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  {isGeneratingPdf ? 'Generating...' : 'View PDF'}
+                </Button>
                 {canEdit && onEdit && (
-                  <Button variant="outline" onClick={handleEdit}>
+                  <Button variant="outline" size="sm" onClick={handleEdit}>
                     Edit Order
                   </Button>
                 )}
                 {canCreatePickTicket && (
                   <Button
                     variant="outline"
+                    size="sm"
                     onClick={handleOpenPickTicketDialog}
                     disabled={isPending}
                   >
@@ -788,8 +847,19 @@ const handleReleaseHold = async () => {
                     Create Pick Ticket
                   </Button>
                 )}
+                {canCreateInvoice && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowInvoiceDialog(true)}
+                    disabled={isPending}
+                  >
+                    <Receipt className="mr-2 h-4 w-4" />
+                    Create Invoice
+                  </Button>
+                )}
                 {canConfirm && (
-                  <Button onClick={() => setShowConfirmDialog(true)} disabled={isPending}>
+                  <Button size="sm" onClick={() => setShowConfirmDialog(true)} disabled={isPending}>
                     <CheckCircle className="mr-2 h-4 w-4" />
                     Confirm Order
                   </Button>
@@ -995,6 +1065,29 @@ const handleReleaseHold = async () => {
                 {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 <ClipboardList className="mr-2 h-4 w-4" />
                 Create Pick Ticket
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Create Invoice Dialog */}
+        <AlertDialog open={showInvoiceDialog} onOpenChange={setShowInvoiceDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Create Invoice</AlertDialogTitle>
+              <AlertDialogDescription>
+                Create an invoice for order <span className="font-semibold">{order?.orderNumber}</span>.
+                <br /><br />
+                This will create a draft invoice with all items from this sales order.
+                You can edit the invoice details before sending it to the customer.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleCreateInvoice} disabled={isPending}>
+                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <Receipt className="mr-2 h-4 w-4" />
+                Create Invoice
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

@@ -391,11 +391,42 @@ class QuoteRepositoryImpl {
   // ==========================================
 
   /**
+   * Check if a quote number already exists
+   */
+  async quoteNumberExists(quoteNumber: string): Promise<boolean> {
+    const { count, error } = await db
+      .from('quotes')
+      .select('id', { count: 'exact', head: true })
+      .eq('quote_number', quoteNumber);
+
+    if (error) {
+      throw new Error(`Failed to check quote number: ${error.message}`);
+    }
+
+    return (count ?? 0) > 0;
+  }
+
+  /**
    * Create a new quote with items
    */
   async create(data: CreateQuoteDTO, userId?: string): Promise<QuoteWithItems> {
-    // Generate quote number
-    const quoteNumber = await this.getNextQuoteNumber();
+    // Use provided quote number or auto-generate
+    let quoteNumber: string;
+
+    // Safely get trimmed quote number (handles undefined, null, empty string)
+    const providedQuoteNumber = typeof data.quoteNumber === 'string' ? data.quoteNumber.trim() : '';
+
+    if (providedQuoteNumber.length > 0) {
+      // Check for duplicates
+      const exists = await this.quoteNumberExists(providedQuoteNumber);
+      if (exists) {
+        throw new Error(`Quote number "${providedQuoteNumber}" already exists. Please use a different number.`);
+      }
+      quoteNumber = providedQuoteNumber;
+    } else {
+      // Auto-generate
+      quoteNumber = await this.getNextQuoteNumber();
+    }
 
     // Calculate totals from items
     const totals = calculateQuoteTotals(data.items);

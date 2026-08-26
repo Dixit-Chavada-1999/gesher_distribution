@@ -224,11 +224,11 @@ const OrderItemRow = memo(function OrderItemRow({
       {/* Tax Rate */}
       <TableCell>
         <Select
-          value={item.taxRateId || undefined}
+          value={item.taxRateId || 'tax-003'}
           onValueChange={handleTaxRateChange}
         >
           <SelectTrigger className="h-9">
-            <SelectValue />
+            <SelectValue placeholder="Select tax" />
           </SelectTrigger>
           <SelectContent>
             {taxRates.map((rate) => (
@@ -329,20 +329,28 @@ function OrderItemsTableComponent({
           }
         }
 
-        // Recalculate line total
+        // Recalculate line total (including tax)
         const quantity = field === 'quantity' ? Number(value) : updatedItem.quantity;
         const unitPrice = field === 'unitPrice' ? Number(value) : updatedItem.unitPrice;
         const discountPercent =
           field === 'discountPercent' ? Number(value) : updatedItem.discountPercent;
+        const taxRateId = field === 'taxRateId' ? String(value) : updatedItem.taxRateId;
 
         const subtotal = quantity * unitPrice;
         const discountAmount = subtotal * (discountPercent / 100);
-        updatedItem.lineTotal = subtotal - discountAmount;
+        const subtotalAfterDiscount = subtotal - discountAmount;
+
+        // Get tax rate and calculate tax
+        const taxRate = taxRates.find((t) => t.id === taxRateId);
+        const taxPercent = taxRate?.rate ?? 0;
+        const taxAmount = subtotalAfterDiscount * (taxPercent / 100);
+
+        updatedItem.lineTotal = subtotalAfterDiscount + taxAmount;
 
         return updatedItem;
       })
     );
-  }, [items, onItemsChange, onProductSelect, products]);
+  }, [items, onItemsChange, onProductSelect, products, taxRates]);
 
   // ----------------------------------------
   // RENDER

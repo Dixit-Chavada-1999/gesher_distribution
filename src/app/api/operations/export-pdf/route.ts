@@ -310,7 +310,7 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
   // SKU Table - inside the box
   autoTable(doc, {
     startY: currentY + 16,
-    head: [['Product/SKU', 'Supplier', 'GDC1', 'Combined', 'Share']],
+    head: [['Product/SKU', 'Supplier', 'GDC 1', 'Combined', 'Share']],
     body: [
       ...data.skuBreakdown.map(sku => [
         (sku.skuName || sku.sku).substring(0, 22),
@@ -515,6 +515,9 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
   // @ts-expect-error - autoTable adds lastAutoTable
   currentY = doc.lastAutoTable.finalY + 10;
 
+  // HIDDEN: SUPPLIER SHIPMENT SCHEDULE - per Ankur/Jenny feedback Aug 26, 2025
+  // Entire section commented out to exclude from PDF export
+  /*
   // === SUPPLIER SHIPMENT SCHEDULE (continues on same page if space available) ===
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
@@ -549,7 +552,6 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
     body: data.supplierShipmentSchedule.map(item => [
       item.no.toString(),
       item.loadNumber,
-      // Use product name if available, otherwise use SKU
       item.items.map(i => `${i.productName || i.sku}: ${i.qty}`).join(', ').substring(0, 35),
       formatNumber(item.totalQty),
       item.customer.substring(0, 18),
@@ -570,23 +572,20 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
     alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: {
       0: { cellWidth: 8 },
-      2: { cellWidth: 40 },  // Products column - wider for product names
+      2: { cellWidth: 40 },
       4: { cellWidth: 20 },
       12: { halign: 'right' },
       14: { cellWidth: 22 },
     },
     didParseCell: (hookData) => {
       if (hookData.section === 'body') {
-        // Color invoice amount green
         if (hookData.column.index === 12) {
           hookData.cell.styles.textColor = COLORS.emerald600;
           hookData.cell.styles.fontStyle = 'bold';
         }
-        // Color outstanding orange if > 0
         if (hookData.column.index === 10 && hookData.cell.raw !== '0') {
           hookData.cell.styles.textColor = [234, 88, 12];
         }
-        // Color status based on value
         if (hookData.column.index === 13) {
           const status = hookData.cell.raw as string;
           if (status === 'AVAILABLE') { hookData.cell.styles.textColor = [22, 163, 74]; }
@@ -616,6 +615,7 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
   doc.text(`Outstanding: ${formatNumber(supplierTotals.outstanding)}`, margin + 125, currentY + 5);
   doc.setTextColor(...COLORS.emerald600);
   doc.text(`Invoice Total: ${formatCurrency(supplierTotals.invoiceTotal)}`, margin + 175, currentY + 5);
+  */
 
   currentY += 15;
 

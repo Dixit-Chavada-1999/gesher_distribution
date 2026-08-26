@@ -78,7 +78,7 @@ interface DashboardStatsGridProps {
 
 export function DashboardStatsGrid({ stats }: DashboardStatsGridProps) {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4">
       {stats.map((stat) => (
         <DashboardStatsCard key={stat.id} stat={stat} />
       ))}

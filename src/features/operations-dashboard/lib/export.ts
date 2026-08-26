@@ -192,7 +192,7 @@ export function exportSKUBreakdown(data: SKUBreakdown[]): void {
   const headers: { key: keyof SKUBreakdown; label: string }[] = [
     { key: 'skuName', label: 'SKU' },
     { key: 'supplierOutstandingQty', label: 'Supplier Outstanding' },
-    { key: 'gdc1AvailableInventory', label: 'GDC1 Available' },
+    { key: 'gdc1AvailableInventory', label: 'GDC 1 Available' },
     { key: 'combinedQty', label: 'Combined Qty' },
     { key: 'shareOfCombined', label: 'Share %' },
   ];

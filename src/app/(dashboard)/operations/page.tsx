@@ -25,7 +25,8 @@ import { CustomerCommitments } from '@/features/operations-dashboard/components/
 import { ShipmentStatusMix } from '@/features/operations-dashboard/components/ShipmentStatusMix';
 import { StoryInBrief } from '@/features/operations-dashboard/components/StoryInBrief';
 import { ShipmentOverviewTable } from '@/features/operations-dashboard/components/ShipmentOverviewTable';
-import { SupplierShipmentScheduleTable } from '@/features/operations-dashboard/components/SupplierShipmentScheduleTable';
+// HIDDEN: Supplier Schedule - per Ankur/Jenny feedback Aug 26, 2025
+// import { SupplierShipmentScheduleTable } from '@/features/operations-dashboard/components/SupplierShipmentScheduleTable';
 import { GDC1InventoryTable } from '@/features/operations-dashboard/components/GDC1InventoryTable';
 import { EditShipmentDialog, type EditSource } from '@/features/operations-dashboard/components/EditShipmentDialog';
 
@@ -39,7 +40,7 @@ import { exportToXLSX, type XLSXExportType } from '@/features/operations-dashboa
 import type {
   OperationsData,
   ImmediateAttentionItem,
-  ShipmentScheduleItem,
+  // ShipmentScheduleItem, // HIDDEN: Supplier Schedule - per Ankur/Jenny feedback Aug 26, 2025
   GDC1InventoryItem,
   ShipmentStatus,
   OperationsFilters as OperationsFiltersType,
@@ -225,22 +226,22 @@ export default function OperationsPage() {
     setEditDialogOpen(true);
   };
 
-  // Handle edit from Supplier Schedule table (Galileo Orders)
-  const handleEditScheduleItem = (item: ShipmentScheduleItem) => {
-    setEditingShipment({
-      id: item.id,
-      loadNumber: item.loadNumber,
-      customer: item.customer,
-      status: item.status,
-      actionRequired: item.actionRequired,
-      confirmedEta: item.confirmedEta,
-      actualDeliveryDate: item.actualDeliveryDate,
-      qtyDelivered: item.qtyDelivered,
-      totalQty: item.totalQty,
-    });
-    setEditSource('supplier');
-    setEditDialogOpen(true);
-  };
+  // HIDDEN: Handle edit from Supplier Schedule table (Galileo Orders) - per Ankur/Jenny feedback Aug 26, 2025
+  // const handleEditScheduleItem = (item: ShipmentScheduleItem) => {
+  //   setEditingShipment({
+  //     id: item.id,
+  //     loadNumber: item.loadNumber,
+  //     customer: item.customer,
+  //     status: item.status,
+  //     actionRequired: item.actionRequired,
+  //     confirmedEta: item.confirmedEta,
+  //     actualDeliveryDate: item.actualDeliveryDate,
+  //     qtyDelivered: item.qtyDelivered,
+  //     totalQty: item.totalQty,
+  //   });
+  //   setEditSource('supplier');
+  //   setEditDialogOpen(true);
+  // };
 
   // Handle edit from GDC1 Inventory table
   const handleEditGDC1Item = (item: GDC1InventoryItem) => {
@@ -296,11 +297,12 @@ export default function OperationsPage() {
 
       {/* Tabbed Content */}
       <Tabs defaultValue="executive-summary" className="w-full">
-        <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-flex">
+        <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-flex">
           <TabsTrigger value="executive-summary">Executive Summary</TabsTrigger>
           <TabsTrigger value="shipment-overview">Shipment Overview</TabsTrigger>
-          <TabsTrigger value="supplier-schedule">Supplier Schedule</TabsTrigger>
-          <TabsTrigger value="gdc1-inventory">GDC1 Inventory</TabsTrigger>
+          {/* HIDDEN: Supplier Schedule tab - per Ankur/Jenny feedback Aug 26, 2025 */}
+          {/* <TabsTrigger value="supplier-schedule">Supplier Schedule</TabsTrigger> */}
+          <TabsTrigger value="gdc1-inventory">GDC 1 Inventory</TabsTrigger>
         </TabsList>
 
         {/* Filters - Between tabs and content */}
@@ -358,14 +360,14 @@ export default function OperationsPage() {
           />
         </TabsContent>
 
-        {/* Tab 3: Supplier Schedule */}
-        <TabsContent value="supplier-schedule" className={`space-y-6 ${isRefreshing ? 'hidden' : ''}`}>
+        {/* HIDDEN: Tab 3: Supplier Schedule - per Ankur/Jenny feedback Aug 26, 2025 */}
+        {/* <TabsContent value="supplier-schedule" className={`space-y-6 ${isRefreshing ? 'hidden' : ''}`}>
           <SupplierShipmentScheduleTable
             data={data.supplierShipmentSchedule}
             uniqueSkus={data.supplierScheduleSkus || []}
             onEdit={handleEditScheduleItem}
           />
-        </TabsContent>
+        </TabsContent> */}
 
         {/* Tab 4: GDC1 Inventory */}
         <TabsContent value="gdc1-inventory" className={`space-y-6 ${isRefreshing ? 'hidden' : ''}`}>

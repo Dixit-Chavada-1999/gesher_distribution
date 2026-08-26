@@ -42,6 +42,29 @@ async function getCurrentUserId(): Promise<string | undefined> {
 }
 
 // ============================================
+// CREATE INVOICE FROM SALES ORDER
+// ============================================
+
+export async function createInvoiceFromSalesOrder(
+  salesOrderId: string,
+  options: {
+    dueDate?: Date;
+    paymentTerms?: string;
+  } = {}
+) {
+  const userId = await getCurrentUserId();
+  const result = await invoiceService.createFromSalesOrder(salesOrderId, options, userId);
+
+  if (result.success) {
+    revalidatePath('/invoices');
+    revalidatePath('/sales-orders');
+    revalidatePath(`/sales-orders/${salesOrderId}`);
+  }
+
+  return result;
+}
+
+// ============================================
 // LIST INVOICES
 // ============================================
 

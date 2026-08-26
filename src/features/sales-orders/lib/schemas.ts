@@ -322,7 +322,10 @@ export function orderToFormValues(order: {
     shippingMethodId: order.shippingMethod || '',
     items: (order.items || []).map((item) => {
       const unitPrice = item.unitPrice / 100; // cents to dollars
-      const lineTotal = calculateLineTotal(item.quantity, item.unitPrice, item.discountPercent) / 100; // cents to dollars
+      const subtotalAfterDiscount = calculateLineTotal(item.quantity, item.unitPrice, item.discountPercent) / 100; // cents to dollars
+      // Include tax in line total
+      const taxAmount = subtotalAfterDiscount * (item.taxRate / 100);
+      const lineTotal = subtotalAfterDiscount + taxAmount;
       return {
         id: item.id,
         productId: item.productId,
@@ -360,8 +363,9 @@ function getTaxRateFromId(taxRateId: string): number {
 }
 
 function getTaxRateId(taxRate: number): string {
+  // Handle floating point comparison with tolerance
   for (const [id, rate] of Object.entries(TAX_RATES)) {
-    if (rate === taxRate) {return id;}
+    if (Math.abs(rate - taxRate) < 0.01) {return id;}
   }
   return 'tax-003'; // Default to tax exempt
 }
