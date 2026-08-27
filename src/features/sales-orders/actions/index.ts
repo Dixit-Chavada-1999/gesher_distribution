@@ -431,12 +431,17 @@ export async function confirmSalesOrder(id: string): Promise<ActionResult<SalesO
   const result = await salesOrderService.confirm(id, auth.user.id);
 
   if (result.success) {
-    // Auto-create Purchase Order from confirmed Sales Order
-    try {
-      await createPurchaseOrderFromSalesOrder(id, auth.user.id);
-    } catch (error) {
-      console.error('Failed to auto-create PO:', error);
-      // Don't fail the confirmation if PO creation fails
+    // Only dropship orders need a supplier PO. Warehouse orders ship from our
+    // own stock, so raising a PO would put a phantom order in front of the
+    // supplier — and their confirmation would create a second shipment for an
+    // order the warehouse is already fulfilling.
+    if (result.data?.productSource === 'dropship') {
+      try {
+        await createPurchaseOrderFromSalesOrder(id, auth.user.id);
+      } catch (error) {
+        console.error('Failed to auto-create PO:', error);
+        // Don't fail the confirmation if PO creation fails
+      }
     }
 
     revalidatePath('/sales-orders');

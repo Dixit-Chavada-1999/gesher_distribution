@@ -6,8 +6,10 @@
  * Jenny's main operations view showing:
  * Tab 1: Executive Summary (KPIs, Story in Brief, Immediate Attention)
  * Tab 2: Shipment Overview
- * Tab 3: Supplier Schedule
- * Tab 4: GDC1 Inventory
+ * Tab 3+: Dynamic GDC tabs (GDC 1, GDC 2, GDC 3) - Purchase Orders by order_series
+ *
+ * Note: Supplier Schedule tab hidden per Ankur/Jenny feedback Aug 26, 2025
+ * GDC tabs now show Purchase Orders filtered by order_series (redesign Aug 27, 2025)
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -27,8 +29,13 @@ import { StoryInBrief } from '@/features/operations-dashboard/components/StoryIn
 import { ShipmentOverviewTable } from '@/features/operations-dashboard/components/ShipmentOverviewTable';
 // HIDDEN: Supplier Schedule - per Ankur/Jenny feedback Aug 26, 2025
 // import { SupplierShipmentScheduleTable } from '@/features/operations-dashboard/components/SupplierShipmentScheduleTable';
-import { GDC1InventoryTable } from '@/features/operations-dashboard/components/GDC1InventoryTable';
+// REPLACED: GDC1InventoryTable replaced with dynamic GDCInventoryTable - Aug 27, 2025
+// import { GDC1InventoryTable } from '@/features/operations-dashboard/components/GDC1InventoryTable';
+import { GDCInventoryTable } from '@/features/operations-dashboard/components/GDCInventoryTable';
 import { EditShipmentDialog, type EditSource } from '@/features/operations-dashboard/components/EditShipmentDialog';
+
+// Global data for dynamic tabs
+import { ORDER_SERIES } from '@/shared/lib/global-data';
 
 // Server actions
 import { fetchOperationsData, fetchFilterOptions } from '@/features/operations-dashboard/actions';
@@ -41,7 +48,8 @@ import type {
   OperationsData,
   ImmediateAttentionItem,
   // ShipmentScheduleItem, // HIDDEN: Supplier Schedule - per Ankur/Jenny feedback Aug 26, 2025
-  GDC1InventoryItem,
+  // GDC1InventoryItem,    // REPLACED: Now using GDCInventoryItem from PO data
+  GDCInventoryItem,
   ShipmentStatus,
   OperationsFilters as OperationsFiltersType,
   FilterOptions,
@@ -80,6 +88,7 @@ const emptyData: OperationsData = {
   supplierScheduleSkus: [],
   gdc1Inventory: [],
   gdc1InventorySkus: [],
+  gdcInventories: [],  // NEW: GDC inventories by order series from Purchase Orders
   rimInstallationRequired: [],
   rimInstallationSkus: [],
   storyInBrief: '',
@@ -243,21 +252,12 @@ export default function OperationsPage() {
   //   setEditDialogOpen(true);
   // };
 
-  // Handle edit from GDC1 Inventory table
-  const handleEditGDC1Item = (item: GDC1InventoryItem) => {
-    setEditingShipment({
-      id: item.id,
-      loadNumber: item.loadNumber,
-      customer: item.customer || '',
-      status: item.status,
-      actionRequired: item.actionRequired,
-      confirmedEta: item.etaToUsPort,
-      actualDeliveryDate: item.actualDelivery,
-      qtyDelivered: item.qtyDelivered,
-      totalQty: item.totalQty,
-    });
-    setEditSource('gdc1');
-    setEditDialogOpen(true);
+  // Handle edit from dynamic GDC Inventory table (Purchase Orders)
+  const handleEditGDCItem = (item: GDCInventoryItem) => {
+    // For PO-based GDC items, we navigate to PO edit or show a simple dialog
+    // For now, just log - future: open PO edit drawer
+    console.log('Edit GDC PO item:', item);
+    // TODO: Could open a PO edit modal here if needed
   };
 
   // Handle successful edit - refresh data
@@ -297,12 +297,17 @@ export default function OperationsPage() {
 
       {/* Tabbed Content */}
       <Tabs defaultValue="executive-summary" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-flex">
+        <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-flex">
           <TabsTrigger value="executive-summary">Executive Summary</TabsTrigger>
           <TabsTrigger value="shipment-overview">Shipment Overview</TabsTrigger>
           {/* HIDDEN: Supplier Schedule tab - per Ankur/Jenny feedback Aug 26, 2025 */}
           {/* <TabsTrigger value="supplier-schedule">Supplier Schedule</TabsTrigger> */}
-          <TabsTrigger value="gdc1-inventory">GDC 1 Inventory</TabsTrigger>
+          {/* Dynamic GDC tabs based on ORDER_SERIES */}
+          {ORDER_SERIES.map((series) => (
+            <TabsTrigger key={series.id} value={`gdc-${series.id}`}>
+              {series.name}
+            </TabsTrigger>
+          ))}
         </TabsList>
 
         {/* Filters - Between tabs and content */}
@@ -369,14 +374,24 @@ export default function OperationsPage() {
           />
         </TabsContent> */}
 
-        {/* Tab 4: GDC1 Inventory */}
-        <TabsContent value="gdc1-inventory" className={`space-y-6 ${isRefreshing ? 'hidden' : ''}`}>
-          <GDC1InventoryTable
-            data={data.gdc1Inventory}
-            uniqueSkus={data.gdc1InventorySkus || []}
-            onEdit={handleEditGDC1Item}
-          />
-        </TabsContent>
+        {/* Dynamic GDC Tabs - Purchase Orders by Order Series */}
+        {ORDER_SERIES.map((series) => {
+          const gdcData = data.gdcInventories?.find((g) => g.orderSeries === series.code);
+          return (
+            <TabsContent
+              key={series.id}
+              value={`gdc-${series.id}`}
+              className={`space-y-6 ${isRefreshing ? 'hidden' : ''}`}
+            >
+              <GDCInventoryTable
+                orderSeries={series.name}
+                data={gdcData?.items || []}
+                uniqueSkus={gdcData?.uniqueSkus || []}
+                onEdit={handleEditGDCItem}
+              />
+            </TabsContent>
+          );
+        })}
       </Tabs>
 
       {/* Edit Shipment Dialog */}

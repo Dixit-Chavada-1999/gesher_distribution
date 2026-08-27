@@ -49,6 +49,7 @@ import { Label } from '@/shared/components/ui/label';
 import { poFormSchema } from '../lib/schemas';
 import { getPurchaseOrder, updatePurchaseOrder, getSuppliersForDropdown } from '../actions';
 import type { PurchaseOrderWithItems, SupplierSummary, EditPurchaseOrderDrawerProps } from '../types';
+import { ORDER_SERIES } from '@/shared/lib/global-data';
 
 // ============================================
 // COMPONENT
@@ -82,6 +83,7 @@ export function EditPurchaseOrderDrawer({
       salesOrderId: '',
       warehouseId: '',
       currencyCode: 'USD',
+      orderSeries: '',
       vendorAddressStreet: '',
       vendorAddressCity: '',
       vendorAddressState: '',
@@ -139,6 +141,7 @@ export function EditPurchaseOrderDrawer({
             salesOrderId: result.data.salesOrderId || '',
             warehouseId: result.data.warehouseId || '',
             currencyCode: result.data.currencyCode || 'USD',
+            orderSeries: result.data.orderSeries || '',
             vendorAddressStreet: result.data.vendorAddressStreet || '',
             vendorAddressCity: result.data.vendorAddressCity || '',
             vendorAddressState: result.data.vendorAddressState || '',
@@ -259,6 +262,7 @@ export function EditPurchaseOrderDrawer({
             : null,
           warehouseId: (data.warehouseId as string) || null,
           currencyCode: (data.currencyCode as string) || 'USD',
+          orderSeries: (data.orderSeries as string) || null,
           vendorAddress: {
             street: (data.vendorAddressStreet as string) || null,
             city: (data.vendorAddressCity as string) || null,
@@ -332,10 +336,37 @@ export function EditPurchaseOrderDrawer({
             ) : po ? (
               <Form {...form}>
                 <form id="edit-po-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                  {/* PO Details */}
+                  {/* Order Details - Order Series, PO Date, Expected Delivery in single row */}
                   <div className="space-y-4">
                     <h3 className="text-sm font-medium">Order Details</h3>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-3 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="orderSeries"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Order Series *</FormLabel>
+                            <Select
+                              value={field.value || ''}
+                              onValueChange={field.onChange}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {ORDER_SERIES.map((series) => (
+                                  <SelectItem key={series.id} value={series.code}>
+                                    {series.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                       <FormField
                         control={form.control}
                         name="poDate"

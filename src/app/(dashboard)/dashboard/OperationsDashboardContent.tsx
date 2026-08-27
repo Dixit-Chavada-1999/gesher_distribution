@@ -53,6 +53,7 @@ const emptyData: OperationsData = {
   supplierScheduleSkus: [],
   gdc1Inventory: [],
   gdc1InventorySkus: [],
+  gdcInventories: [],  // Dynamic GDC inventories by order series
   rimInstallationRequired: [],
   rimInstallationSkus: [],
   storyInBrief: '',

@@ -30,6 +30,7 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 
+import { PdfViewerModal } from '@/shared/components/pdf-viewer';
 import { usePackingList } from '../hooks';
 import { markPackingListAsPacked, transitionPackingListStatus } from '../actions/packing-list.actions';
 import { PACKING_LIST_STATUS_LABELS, PACKING_LIST_STATUS_COLORS } from '../types';
@@ -85,6 +86,7 @@ export function ViewPackingListDrawer({
 }: ViewPackingListDrawerProps) {
   const { data: packingList, isLoading, error, refetch } = usePackingList(open ? packingListId : null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [showPdfModal, setShowPdfModal] = useState(false);
 
   const handleMarkAsPacked = async () => {
     if (!packingList) {
@@ -293,6 +295,13 @@ export function ViewPackingListDrawer({
               <Button variant="outline" onClick={onClose}>
                 Close
               </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowPdfModal(true)}
+              >
+                <FileText className="mr-2 h-4 w-4" />
+                View PDF
+              </Button>
               {canMarkAsPacked && (
                 <Button onClick={handleMarkAsPacked} disabled={isUpdating}>
                   {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -309,6 +318,17 @@ export function ViewPackingListDrawer({
               )}
             </div>
           </div>
+        )}
+
+        {/* PDF Viewer Modal */}
+        {packingList && (
+          <PdfViewerModal
+            open={showPdfModal}
+            onClose={() => setShowPdfModal(false)}
+            pdfUrl={`/api/packing-lists/${packingList.id}/pdf`}
+            title={`Packing List - ${packingList.packingListNumber}`}
+            fileName={`PackingList-${packingList.packingListNumber}.pdf`}
+          />
         )}
       </SheetContent>
     </Sheet>

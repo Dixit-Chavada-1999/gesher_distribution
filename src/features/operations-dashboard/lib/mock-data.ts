@@ -1153,6 +1153,7 @@ export const operationsData: OperationsData = {
   supplierScheduleSkus,
   gdc1Inventory,
   gdc1InventorySkus,
+  gdcInventories: [],  // Dynamic GDC inventories from PO data (live data only)
   rimInstallationRequired,
   rimInstallationSkus,
   storyInBrief,

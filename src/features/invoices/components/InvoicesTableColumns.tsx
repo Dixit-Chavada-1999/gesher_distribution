@@ -112,13 +112,13 @@ export function InvoicesTableColumns(options: ColumnsOptions = {}): ColumnDef<In
 
         return (
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
               <Button variant="ghost" size="icon" className="h-8 w-8">
                 <span className="sr-only">Open menu</span>
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
               {onView && (
                 <DropdownMenuItem onClick={() => onView(invoice)}>
                   <Eye className="mr-2 h-4 w-4" />

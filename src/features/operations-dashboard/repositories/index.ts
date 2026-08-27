@@ -14,6 +14,8 @@ import type {
   ImmediateAttentionItem,
   ShipmentScheduleItem,
   GDC1InventoryItem,
+  GDCInventoryItem,
+  GDCInventoryData,
   RimInstallationItem,
   ShipmentStatus,
   SKUColumnInfo,
@@ -1386,6 +1388,189 @@ export async function getGDC1Inventory(filters?: OperationsFilters): Promise<{ d
   uniqueSkus.sort((a, b) => a.sku.localeCompare(b.sku));
 
   return { data: result, uniqueSkus };
+}
+
+// ============================================
+// GET GDC INVENTORY BY ORDER SERIES (from Purchase Orders)
+// Shows Purchase Orders filtered by order_series field
+// ============================================
+
+export async function getGDCInventoryByOrderSeries(
+  orderSeries: string,
+  filters?: OperationsFilters
+): Promise<GDCInventoryData> {
+  const supabase = await createClient();
+
+  // Get Purchase Orders with the specified order_series
+  let poQuery = supabase
+    .from('purchase_orders')
+    .select(`
+      id,
+      po_number,
+      po_date,
+      expected_delivery_date,
+      status,
+      order_series,
+      internal_notes,
+      ship_to_address_street,
+      ship_to_address_city,
+      ship_to_address_state,
+      ship_to_address_postal_code,
+      sales_order_id,
+      created_at,
+      sales_orders(
+        id,
+        order_number,
+        customer_id,
+        customers(id, name)
+      )
+    `)
+    .is('deleted_at', null)
+    .eq('order_series', orderSeries)
+    .neq('status', 'cancelled')
+    .order('created_at', { ascending: false });
+
+  // Apply filters
+  if (filters?.salesOrderId) {
+    poQuery = poQuery.eq('sales_order_id', filters.salesOrderId);
+  }
+
+  const { data: purchaseOrders, error } = await poQuery;
+
+  if (error) {
+    console.error('Error fetching GDC inventory by order series:', error);
+    throw error;
+  }
+
+  // Get purchase order items for SKU breakdown
+  const poIds = purchaseOrders?.map((po) => po.id) || [];
+
+  if (poIds.length === 0) {
+    return { orderSeries, items: [], uniqueSkus: [] };
+  }
+
+  let itemsQuery = supabase
+    .from('purchase_order_items')
+    .select(`
+      purchase_order_id,
+      sku,
+      description,
+      quantity_ordered,
+      unit_price,
+      supplier_name,
+      product_id,
+      products(id, name, item_type)
+    `)
+    .in('purchase_order_id', poIds);
+
+  // Apply product filter
+  if (filters?.productId) {
+    itemsQuery = itemsQuery.eq('product_id', filters.productId);
+  }
+
+  const { data: items } = await itemsQuery;
+
+  // Group items by purchase order and build SKU info map
+  const itemsByPO = new Map<string, { sku: string; productName: string; qty: number; unitPrice: number; supplierName: string | null }[]>();
+  const skuInfoMap = new Map<string, string>(); // sku -> productName
+
+  items?.forEach((item) => {
+    const productData = toOne(item.products);
+    const productName = productData?.name || item.description || item.sku;
+    const unitPrice = item.unit_price ? item.unit_price / 100 : 0;
+
+    // Store SKU info for column headers
+    if (item.sku && !skuInfoMap.has(item.sku)) {
+      skuInfoMap.set(item.sku, productName);
+    }
+
+    if (!itemsByPO.has(item.purchase_order_id)) {
+      itemsByPO.set(item.purchase_order_id, []);
+    }
+    itemsByPO.get(item.purchase_order_id)!.push({
+      sku: item.sku || 'Unknown',
+      productName,
+      qty: item.quantity_ordered || 0,
+      unitPrice,
+      supplierName: item.supplier_name,
+    });
+  });
+
+  const result: GDCInventoryItem[] = [];
+
+  purchaseOrders?.forEach((po, index) => {
+    const salesOrderData = toOne(po.sales_orders);
+    const customerData = salesOrderData ? toOne(salesOrderData.customers) : null;
+
+    // Apply customer filter
+    if (filters?.customerId && customerData?.id !== filters.customerId) {
+      return;
+    }
+
+    const poItems = itemsByPO.get(po.id) || [];
+    const totalQty = poItems.reduce((sum, item) => sum + item.qty, 0);
+
+    // Get first supplier name from items
+    const supplierName = poItems.find(item => item.supplierName)?.supplierName || null;
+
+    // Build address
+    const addressParts = [
+      po.ship_to_address_street,
+      po.ship_to_address_city,
+      po.ship_to_address_state,
+      po.ship_to_address_postal_code,
+    ].filter(Boolean);
+
+    result.push({
+      id: po.id,
+      no: index + 1,
+      poNumber: po.po_number,
+      soNumber: salesOrderData?.order_number || null,
+      orderSeries: po.order_series || orderSeries,
+      items: poItems.map(item => ({
+        sku: item.sku,
+        productName: item.productName,
+        qty: item.qty,
+        unitPrice: item.unitPrice,
+      })),
+      totalQty,
+      customer: customerData?.name || 'Unallocated',
+      supplierName,
+      etaToUsPort: null, // Can be updated from shipment tracking
+      deliveryAddress: addressParts.join(', '),
+      expectedDelivery: po.expected_delivery_date,
+      status: po.status,
+      actionRequired: po.internal_notes || '',
+      notes: '',
+    });
+  });
+
+  // Build unique SKUs with product names for column headers
+  const uniqueSkus: SKUColumnInfo[] = [];
+  skuInfoMap.forEach((productName, sku) => {
+    uniqueSkus.push({ sku, productName });
+  });
+  uniqueSkus.sort((a, b) => a.sku.localeCompare(b.sku));
+
+  return { orderSeries, items: result, uniqueSkus };
+}
+
+// ============================================
+// GET ALL GDC INVENTORIES (for all order series)
+// Returns data for all order series tabs
+// ============================================
+
+export async function getAllGDCInventories(filters?: OperationsFilters): Promise<GDCInventoryData[]> {
+  const { ORDER_SERIES } = await import('@/shared/lib/global-data');
+
+  const results: GDCInventoryData[] = [];
+
+  for (const series of ORDER_SERIES) {
+    const data = await getGDCInventoryByOrderSeries(series.code, filters);
+    results.push(data);
+  }
+
+  return results;
 }
 
 // ============================================

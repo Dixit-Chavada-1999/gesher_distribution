@@ -26,7 +26,18 @@ import {
   Loader2,
 } from 'lucide-react';
 import { Input } from '@/shared/components/ui/input';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/shared/components/ui/alert-dialog';
 import { cn } from '@/shared/lib/utils';
+import { PdfViewerModal } from '@/shared/components/pdf-viewer';
 import { usePickTicket } from '../hooks/usePickTicket';
 import { createPackingListFromPickTicket } from '../actions/packing-list.actions';
 import { completePicking, startPicking, pickItem, transitionPickTicketStatus } from '../actions';
@@ -52,12 +63,30 @@ export function ViewPickTicketDrawer({
   const [isStartingPicking, setIsStartingPicking] = useState(false);
   const [isCompletingPicking, setIsCompletingPicking] = useState(false);
   const [pickingItemId, setPickingItemId] = useState<string | null>(null);
+  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
+  const [showShippedEditConfirm, setShowShippedEditConfirm] = useState(false);
+  const [showPdfModal, setShowPdfModal] = useState(false);
+  const [pdfModalType, setPdfModalType] = useState<'pickTicket' | 'packingList'>('pickTicket');
 
-  const canEdit = pickTicket && ['pending', 'assigned'].includes(pickTicket.status);
+  // Allow editing for all statuses except cancelled (per Ankur/Jenny feedback Aug 26)
+  const canEdit = pickTicket && pickTicket.status !== 'cancelled';
+  const isShipped = pickTicket?.status === 'shipped';
   const canStartPicking = pickTicket && pickTicket.status === 'assigned';
   // Allow Complete Picking from both 'picking' and 'picked' statuses (before packing list is created)
   const canCompletePicking = pickTicket && ['picking', 'picked'].includes(pickTicket.status) && !pickTicket.packingList;
   const canCreatePackingList = pickTicket && pickTicket.status === 'picked' && !pickTicket.packingList;
+
+  const handleViewPdf = () => {
+    if (!pickTicket) { return; }
+    setPdfModalType('pickTicket');
+    setShowPdfModal(true);
+  };
+
+  const handleViewPackingListPdf = () => {
+    if (!pickTicket?.packingList) { return; }
+    setPdfModalType('packingList');
+    setShowPdfModal(true);
+  };
 
   const handleCreatePackingList = async () => {
     if (!pickTicket) { return; }
@@ -101,11 +130,23 @@ export function ViewPickTicketDrawer({
   const handleCompletePicking = async () => {
     if (!pickTicket) { return; }
 
+    setShowCompleteConfirm(false);
     setIsCompletingPicking(true);
     try {
       const result = await completePicking(pickTicket.id);
       if (result.success) {
-        toast.success('Picking completed! Shipment created.');
+        // The shipment is created separately and can fail on its own; say what
+        // actually happened rather than always claiming success.
+        const warning =
+          'warning' in result && typeof result.warning === 'string'
+            ? result.warning
+            : null;
+
+        if (warning) {
+          toast.warning(warning);
+        } else {
+          toast.success('Picking completed. Shipment created.');
+        }
         refetch();
         onClose();
       } else {
@@ -201,28 +242,6 @@ export function ViewPickTicketDrawer({
                 </>
               ) : null}
             </div>
-            {pickTicket && (
-              <div className="flex items-center gap-2">
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    'text-xs font-medium',
-                    PICK_TICKET_PRIORITY_COLORS[pickTicket.priority]
-                  )}
-                >
-                  {PICK_TICKET_PRIORITY_LABELS[pickTicket.priority]}
-                </Badge>
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    'text-xs font-medium',
-                    PICK_TICKET_STATUS_COLORS[pickTicket.status]
-                  )}
-                >
-                  {PICK_TICKET_STATUS_LABELS[pickTicket.status]}
-                </Badge>
-              </div>
-            )}
           </div>
         </SheetHeader>
 
@@ -261,6 +280,32 @@ export function ViewPickTicketDrawer({
                   <div>
                     <p className="font-medium font-mono">{pickTicket.salesOrder.orderNumber}</p>
                     <p className="text-muted-foreground">{pickTicket.salesOrder.customerName}</p>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2 pt-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground">Priority:</span>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        'text-xs font-medium',
+                        PICK_TICKET_PRIORITY_COLORS[pickTicket.priority]
+                      )}
+                    >
+                      {PICK_TICKET_PRIORITY_LABELS[pickTicket.priority]}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground">Status:</span>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        'text-xs font-medium',
+                        PICK_TICKET_STATUS_COLORS[pickTicket.status]
+                      )}
+                    >
+                      {PICK_TICKET_STATUS_LABELS[pickTicket.status]}
+                    </Badge>
                   </div>
                 </div>
               </div>
@@ -465,28 +510,14 @@ export function ViewPickTicketDrawer({
                     Start Picking
                   </Button>
                 )}
-                {canCompletePicking && (
-                  <Button
-                    onClick={handleCompletePicking}
-                    disabled={isCompletingPicking}
-                    className="flex-1 bg-emerald-600 hover:bg-emerald-700"
-                  >
-                    {isCompletingPicking ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="mr-2 h-4 w-4" />
-                    )}
-                    Complete Picking
-                  </Button>
-                )}
-              </div>
-              <div className="flex gap-2">
+                {/* Creating the packing list is the normal next step, so it
+                    leads. Completing picking skips the packing list for good,
+                    so it sits below behind a confirmation. */}
                 {canCreatePackingList && (
                   <Button
                     onClick={handleCreatePackingList}
                     disabled={isCreatingPackingList}
-                    variant="outline"
-                    className="flex-1"
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700"
                   >
                     {isCreatingPackingList ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -496,13 +527,50 @@ export function ViewPickTicketDrawer({
                     Create Packing List
                   </Button>
                 )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {canCompletePicking && (
+                  <Button
+                    onClick={() => setShowCompleteConfirm(true)}
+                    disabled={isCompletingPicking}
+                    variant="outline"
+                  >
+                    {isCompletingPicking ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                    )}
+                    Complete Picking
+                  </Button>
+                )}
+                <Button
+                  onClick={handleViewPdf}
+                  variant="outline"
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  View PDF
+                </Button>
                 {pickTicket.packingList && (
-                  <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200">
-                    Packing List: {pickTicket.packingList.packingListNumber}
-                  </Badge>
+                  <Button
+                    onClick={handleViewPackingListPdf}
+                    variant="outline"
+                    className="border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100 hover:text-teal-800"
+                  >
+                    <ClipboardList className="mr-2 h-4 w-4" />
+                    Packing List PDF
+                  </Button>
                 )}
                 {onEdit && canEdit && (
-                  <Button onClick={() => onEdit(pickTicket)} variant="outline" className="flex-1">
+                  <Button
+                    onClick={() => {
+                      if (isShipped) {
+                        setShowShippedEditConfirm(true);
+                      } else {
+                        onEdit(pickTicket);
+                      }
+                    }}
+                    variant="outline"
+                  >
                     <Pencil className="mr-2 h-4 w-4" />
                     Edit
                   </Button>
@@ -514,6 +582,81 @@ export function ViewPickTicketDrawer({
           <div className="mt-6 text-center text-muted-foreground">
             Pick ticket not found
           </div>
+        )}
+
+        <AlertDialog open={showCompleteConfirm} onOpenChange={setShowCompleteConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Complete picking without a packing list?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This ships {pickTicket?.pickTicketNumber} straight away: stock leaves the
+                warehouse and a shipment is created. No packing list will exist for this
+                order, and one can no longer be created afterwards.
+                <br />
+                <br />
+                If the warehouse needs a packing list, cancel and choose{' '}
+                <span className="font-medium">Create Packing List</span> instead.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleCompletePicking}>
+                Ship without packing list
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Confirmation dialog for editing shipped pick tickets */}
+        <AlertDialog open={showShippedEditConfirm} onOpenChange={setShowShippedEditConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Edit shipped pick ticket?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This pick ticket has already been shipped. Editing shipped records may affect
+                inventory tracking and shipment history.
+                <br />
+                <br />
+                Are you sure you want to make changes to this shipped pick ticket?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  setShowShippedEditConfirm(false);
+                  if (pickTicket && onEdit) {
+                    onEdit(pickTicket);
+                  }
+                }}
+              >
+                Yes, Edit Anyway
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* PDF Viewer Modal */}
+        {pickTicket && (
+          <PdfViewerModal
+            open={showPdfModal}
+            onClose={() => setShowPdfModal(false)}
+            pdfUrl={
+              pdfModalType === 'pickTicket'
+                ? `/api/pick-tickets/${pickTicket.id}/pdf`
+                : `/api/packing-lists/${pickTicket.packingList?.id}/pdf`
+            }
+            title={
+              pdfModalType === 'pickTicket'
+                ? `Pick Ticket - ${pickTicket.pickTicketNumber}`
+                : `Packing List - ${pickTicket.packingList?.packingListNumber || ''}`
+            }
+            fileName={
+              pdfModalType === 'pickTicket'
+                ? `PickTicket-${pickTicket.pickTicketNumber}.pdf`
+                : `PackingList-${pickTicket.packingList?.packingListNumber || ''}.pdf`
+            }
+          />
         )}
       </SheetContent>
     </Sheet>

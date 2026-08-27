@@ -35,6 +35,7 @@ import {
 import {
   ShipmentsTable,
   ViewShipmentDrawer,
+  EditShipmentDrawer,
   useShipments,
 } from '@/features/shipments';
 import { deleteShipment } from '@/features/shipments/actions';
@@ -71,6 +72,7 @@ export default function ShipmentsPage() {
 
   // Drawer states
   const [isViewDrawerOpen, setIsViewDrawerOpen] = useState(false);
+  const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
   const [selectedShipmentId, setSelectedShipmentId] = useState<string | null>(null);
 
   // Delete confirmation
@@ -111,9 +113,23 @@ export default function ShipmentsPage() {
     setSelectedShipmentId(null);
   }, []);
 
-  const handleEdit = useCallback((_shipment: ShipmentListItem | ShipmentWithItems) => {
-    toast.info('Edit shipment functionality coming soon');
+  const handleEdit = useCallback((shipment: ShipmentListItem | ShipmentWithItems) => {
+    setSelectedShipmentId(shipment.id);
+    // Close the view drawer first, then open the edit modal once its exit
+    // animation has run — otherwise both panels are on screen together.
+    // The sheet's close animation is 300ms (see ui/sheet.tsx).
+    setIsViewDrawerOpen(false);
+    setTimeout(() => setIsEditDrawerOpen(true), 320);
   }, []);
+
+  const handleEditDrawerClose = useCallback(() => {
+    setIsEditDrawerOpen(false);
+    setSelectedShipmentId(null);
+  }, []);
+
+  const handleEditSuccess = useCallback(() => {
+    refetchShipments();
+  }, [refetchShipments]);
 
   const handleDeleteClick = useCallback((shipment: ShipmentListItem) => {
     setShipmentToDelete(shipment);
@@ -221,6 +237,14 @@ export default function ShipmentsPage() {
         open={isViewDrawerOpen}
         onClose={handleViewDrawerClose}
         onEdit={handleEdit}
+      />
+
+      {/* Edit Shipment Drawer */}
+      <EditShipmentDrawer
+        shipmentId={selectedShipmentId}
+        open={isEditDrawerOpen}
+        onClose={handleEditDrawerClose}
+        onSuccess={handleEditSuccess}
       />
 
       {/* Delete Confirmation Dialog */}

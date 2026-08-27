@@ -835,3 +835,63 @@ export async function updateSalesOrderStatus(
   );
   return true;
 }
+
+/**
+ * Update purchase order status based on shipping tracking status
+ * Called when shipment tracking status changes (e.g., delivered → PO received)
+ */
+export async function updatePurchaseOrderStatus(
+  purchaseOrderId: string,
+  newStatus: string
+): Promise<boolean> {
+  const supabase = createAdminClient();
+
+  // First get current status to check if update is needed
+  const { data: currentPO, error: fetchError } = await supabase
+    .from('purchase_orders')
+    .select('status')
+    .eq('id', purchaseOrderId)
+    .single();
+
+  if (fetchError || !currentPO) {
+    console.error('[Shipping] Error fetching purchase order:', fetchError);
+    return false;
+  }
+
+  // PO status order - can only move forward
+  const statusOrder = ['draft', 'sent', 'confirmed', 'in_production', 'ready_to_ship', 'in_transit', 'partial', 'received'];
+  const currentIndex = statusOrder.indexOf(currentPO.status);
+  const newIndex = statusOrder.indexOf(newStatus);
+
+  // Only update if moving forward in the workflow
+  if (newIndex <= currentIndex) {
+    console.log(
+      `[Shipping] Skipping PO status update: current=${currentPO.status}, proposed=${newStatus}`
+    );
+    return true; // Not an error, just no update needed
+  }
+
+  // Don't update cancelled orders
+  if (currentPO.status === 'cancelled') {
+    console.log('[Shipping] Skipping PO status update: order is cancelled');
+    return true;
+  }
+
+  const { error } = await supabase
+    .from('purchase_orders')
+    .update({
+      status: newStatus,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', purchaseOrderId);
+
+  if (error) {
+    console.error('[Shipping] Error updating purchase order status:', error);
+    return false;
+  }
+
+  console.log(
+    `[Shipping] Updated PO ${purchaseOrderId} status: ${currentPO.status} → ${newStatus}`
+  );
+  return true;
+}

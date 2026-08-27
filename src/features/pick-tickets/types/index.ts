@@ -249,6 +249,19 @@ export interface UserSummary {
   email: string;
 }
 
+/**
+ * Sales order fields the pick ticket PDF needs but the pick ticket join
+ * does not carry.
+ */
+export interface PickTicketPdfSalesOrderFields {
+  shipping_address_street: string | null;
+  shipping_address_city: string | null;
+  shipping_address_state: string | null;
+  shipping_address_postal_code: string | null;
+  requested_delivery_date: string | null;
+  customer_po_number: string | null;
+}
+
 export interface PickTicketSummary {
   id: string;
   pickTicketNumber: string;
@@ -290,11 +303,20 @@ export interface CreatePickTicketDTO {
   items: CreatePickTicketItemDTO[];
 }
 
+export interface UpdatePickTicketItemDTO {
+  id: string;
+  quantityToPick?: number;
+  quantityPicked?: number;
+}
+
 export interface UpdatePickTicketDTO {
+  status?: PickTicketStatus;
   assignedTo?: string | null;
+  warehouseId?: string;
   priority?: PickTicketPriority;
   notes?: string | null;
   specialInstructions?: string | null;
+  items?: UpdatePickTicketItemDTO[];
 }
 
 export interface PickItemDTO {

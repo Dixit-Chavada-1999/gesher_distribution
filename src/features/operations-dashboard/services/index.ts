@@ -13,6 +13,7 @@ import {
   getImmediateAttention,
   getSupplierShipmentSchedule,
   getGDC1Inventory,
+  getAllGDCInventories,
   getRimInstallationRequired,
   generateStoryInBrief,
   getFilterOptions,
@@ -38,6 +39,7 @@ export async function getOperationsData(filters?: OperationsFilters): Promise<Op
     immediateAttention,
     // supplierScheduleResult, // HIDDEN: Supplier Schedule
     gdc1InventoryResult,
+    gdcInventories,  // NEW: GDC inventories by order series from Purchase Orders
     rimInstallationResult,
   ] = await Promise.all([
     getOperationsStats(filters),
@@ -47,6 +49,7 @@ export async function getOperationsData(filters?: OperationsFilters): Promise<Op
     getImmediateAttention(filters),
     // getSupplierShipmentSchedule(filters), // HIDDEN: Supplier Schedule - skipped to save API time
     getGDC1Inventory(filters),
+    getAllGDCInventories(filters),  // NEW: Fetch all GDC inventories by order series
     getRimInstallationRequired(filters),
   ]);
 
@@ -74,6 +77,7 @@ export async function getOperationsData(filters?: OperationsFilters): Promise<Op
     supplierScheduleSkus,
     gdc1Inventory,
     gdc1InventorySkus,
+    gdcInventories,  // NEW: Array of GDC inventories for dynamic tabs
     rimInstallationRequired,
     rimInstallationSkus,
     storyInBrief,

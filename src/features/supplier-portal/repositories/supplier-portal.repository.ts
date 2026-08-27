@@ -429,16 +429,33 @@ export async function updateProductionStatus(
     supplierNotes?: string;
   }
 ): Promise<{ success: boolean; error?: string }> {
-  // 1. Update PO production status
+  // 1. Update PO production status and sync PO status
+  const poUpdateData: Record<string, unknown> = {
+    production_status: data.productionStatus,
+    expected_completion_date: data.expectedCompletionDate || null,
+    supplier_notes: data.supplierNotes || null,
+    updated_at: new Date().toISOString(),
+    updated_by: userId,
+  };
+
+  // Map production_status to PO status
+  // This keeps PO status in sync with supplier's production progress
+  const productionToPOStatus: Record<string, string> = {
+    not_started: 'confirmed',      // No change - just confirmed
+    in_production: 'in_production', // Supplier started manufacturing
+    ready_to_ship: 'ready_to_ship', // Goods ready, waiting to ship
+    shipped: 'in_transit',          // Goods shipped by supplier
+  };
+
+  const newPOStatus = productionToPOStatus[data.productionStatus];
+  if (newPOStatus && newPOStatus !== 'confirmed') {
+    // Only update if it's a production-related status (not 'confirmed' which means no change)
+    poUpdateData.status = newPOStatus;
+  }
+
   const { error } = await db
     .from('purchase_orders')
-    .update({
-      production_status: data.productionStatus,
-      expected_completion_date: data.expectedCompletionDate || null,
-      supplier_notes: data.supplierNotes || null,
-      updated_at: new Date().toISOString(),
-      updated_by: userId,
-    })
+    .update(poUpdateData)
     .eq('id', poId);
 
   if (error) {

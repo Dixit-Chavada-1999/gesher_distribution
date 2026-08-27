@@ -5,6 +5,7 @@
  */
 
 import { purchaseOrderRepository } from '../repositories/purchase-order.repository';
+import { db } from '@/shared/lib/supabase/database';
 import { createClient } from '@/shared/lib/supabase/server';
 import {
   createPurchaseOrderSchema,
@@ -268,6 +269,116 @@ export const purchaseOrderService = {
       return {
         success: false,
         error: 'Failed to delete purchase order',
+      };
+    }
+  },
+
+  // ==========================================
+  // INLINE UPDATE METHODS
+  // ==========================================
+
+  /**
+   * Update supplier for all items in a PO
+   */
+  async updateSupplier(
+    id: string,
+    supplierId: string | null,
+    supplierName: string | null,
+    userId?: string
+  ): Promise<ServiceResult<void>> {
+    try {
+      const existing = await purchaseOrderRepository.findById(id);
+      if (!existing) {
+        return {
+          success: false,
+          error: 'Purchase order not found',
+        };
+      }
+
+      if (!['draft', 'sent'].includes(existing.status)) {
+        return {
+          success: false,
+          error: `Cannot edit purchase order in ${existing.status} status`,
+        };
+      }
+
+      // Use db (service role) to bypass RLS
+      const { error } = await db
+        .from('purchase_order_items')
+        .update({
+          supplier_id: supplierId,
+          supplier_name: supplierName,
+          updated_by: userId || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('purchase_order_id', id);
+
+      if (error) {
+        console.error('[updateSupplier] Error:', error);
+        return {
+          success: false,
+          error: 'Failed to update supplier',
+        };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('PurchaseOrderService.updateSupplier error:', error);
+      return {
+        success: false,
+        error: 'Failed to update supplier',
+      };
+    }
+  },
+
+  /**
+   * Update order series for a PO
+   */
+  async updateOrderSeries(
+    id: string,
+    orderSeries: string | null,
+    userId?: string
+  ): Promise<ServiceResult<void>> {
+    try {
+      const existing = await purchaseOrderRepository.findById(id);
+      if (!existing) {
+        return {
+          success: false,
+          error: 'Purchase order not found',
+        };
+      }
+
+      if (!['draft', 'sent'].includes(existing.status)) {
+        return {
+          success: false,
+          error: `Cannot edit purchase order in ${existing.status} status`,
+        };
+      }
+
+      // Use db (service role) to bypass RLS
+      const { error } = await db
+        .from('purchase_orders')
+        .update({
+          order_series: orderSeries,
+          updated_by: userId || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+
+      if (error) {
+        console.error('[updateOrderSeries] Error:', error);
+        return {
+          success: false,
+          error: 'Failed to update order series',
+        };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('PurchaseOrderService.updateOrderSeries error:', error);
+      return {
+        success: false,
+        error: 'Failed to update order series',
       };
     }
   },

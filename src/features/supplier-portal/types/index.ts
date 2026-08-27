@@ -12,7 +12,7 @@ export type ProductionStatus = 'not_started' | 'in_production' | 'ready_to_ship'
 
 export type SupplierStatus = 'active' | 'inactive' | 'pending';
 
-export type POStatus = 'draft' | 'sent' | 'confirmed' | 'partial' | 'received' | 'cancelled';
+export type POStatus = 'draft' | 'sent' | 'confirmed' | 'in_production' | 'ready_to_ship' | 'in_transit' | 'partial' | 'received' | 'cancelled';
 
 export type ShipmentStatus = 'pending' | 'in_transit' | 'delivered' | 'failed';
 

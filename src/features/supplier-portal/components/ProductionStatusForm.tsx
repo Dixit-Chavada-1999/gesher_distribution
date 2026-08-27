@@ -86,11 +86,19 @@ export function ProductionStatusForm({
   );
 
   const handleSubmit = () => {
+    // Validate required field
+    if (!expectedCompletionDate) {
+      toast.error('Validation Error', {
+        description: 'Expected Completion Date is required.',
+      });
+      return;
+    }
+
     startTransition(async () => {
       const result = await updateProductionStatusAction({
         poId: purchaseOrder.id,
         productionStatus,
-        expectedCompletionDate: expectedCompletionDate || undefined,
+        expectedCompletionDate,
         supplierNotes: supplierNotes || undefined,
       });
 
@@ -164,12 +172,13 @@ export function ProductionStatusForm({
             </RadioGroup>
           </div>
 
-          {/* Expected Completion Date */}
+          {/* Expected Completion Date - Required */}
           <div className="space-y-2">
             <Label htmlFor="expectedCompletionDate">
               <span className="flex items-center gap-2">
                 <Calendar className="h-4 w-4" />
                 Expected Completion Date
+                <span className="text-destructive">*</span>
               </span>
             </Label>
             <Input
@@ -178,7 +187,12 @@ export function ProductionStatusForm({
               value={expectedCompletionDate}
               onChange={(e) => setExpectedCompletionDate(e.target.value)}
               min={new Date().toISOString().split('T')[0]}
+              required
+              className={cn(!expectedCompletionDate && 'border-destructive')}
             />
+            {!expectedCompletionDate && (
+              <p className="text-sm text-destructive">This field is required</p>
+            )}
           </div>
 
           {/* Notes */}
@@ -202,7 +216,7 @@ export function ProductionStatusForm({
           >
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={isPending}>
+          <Button onClick={handleSubmit} disabled={isPending || !expectedCompletionDate}>
             {isPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -1,26 +1,27 @@
 'use client';
 
 /**
- * Create Purchase Order Drawer
+ * Create Purchase Order Modal
  *
- * Drawer component for creating new purchase orders.
+ * Modal component for creating new purchase orders.
  * Includes supplier selection dropdown.
  */
 
 import { useState, useEffect, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, Plus, X } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/shared/components/ui/sheet';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/shared/components/ui/dialog';
 import {
   Form,
   FormControl,
@@ -39,10 +40,13 @@ import {
 } from '@/shared/components/ui/select';
 import { Textarea } from '@/shared/components/ui/textarea';
 import { Separator } from '@/shared/components/ui/separator';
+import { ScrollArea } from '@/shared/components/ui/scroll-area';
 
 import { poFormSchema } from '../lib/schemas';
 import { createPurchaseOrder, getSuppliersForDropdown } from '../actions';
 import type { SupplierSummary, CreatePOItemDTO } from '../types';
+import { ORDER_SERIES } from '@/shared/lib/global-data';
+import { POItemsTable } from './POItemsTable';
 
 // ============================================
 // TYPES
@@ -72,7 +76,15 @@ export function CreatePurchaseOrderDrawer({
   const [suppliers, setSuppliers] = useState<SupplierSummary[]>([]);
   const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<SupplierSummary | null>(null);
-  const [items, setItems] = useState<CreatePOItemDTO[]>(defaultItems);
+
+  // Items with extended properties for the table
+  const [items, setItems] = useState<Array<CreatePOItemDTO & { id: string; lineTotal: number }>>(
+    defaultItems.map((item, index) => ({
+      ...item,
+      id: `poi-default-${index}`,
+      lineTotal: item.quantityOrdered * item.unitPrice,
+    }))
+  );
 
   // Track selected supplier for auto-assigning to items
   const [supplierIdForItems, setSupplierIdForItems] = useState<string>('');
@@ -85,6 +97,7 @@ export function CreatePurchaseOrderDrawer({
       salesOrderId: defaultSalesOrderId || '',
       warehouseId: '',
       currencyCode: 'USD',
+      orderSeries: '',
       vendorAddressStreet: '',
       vendorAddressCity: '',
       vendorAddressState: '',
@@ -159,6 +172,7 @@ export function CreatePurchaseOrderDrawer({
           warehouseId: (data.warehouseId as string) || null,
           currencyCode: (data.currencyCode as string) || 'USD',
           status: 'draft',
+          orderSeries: (data.orderSeries as string) || null,
           vendorAddress: {
             street: (data.vendorAddressStreet as string) || null,
             city: (data.vendorAddressCity as string) || null,
@@ -206,192 +220,183 @@ export function CreatePurchaseOrderDrawer({
   };
 
   return (
-    <Sheet open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
-      <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>Create Purchase Order</SheetTitle>
-          <SheetDescription>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
+      <DialogContent className="flex max-h-[90vh] h-[90vh] w-full max-w-4xl flex-col overflow-hidden p-0">
+        {/* Header */}
+        <DialogHeader className="flex-shrink-0 border-b px-6 py-4">
+          <DialogTitle className="text-xl font-semibold">Create Purchase Order</DialogTitle>
+          <DialogDescription>
             Create a new purchase order to a supplier.
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 mt-6">
-            {/* Supplier Selection (for auto-assigning to items) */}
-            <div className="space-y-4">
-              <h3 className="text-sm font-medium">Default Supplier</h3>
-              <div className="space-y-2">
-                <label className="text-sm text-muted-foreground">
-                  Select a supplier to auto-assign to items without a supplier
-                </label>
-                <Select
-                  value={supplierIdForItems}
-                  onValueChange={handleSupplierChange}
-                  disabled={isLoadingSuppliers}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={isLoadingSuppliers ? 'Loading...' : 'Select a supplier'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {suppliers.map((supplier) => (
-                      <SelectItem key={supplier.id} value={supplier.id}>
-                        {supplier.name}
-                        {supplier.primaryContactName && (
-                          <span className="text-muted-foreground ml-2">
-                            ({supplier.primaryContactName})
-                          </span>
-                        )}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* PO Details */}
-            <div className="space-y-4">
-              <h3 className="text-sm font-medium">Order Details</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="poDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>PO Date *</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="expectedDeliveryDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Expected Delivery</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Items Section */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium">Items</h3>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => toast.info('Add item functionality coming soon')}
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Item
-                </Button>
-              </div>
-              {items.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
-                  No items added yet. Click &quot;Add Item&quot; to add products.
+        {/* Content */}
+        <ScrollArea className="flex-1 h-0 min-h-0">
+          <div className="px-6 py-6">
+            <Form {...form}>
+              <form id="create-po-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                {/* Supplier Selection (for auto-assigning to items) */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium">Default Supplier</h3>
+                  <div className="space-y-2">
+                    <label className="text-sm text-muted-foreground">
+                      Select a supplier to auto-assign to items without a supplier
+                    </label>
+                    <Select
+                      value={supplierIdForItems}
+                      onValueChange={handleSupplierChange}
+                      disabled={isLoadingSuppliers}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={isLoadingSuppliers ? 'Loading...' : 'Select a supplier'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {suppliers.map((supplier) => (
+                          <SelectItem key={supplier.id} value={supplier.id}>
+                            {supplier.name}
+                            {supplier.primaryContactName && (
+                              <span className="text-muted-foreground ml-2">
+                                ({supplier.primaryContactName})
+                              </span>
+                            )}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              ) : (
-                <div className="space-y-2">
-                  {items.map((item, index) => {
-                    const isServiceOrNonInventory = item.itemType === 'service' || item.itemType === 'non_inventory';
-                    return (
-                      <div
-                        key={index}
-                        className="flex items-center justify-between p-3 bg-muted rounded-lg"
-                      >
-                        <div>
-                          <p className="font-medium">{item.sku}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {isServiceOrNonInventory
-                              ? `@ ${(item.unitPrice / 100).toFixed(2)}`
-                              : `Qty: ${item.quantityOrdered} @ ${(item.unitPrice / 100).toFixed(2)}`
-                            }
-                          </p>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setItems(items.filter((_, i) => i !== index));
-                          }}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    );
-                  })}
+
+                <Separator />
+
+                {/* Order Details - Order Series, PO Date, Expected Delivery in single row */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium">Order Details</h3>
+                  <div className="grid grid-cols-3 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="orderSeries"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Order Series *</FormLabel>
+                          <Select
+                            value={field.value || ''}
+                            onValueChange={field.onChange}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {ORDER_SERIES.map((series) => (
+                                <SelectItem key={series.id} value={series.code}>
+                                  {series.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="poDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>PO Date *</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="expectedDeliveryDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Expected Delivery</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </div>
-              )}
-            </div>
 
-            <Separator />
+                <Separator />
 
-            {/* Notes */}
-            <div className="space-y-4">
-              <h3 className="text-sm font-medium">Notes</h3>
-              <FormField
-                control={form.control}
-                name="vendorNotes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Notes for Supplier</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Notes visible to supplier..."
-                        rows={2}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="internalNotes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Internal Notes</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Internal notes (not visible to supplier)..."
-                        rows={2}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+                {/* Items Section - Inline Table */}
+                <POItemsTable
+                  items={items}
+                  onItemsChange={setItems}
+                />
 
-            {/* Actions */}
-            <div className="flex justify-end gap-3 pt-4">
-              <Button type="button" variant="outline" onClick={handleClose} disabled={isPending}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isPending || items.length === 0}>
-                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Create Purchase Order
-              </Button>
-            </div>
-          </form>
-        </Form>
-      </SheetContent>
-    </Sheet>
+                <Separator />
+
+                {/* Notes */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium">Notes</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="vendorNotes"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Notes for Supplier</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              placeholder="Notes visible to supplier..."
+                              rows={3}
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="internalNotes"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Internal Notes</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              placeholder="Internal notes (not visible to supplier)..."
+                              rows={3}
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+              </form>
+            </Form>
+          </div>
+        </ScrollArea>
+
+        {/* Footer */}
+        <Separator />
+        <DialogFooter className="flex-shrink-0 border-t px-6 py-4">
+          <div className="flex w-full items-center justify-end gap-3">
+            <Button type="button" variant="outline" onClick={handleClose} disabled={isPending}>
+              Cancel
+            </Button>
+            <Button type="submit" form="create-po-form" disabled={isPending || items.length === 0}>
+              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Create Purchase Order
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

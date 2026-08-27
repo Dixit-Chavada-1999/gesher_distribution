@@ -89,13 +89,15 @@ export function ShipmentsTableColumns(options: ColumnsOptions = {}): ColumnDef<S
 
         return (
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+            {/* Stop the click here: the row itself opens the view drawer, so
+                without this a menu action fires alongside it. */}
+            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
               <Button variant="ghost" size="icon" className="h-8 w-8">
                 <span className="sr-only">Open menu</span>
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
               {onView && (
                 <DropdownMenuItem onClick={() => onView(shipment)}>
                   <Eye className="mr-2 h-4 w-4" />

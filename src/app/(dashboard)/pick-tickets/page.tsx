@@ -96,7 +96,10 @@ export default function PickTicketsPage() {
 
   const handleEdit = useCallback((pickTicket: PickTicketListItem | PickTicketWithItems) => {
     setSelectedPickTicketId(pickTicket.id);
-    setIsEditDrawerOpen(true);
+    // Close the view drawer first so the edit modal is the only surface on
+    // screen. The sheet's close animation is 300ms (see ui/sheet.tsx).
+    setIsViewDrawerOpen(false);
+    setTimeout(() => setIsEditDrawerOpen(true), 320);
   }, []);
 
   const handleEditDrawerClose = useCallback(() => {

@@ -13,6 +13,7 @@ import type {
   PickTicketListParams,
   CreatePickTicketDTO,
   UpdatePickTicketDTO,
+  UpdatePickTicketItemDTO,
   PickTicketStatus,
   PickTicketPriority,
   PaginatedResult,
@@ -461,11 +462,19 @@ class PickTicketRepositoryImpl {
       updated_at: new Date().toISOString(),
     };
 
+    if (dto.status !== undefined) {
+      updateData.status = dto.status;
+    }
+
     if (dto.assignedTo !== undefined) {
       updateData.assigned_to = dto.assignedTo;
       if (dto.assignedTo) {
         updateData.assigned_at = new Date().toISOString();
       }
+    }
+
+    if (dto.warehouseId !== undefined) {
+      updateData.warehouse_id = dto.warehouseId;
     }
 
     if (dto.priority !== undefined) {
@@ -618,6 +627,42 @@ class PickTicketRepositoryImpl {
     }
 
     return (data || []).every((item) => item.quantity_picked >= item.quantity_to_pick);
+  }
+
+  /**
+   * Update pick ticket items (quantity_to_pick and/or quantity_picked)
+   */
+  async updateItems(
+    items: UpdatePickTicketItemDTO[],
+    userId?: string
+  ): Promise<void> {
+    console.log('[PickTicketRepository.updateItems] Updating items:', items);
+    for (const item of items) {
+      const updateData: Record<string, unknown> = {
+        updated_by: userId || null,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (item.quantityToPick !== undefined) {
+        updateData.quantity_to_pick = item.quantityToPick;
+      }
+      if (item.quantityPicked !== undefined) {
+        updateData.quantity_picked = item.quantityPicked;
+      }
+
+      const { data, error } = await db
+        .from('pick_ticket_items')
+        .update(updateData)
+        .eq('id', item.id)
+        .select();
+
+      console.log('[PickTicketRepository.updateItems] Result for item', item.id, ':', { data, error });
+
+      if (error) {
+        console.error('[PickTicketRepository.updateItems] Error:', error);
+        throw new Error(`Failed to update pick ticket item: ${error.message}`);
+      }
+    }
   }
 }
 

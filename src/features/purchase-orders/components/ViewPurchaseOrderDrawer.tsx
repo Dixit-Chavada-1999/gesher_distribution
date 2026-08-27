@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Sheet,
@@ -30,13 +30,21 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/shared/components/ui/alert-dialog';
-import { Pencil, Building2, MapPin, Send, Loader2, Calendar } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/components/ui/select';
+import { Pencil, Building2, MapPin, Send, Loader2, Calendar, X, Layers } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/shared/lib/utils';
 import { usePurchaseOrder } from '../hooks/usePurchaseOrder';
-import { sendPurchaseOrder } from '../actions';
+import { sendPurchaseOrder, getSuppliersForDropdown, updatePOSupplier, updatePOOrderSeries } from '../actions';
 import { PO_STATUS_COLORS, PO_STATUS_LABELS } from '../types';
-import type { ViewPurchaseOrderDrawerProps } from '../types';
+import type { ViewPurchaseOrderDrawerProps, SupplierSummary } from '../types';
+import { ORDER_SERIES } from '@/shared/lib/global-data';
 
 export function ViewPurchaseOrderDrawer({
   open,
@@ -48,12 +56,84 @@ export function ViewPurchaseOrderDrawer({
   const [isPending, startTransition] = useTransition();
   const [showSendDialog, setShowSendDialog] = useState(false);
 
+  // Inline editing state
+  const [suppliers, setSuppliers] = useState<SupplierSummary[]>([]);
+  const [isEditingSupplier, setIsEditingSupplier] = useState(false);
+  const [isEditingOrderSeries, setIsEditingOrderSeries] = useState(false);
+  const [isUpdatingSupplier, setIsUpdatingSupplier] = useState(false);
+  const [isUpdatingOrderSeries, setIsUpdatingOrderSeries] = useState(false);
+
+  // Load suppliers when editing
+  useEffect(() => {
+    if (isEditingSupplier && suppliers.length === 0) {
+      loadSuppliers();
+    }
+  }, [isEditingSupplier, suppliers.length]);
+
+  const loadSuppliers = async () => {
+    const data = await getSuppliersForDropdown();
+    setSuppliers(data);
+  };
+
+  // Get current supplier from items (assuming all items have same supplier)
+  const currentSupplier = po?.items.find((item) => item.supplierId)?.supplierName || null;
+  const currentSupplierId = po?.items.find((item) => item.supplierId)?.supplierId || null;
+
   const handleEditClick = () => {
     if (po && onEdit) {
       // Call onEdit which will handle closing drawer and opening edit modal
       onEdit(po);
     }
   };
+
+  const handleUpdateSupplier = async (supplierId: string) => {
+    if (!po) return;
+
+    const supplierIdValue = supplierId === 'none' ? null : supplierId;
+    const supplier = suppliers.find((s) => s.id === supplierIdValue);
+    const supplierName = supplier?.name || null;
+
+    setIsUpdatingSupplier(true);
+    try {
+      const result = await updatePOSupplier(po.id, supplierIdValue, supplierName);
+      if (result.success) {
+        toast.success('Supplier updated');
+        setIsEditingSupplier(false);
+        refetch();
+      } else {
+        toast.error(result.error || 'Failed to update supplier');
+      }
+    } catch {
+      toast.error('Failed to update supplier');
+    } finally {
+      setIsUpdatingSupplier(false);
+    }
+  };
+
+  const handleUpdateOrderSeries = async (orderSeries: string) => {
+    if (!po) return;
+
+    const orderSeriesValue = orderSeries === 'none' ? null : orderSeries;
+
+    setIsUpdatingOrderSeries(true);
+    try {
+      const result = await updatePOOrderSeries(po.id, orderSeriesValue);
+      if (result.success) {
+        toast.success('Order series updated');
+        setIsEditingOrderSeries(false);
+        refetch();
+      } else {
+        toast.error(result.error || 'Failed to update order series');
+      }
+    } catch {
+      toast.error('Failed to update order series');
+    } finally {
+      setIsUpdatingOrderSeries(false);
+    }
+  };
+
+  // Can edit only for draft and sent POs
+  const canInlineEdit = po && ['draft', 'sent'].includes(po.status);
 
   const handleSendToSupplier = () => {
     if (!po) {
@@ -103,6 +183,11 @@ export function ViewPurchaseOrderDrawer({
                     <Calendar className="h-3.5 w-3.5" />
                     <span>{new Date(po.poDate).toLocaleDateString()}</span>
                   </div>
+                  {po.orderSeries && (
+                    <Badge variant="secondary" className="text-xs font-medium">
+                      {po.orderSeries}
+                    </Badge>
+                  )}
                   <Badge
                     variant="outline"
                     className={cn(
@@ -145,6 +230,131 @@ export function ViewPurchaseOrderDrawer({
                       .join(', ')}
                   </p>
                   {po.shipToAddressCountry && <p>{po.shipToAddressCountry}</p>}
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Supplier & Order Series - Editable */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* Supplier */}
+              <div className="flex items-start gap-3">
+                <div className="text-muted-foreground mt-0.5 flex-shrink-0">
+                  <Building2 className="h-4 w-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-muted-foreground mb-0.5">Supplier</p>
+                  {isEditingSupplier ? (
+                    <div className="flex items-center gap-2">
+                      <Select
+                        defaultValue={currentSupplierId || 'none'}
+                        onValueChange={handleUpdateSupplier}
+                        disabled={isUpdatingSupplier}
+                      >
+                        <SelectTrigger className="h-8 w-[180px]">
+                          <SelectValue placeholder="Select supplier" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Select supplier</SelectItem>
+                          {suppliers.map((supplier) => (
+                            <SelectItem key={supplier.id} value={supplier.id}>
+                              {supplier.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {isUpdatingSupplier ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => setIsEditingSupplier(false)}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-foreground">
+                        {currentSupplier || '-'}
+                      </p>
+                      {canInlineEdit && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                          onClick={() => setIsEditingSupplier(true)}
+                          title="Edit supplier"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Order Series */}
+              <div className="flex items-start gap-3">
+                <div className="text-muted-foreground mt-0.5 flex-shrink-0">
+                  <Layers className="h-4 w-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-muted-foreground mb-0.5">Order Series</p>
+                  {isEditingOrderSeries ? (
+                    <div className="flex items-center gap-2">
+                      <Select
+                        defaultValue={po.orderSeries || 'none'}
+                        onValueChange={handleUpdateOrderSeries}
+                        disabled={isUpdatingOrderSeries}
+                      >
+                        <SelectTrigger className="h-8 w-[180px]">
+                          <SelectValue placeholder="Select series" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Select order series</SelectItem>
+                          {ORDER_SERIES.map((series) => (
+                            <SelectItem key={series.id} value={series.code}>
+                              {series.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {isUpdatingOrderSeries ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => setIsEditingOrderSeries(false)}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-foreground">
+                        {po.orderSeries || '-'}
+                      </p>
+                      {canInlineEdit && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                          onClick={() => setIsEditingOrderSeries(true)}
+                          title="Edit order series"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

@@ -22,6 +22,7 @@ import type {
   UpdatePickTicketDTO,
   PickItemDTO,
   PickTicketStatus,
+  PickTicketPdfSalesOrderFields,
 } from '../types';
 
 // ============================================
@@ -111,6 +112,56 @@ export async function getPickTicket(id: string) {
 // GET PICK TICKETS BY SALES ORDER
 // ============================================
 
+/**
+ * Everything the pick ticket PDF needs, in one authorized call.
+ *
+ * The pick ticket join does not carry the ship-to address, the required date
+ * or the customer PO, so those are read from the sales order here rather than
+ * in the API route — routes in this codebase never touch `db` directly.
+ */
+export async function getPickTicketPdfData(
+  id: string
+): Promise<ActionResult<{ pickTicket: PickTicketWithItems; salesOrder: PickTicketPdfSalesOrderFields | null }>> {
+  const auth = await authorizeAny(['pick_tickets.view', 'pick_tickets.edit']);
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  const result = await PickTicketService.getPickTicketById(id);
+  if (!result.success || !result.data) {
+    return { success: false, error: result.error || 'Pick ticket not found' };
+  }
+
+  const pickTicket = result.data;
+  let salesOrder: PickTicketPdfSalesOrderFields | null = null;
+
+  if (pickTicket.salesOrderId) {
+    const { data, error } = await db
+      .from('sales_orders')
+      .select(
+        `
+        shipping_address_street,
+        shipping_address_city,
+        shipping_address_state,
+        shipping_address_postal_code,
+        requested_delivery_date,
+        customer_po_number
+      `
+      )
+      .eq('id', pickTicket.salesOrderId)
+      .single();
+
+    if (error) {
+      // The PDF is still useful without these fields, so log and carry on.
+      console.error('[getPickTicketPdfData] Sales order lookup failed:', error);
+    } else {
+      salesOrder = data as unknown as PickTicketPdfSalesOrderFields;
+    }
+  }
+
+  return { success: true, data: { pickTicket, salesOrder } };
+}
+
 export async function getPickTicketsBySalesOrder(salesOrderId: string) {
   const auth = await authorize('pick_tickets.view');
   if (!auth.ok) {
@@ -145,15 +196,137 @@ export async function createPickTicket(data: CreatePickTicketDTO) {
 // UPDATE PICK TICKET
 // ============================================
 
+/**
+ * Update pick ticket with proper status transition handling.
+ *
+ * When status is changed via Edit dialog, we trigger the same
+ * business logic that would run via normal workflow buttons:
+ *
+ * - To 'picked': Auto-set quantity_picked = quantity_to_pick for all items
+ * - To 'shipped': Ship inventory + Create shipment (if not via packing list)
+ * - To 'packed': Only allowed via Packing List flow (blocked here)
+ */
 export async function updatePickTicket(id: string, data: UpdatePickTicketDTO) {
   const auth = await authorize('pick_tickets.edit');
   if (!auth.ok) {
     return auth.result;
   }
 
+  // Get current pick ticket to check status transition
+  const currentPT = await PickTicketService.getPickTicketById(id);
+  if (!currentPT.success || !currentPT.data) {
+    return { success: false, error: 'Pick ticket not found' };
+  }
+
+  const oldStatus = currentPT.data.status;
+  const newStatus = data.status;
+  const pickTicket = currentPT.data;
+
+  // Block transition to 'packed' - must use Packing List workflow
+  if (newStatus === 'packed' && oldStatus !== 'packed') {
+    // Provide context-specific error message
+    if (pickTicket.packingList) {
+      return {
+        success: false,
+        error: 'Cannot change status to "packed" here. Please go to Packing Lists and mark the packing list as "Packed" instead. This will automatically update the pick ticket status.',
+      };
+    }
+    // Special case: status is 'packing' but no packing list exists (data inconsistency)
+    if (oldStatus === 'packing') {
+      return {
+        success: false,
+        error: 'Status is "packing" but no Packing List found. Please change status to "picked" first, then create a new Packing List.',
+      };
+    }
+    return {
+      success: false,
+      error: 'Cannot change status to "packed" directly. Please create a Packing List first, then mark it as "Packed".',
+    };
+  }
+
+  // Allow reverting from 'packing' to 'picked' if no packing list exists (data cleanup)
+  if (newStatus === 'picked' && oldStatus === 'packing' && !pickTicket.packingList) {
+    console.log('[updatePickTicket] Allowing revert from "packing" to "picked" - no packing list exists (data cleanup)');
+    // Continue with normal update - no special handling needed
+  }
+
+  // Handle transition to 'picked' status - auto-set quantity_picked
+  if (newStatus === 'picked' && oldStatus !== 'picked') {
+    // If items are not provided with quantities, auto-set quantity_picked = quantity_to_pick
+    if (!data.items || data.items.length === 0) {
+      const autoItems = pickTicket.items.map((item) => ({
+        id: item.id,
+        quantityPicked: item.quantityToPick,
+      }));
+      data.items = autoItems;
+      console.log('[updatePickTicket] Auto-setting quantity_picked for transition to "picked"');
+    }
+  }
+
+  // Handle transition to 'shipped' status (direct ship without packing list)
+  if (newStatus === 'shipped' && oldStatus !== 'shipped') {
+    // Check if packing list exists - if yes, should use packing list flow
+    if (pickTicket.packingList) {
+      return {
+        success: false,
+        error: 'A packing list exists for this pick ticket. Please mark the packing list as "shipped" instead.',
+      };
+    }
+
+    // Auto-set quantity_picked if transitioning from non-picked status
+    if (oldStatus !== 'picked' && (!data.items || data.items.length === 0)) {
+      const autoItems = pickTicket.items.map((item) => ({
+        id: item.id,
+        quantityPicked: item.quantityToPick,
+      }));
+      data.items = autoItems;
+      console.log('[updatePickTicket] Auto-setting quantity_picked for transition to "shipped"');
+    }
+  }
+
+  // Perform the update
   const result = await PickTicketService.updatePickTicket(id, data, auth.user.id);
 
   if (result.success) {
+    // If transitioning to 'shipped', trigger inventory ship and shipment creation
+    if (newStatus === 'shipped' && oldStatus !== 'shipped') {
+      // Refresh pick ticket data after update to get updated quantities
+      const updatedPT = await PickTicketService.getPickTicketById(id);
+      if (updatedPT.success && updatedPT.data) {
+        // Ship inventory for each picked item
+        try {
+          await shipInventoryForPickTicket(updatedPT.data, auth.user.id);
+          console.log('[updatePickTicket] Inventory shipped for status transition to "shipped"');
+        } catch (error) {
+          console.error('[updatePickTicket] Failed to ship inventory:', error);
+        }
+
+        // Create shipment record
+        try {
+          await createShipmentFromCompletedPickTicket(updatedPT.data, auth.user.id);
+          console.log('[updatePickTicket] Shipment created for status transition to "shipped"');
+        } catch (error) {
+          console.error('[updatePickTicket] Failed to create shipment:', error);
+          // Return success with warning - don't fail the update
+          revalidatePath('/pick-tickets');
+          revalidatePath(`/pick-tickets/${id}`);
+          revalidatePath('/inventory');
+          revalidatePath('/operations');
+          revalidatePath('/shipments');
+          return {
+            success: true,
+            data: result.data,
+            warning: `Status updated to "shipped" but shipment could not be created: ${error instanceof Error ? error.message : String(error)}`,
+          };
+        }
+      }
+
+      // Revalidate all related paths
+      revalidatePath('/inventory');
+      revalidatePath('/operations');
+      revalidatePath('/shipments');
+    }
+
     revalidatePath('/pick-tickets');
     revalidatePath(`/pick-tickets/${id}`);
   }
@@ -285,17 +458,27 @@ export async function completePicking(id: string) {
 
     // Auto-create shipment with source='warehouse' for GDC1 Inventory
     // Shipment is created when items are actually picked and ready to ship
+    // The picking is already committed at this point, so a shipment failure
+    // must not roll it back — but it must never be silent either: without a
+    // shipment the order simply disappears from the Shipments page.
+    let shipmentWarning: string | undefined;
     try {
       await createShipmentFromCompletedPickTicket(pickTicket, auth.user.id);
     } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
       console.error('[completePicking] Failed to create warehouse shipment:', error);
-      // Don't fail the completion if shipment creation fails
+      shipmentWarning = `Picking completed, but the shipment could not be created: ${detail}`;
     }
 
     revalidatePath('/pick-tickets');
     revalidatePath(`/pick-tickets/${id}`);
     revalidatePath('/inventory');
     revalidatePath('/operations');
+    revalidatePath('/shipments');
+
+    if (shipmentWarning) {
+      return { ...result, warning: shipmentWarning };
+    }
   }
 
   return result;
@@ -733,18 +916,19 @@ async function createShipmentFromCompletedPickTicket(
     throw new Error(`Failed to generate shipment number: ${numError.message}`);
   }
 
-  // Get sales order with customer info
-  const { data: salesOrder } = await db
+  // Get sales order with customer info.
+  // Note: the ship-to columns on sales_orders are named shipping_address_*
+  // (migration 012). There is no ship_to_name — the recipient is the customer.
+  const { data: salesOrder, error: soError } = await db
     .from('sales_orders')
     .select(`
       id,
       order_number,
-      ship_to_address_street,
-      ship_to_address_city,
-      ship_to_address_state,
-      ship_to_address_postal_code,
-      ship_to_address_country,
-      ship_to_name,
+      shipping_address_street,
+      shipping_address_city,
+      shipping_address_state,
+      shipping_address_postal_code,
+      shipping_address_country,
       customer_po_number,
       requested_delivery_date,
       customers(id, name)
@@ -752,10 +936,15 @@ async function createShipmentFromCompletedPickTicket(
     .eq('id', pickTicket.salesOrderId)
     .single();
 
-  if (!salesOrder) {
-    console.log('[completePicking] Sales order not found, skipping shipment creation');
-    return;
+  if (soError || !salesOrder) {
+    throw new Error(
+      `Failed to load sales order ${pickTicket.salesOrderId} for shipment creation: ${soError?.message || 'not found'}`
+    );
   }
+
+  const customer = Array.isArray(salesOrder.customers)
+    ? salesOrder.customers[0]
+    : salesOrder.customers;
 
   // Calculate total quantity from picked items
   const totalQty = (pickTicket.items || []).reduce((sum, item) => {
@@ -774,12 +963,12 @@ async function createShipmentFromCompletedPickTicket(
       load_status: 'in_transit', // Items are picked and ready to ship
       total_qty: totalQty,
       outstanding_qty: totalQty,
-      ship_to_name: salesOrder.ship_to_name || null,
-      ship_to_address_street: salesOrder.ship_to_address_street || null,
-      ship_to_address_city: salesOrder.ship_to_address_city || null,
-      ship_to_address_state: salesOrder.ship_to_address_state || null,
-      ship_to_address_postal_code: salesOrder.ship_to_address_postal_code || null,
-      ship_to_address_country: salesOrder.ship_to_address_country || null,
+      ship_to_name: customer?.name || null,
+      ship_to_address_street: salesOrder.shipping_address_street || null,
+      ship_to_address_city: salesOrder.shipping_address_city || null,
+      ship_to_address_state: salesOrder.shipping_address_state || null,
+      ship_to_address_postal_code: salesOrder.shipping_address_postal_code || null,
+      ship_to_address_country: salesOrder.shipping_address_country || null,
       customer_expected_delivery: salesOrder.requested_delivery_date || null,
       status: 'in_transit',
       created_by: userId || null,

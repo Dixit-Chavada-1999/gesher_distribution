@@ -97,6 +97,33 @@ export const TAX_RATES: TaxRate[] = [
 ];
 
 // ============================================
+// ORDER SERIES
+// ============================================
+
+export interface OrderSeries {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+}
+
+/**
+ * Order Series for Purchase Orders.
+ * These are time-based groupings for order cycles, NOT warehouse locations.
+ *
+ * - GDC 1: Order series for Q2 → Q3
+ * - GDC 2: Order series for Q3 → Q4 → Q1 next year
+ * - GDC 3: Future order series
+ *
+ * Multiple warehouses can have inventory for the same order series.
+ */
+export const ORDER_SERIES: OrderSeries[] = [
+  { id: 'gdc-1', code: 'GDC 1', name: 'GDC 1', description: 'Order series for Q2 → Q3' },
+  { id: 'gdc-2', code: 'GDC 2', name: 'GDC 2', description: 'Order series for Q3 → Q4 → Q1' },
+  { id: 'gdc-3', code: 'GDC 3', name: 'GDC 3', description: 'Future order series' },
+];
+
+// ============================================
 // DEFAULT VALUES
 // ============================================
 

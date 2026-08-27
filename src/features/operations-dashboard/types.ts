@@ -210,9 +210,39 @@ export interface OperationsData {
   supplierScheduleSkus: SKUColumnInfo[];  // Dynamic SKU column headers with product names
   gdc1Inventory: GDC1InventoryItem[];
   gdc1InventorySkus: SKUColumnInfo[];  // Dynamic SKU column headers with product names
+  // New: GDC inventories by order series (from Purchase Orders)
+  gdcInventories: GDCInventoryData[];   // Array of GDC inventories for each order series
   rimInstallationRequired: RimInstallationItem[];
   rimInstallationSkus: SKUColumnInfo[];  // Dynamic SKU column headers for rim installation
   storyInBrief: string;
+}
+
+// ============================================
+// GDC INVENTORY BY ORDER SERIES (from Purchase Orders)
+// ============================================
+
+export interface GDCInventoryItem {
+  id: string;
+  no: number;
+  poNumber: string;           // PO Number
+  soNumber: string | null;    // Linked SO Number (if any)
+  orderSeries: string;        // GDC 1, GDC 2, GDC 3
+  items: ShipmentItemDetail[];
+  totalQty: number;
+  customer: string | null;    // Customer name (from linked SO or "Unallocated")
+  supplierName: string | null;
+  etaToUsPort: string | null;
+  deliveryAddress: string;
+  expectedDelivery: string | null;
+  status: string;             // PO status: draft, sent, confirmed, etc.
+  actionRequired: string;
+  notes: string;
+}
+
+export interface GDCInventoryData {
+  orderSeries: string;        // e.g., "GDC 1"
+  items: GDCInventoryItem[];
+  uniqueSkus: SKUColumnInfo[];
 }
 
 // ============================================
@@ -225,6 +255,7 @@ export interface OperationsFilters {
   status?: ShipmentStatus;
   salesOrderId?: string;
   customerPoNumber?: string;  // Customer PO Number from sales_orders.customer_po_number
+  orderSeries?: string;       // Filter by GDC order series
 }
 
 export interface FilterOption {

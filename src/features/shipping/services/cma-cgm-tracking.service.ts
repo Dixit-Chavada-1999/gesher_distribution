@@ -25,6 +25,7 @@ import {
   createStatusHistory,
   updateShipmentLoadStatus,
   updateSalesOrderStatus,
+  updatePurchaseOrderStatus,
 } from '../repositories/shipping.repository';
 
 import { createAdminClient } from '@/shared/lib/supabase/admin';
@@ -324,6 +325,7 @@ export async function fetchContainerEvents(
 export async function updateShipmentFromCmaCgm(
   shipmentId: string,
   salesOrderId: string | null,
+  purchaseOrderId: string | null,
   _containerNumber: string,
   mappedStatus: CmaCgmMappedStatus
 ): Promise<boolean> {
@@ -369,6 +371,15 @@ export async function updateShipmentFromCmaCgm(
       }
     }
 
+    // Update purchase order status if applicable
+    // When shipment is delivered, mark PO as received
+    if (purchaseOrderId) {
+      const poStatus = mapTrackingToPurchaseOrderStatus(mappedStatus.trackingStatus);
+      if (poStatus) {
+        await updatePurchaseOrderStatus(purchaseOrderId, poStatus);
+      }
+    }
+
     // Update last sync timestamp
     const supabase = createAdminClient();
     await supabase
@@ -406,6 +417,32 @@ function mapTrackingToSalesOrderStatus(trackingStatus: string): string | null {
   }
 }
 
+/**
+ * Map tracking status to purchase order status
+ * When shipment departs/in transit → PO is in_transit
+ * When shipment is delivered → PO is received
+ */
+function mapTrackingToPurchaseOrderStatus(trackingStatus: string): string | null {
+  switch (trackingStatus) {
+    case 'booked':
+    case 'container_picked':
+      return 'ready_to_ship';
+    case 'loaded_on_vessel':
+    case 'departed_origin':
+    case 'in_transit':
+    case 'arrived_port':
+    case 'customs_clearance':
+    case 'on_rail':
+    case 'at_ramp':
+    case 'out_for_delivery':
+      return 'in_transit';
+    case 'delivered':
+      return 'received';
+    default:
+      return null;
+  }
+}
+
 // ============================================
 // CONTAINER SYNC
 // ============================================
@@ -417,6 +454,7 @@ export async function getActiveContainersForTracking(): Promise<
   Array<{
     shipmentId: string;
     salesOrderId: string | null;
+    purchaseOrderId: string | null;
     containerNumber: string;
   }>
 > {
@@ -425,7 +463,7 @@ export async function getActiveContainersForTracking(): Promise<
   // Get shipments with container numbers that are not yet delivered
   const { data, error } = await supabase
     .from('shipments')
-    .select('id, sales_order_id, container_number, tracking_status')
+    .select('id, sales_order_id, purchase_order_id, container_number, tracking_status')
     .not('container_number', 'is', null)
     .not('tracking_status', 'eq', 'delivered')
     .is('deleted_at', null)
@@ -441,6 +479,7 @@ export async function getActiveContainersForTracking(): Promise<
     .map((s) => ({
       shipmentId: s.id,
       salesOrderId: s.sales_order_id,
+      purchaseOrderId: s.purchase_order_id,
       containerNumber: s.container_number!,
     }));
 }
@@ -528,6 +567,7 @@ export async function syncAllContainers(): Promise<CmaCgmSyncResult> {
       const updated = await updateShipmentFromCmaCgm(
         container.shipmentId,
         container.salesOrderId,
+        container.purchaseOrderId,
         container.containerNumber,
         mappedStatus
       );

@@ -34,6 +34,7 @@ interface DbPurchaseOrder {
   warehouse_id: string | null;
   currency_code: string;
   status: POStatus;
+  order_series: string | null;
   vendor_address_street: string | null;
   vendor_address_city: string | null;
   vendor_address_state: string | null;
@@ -114,6 +115,7 @@ class PurchaseOrderRepositoryImpl {
         po_date,
         expected_delivery_date,
         status,
+        order_series,
         grand_total,
         currency_code,
         created_at
@@ -306,6 +308,7 @@ class PurchaseOrderRepositoryImpl {
         warehouse_id: data.warehouseId || null,
         currency_code: data.currencyCode || 'USD',
         status: data.status || 'draft',
+        order_series: data.orderSeries || null,
         vendor_address_street: data.vendorAddress.street,
         vendor_address_city: data.vendorAddress.city,
         vendor_address_state: data.vendorAddress.state,
@@ -380,6 +383,7 @@ class PurchaseOrderRepositoryImpl {
     }
     if (data.warehouseId !== undefined) {updateData.warehouse_id = data.warehouseId;}
     if (data.currencyCode !== undefined) {updateData.currency_code = data.currencyCode;}
+    if (data.orderSeries !== undefined) {updateData.order_series = data.orderSeries;}
     if (data.vendorAddress !== undefined) {
       updateData.vendor_address_street = data.vendorAddress.street;
       updateData.vendor_address_city = data.vendorAddress.city;
@@ -577,6 +581,7 @@ class PurchaseOrderRepositoryImpl {
       warehouseId: data.warehouse_id,
       currencyCode: data.currency_code,
       status: data.status,
+      orderSeries: data.order_series,
       vendorAddressStreet: data.vendor_address_street,
       vendorAddressCity: data.vendor_address_city,
       vendorAddressState: data.vendor_address_state,
@@ -639,6 +644,7 @@ class PurchaseOrderRepositoryImpl {
       po_date: string;
       expected_delivery_date: string | null;
       status: POStatus;
+      order_series: string | null;
       grand_total: number;
       currency_code: string;
       created_at: string;
@@ -652,6 +658,7 @@ class PurchaseOrderRepositoryImpl {
       poDate: data.po_date,
       expectedDeliveryDate: data.expected_delivery_date,
       status: data.status,
+      orderSeries: data.order_series,
       grandTotal: data.grand_total,
       currencyCode: data.currency_code,
       itemCount: itemCounts[data.id] || 0,

@@ -7,7 +7,7 @@
  */
 
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontal, Eye, Trash2, Package, CheckCircle } from 'lucide-react';
+import { MoreHorizontal, Eye, Trash2, Package, CheckCircle, FileText } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
@@ -128,13 +128,13 @@ export function getPackingListsTableColumns({
 
         return (
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
               <Button variant="ghost" size="icon" className="h-8 w-8">
                 <MoreHorizontal className="h-4 w-4" />
                 <span className="sr-only">Open menu</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {onView && (
@@ -143,6 +143,14 @@ export function getPackingListsTableColumns({
                   View
                 </DropdownMenuItem>
               )}
+              <DropdownMenuItem
+                onClick={() =>
+                  window.open(`/api/packing-lists/${packingList.id}/pdf`, '_blank')
+                }
+              >
+                <FileText className="mr-2 h-4 w-4" />
+                View PDF
+              </DropdownMenuItem>
               {onMarkAsPacked && canMarkAsPacked && (
                 <DropdownMenuItem onClick={() => onMarkAsPacked(packingList)}>
                   <CheckCircle className="mr-2 h-4 w-4" />

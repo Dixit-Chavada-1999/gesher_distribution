@@ -13,6 +13,9 @@ export type POStatus =
   | 'draft'
   | 'sent'
   | 'confirmed'
+  | 'in_production'
+  | 'ready_to_ship'
+  | 'in_transit'
   | 'partial'
   | 'received'
   | 'cancelled';
@@ -21,6 +24,9 @@ export const PO_STATUSES: POStatus[] = [
   'draft',
   'sent',
   'confirmed',
+  'in_production',
+  'ready_to_ship',
+  'in_transit',
   'partial',
   'received',
   'cancelled',
@@ -30,6 +36,9 @@ export const PO_STATUS_LABELS: Record<POStatus, string> = {
   draft: 'Draft',
   sent: 'Sent',
   confirmed: 'Confirmed',
+  in_production: 'In Production',
+  ready_to_ship: 'Ready to Ship',
+  in_transit: 'In Transit',
   partial: 'Partial',
   received: 'Received',
   cancelled: 'Cancelled',
@@ -39,16 +48,23 @@ export const PO_STATUS_COLORS: Record<POStatus, string> = {
   draft: 'bg-stone-100 text-stone-700 border border-stone-200',
   sent: 'bg-sky-100 text-sky-800 border border-sky-200',
   confirmed: 'bg-indigo-100 text-indigo-800 border border-indigo-200',
+  in_production: 'bg-violet-100 text-violet-800 border border-violet-200',
+  ready_to_ship: 'bg-cyan-100 text-cyan-800 border border-cyan-200',
+  in_transit: 'bg-blue-100 text-blue-800 border border-blue-200',
   partial: 'bg-amber-100 text-amber-800 border border-amber-200',
   received: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
   cancelled: 'bg-red-100 text-red-800 border border-red-200',
 };
 
-// Valid status transitions per client doc
+// Valid status transitions
+// Production statuses (in_production, ready_to_ship, in_transit) are set automatically by supplier
 export const PO_STATUS_TRANSITIONS: Record<POStatus, POStatus[]> = {
   draft: ['sent', 'cancelled'],
   sent: ['confirmed', 'cancelled'],
-  confirmed: ['partial', 'received', 'cancelled'],
+  confirmed: ['in_production', 'ready_to_ship', 'in_transit', 'partial', 'received', 'cancelled'],
+  in_production: ['ready_to_ship', 'in_transit', 'partial', 'received', 'cancelled'],
+  ready_to_ship: ['in_transit', 'partial', 'received', 'cancelled'],
+  in_transit: ['partial', 'received', 'cancelled'],
   partial: ['received', 'cancelled'],
   received: [],
   cancelled: [],
@@ -80,6 +96,7 @@ export interface PurchaseOrder {
   warehouseId: string | null;
   currencyCode: string;
   status: POStatus;
+  orderSeries: string | null; // GDC 1, GDC 2, GDC 3
 
   // Supplier Address (denormalized)
   vendorAddressStreet: string | null;
@@ -212,6 +229,7 @@ export interface CreatePurchaseOrderDTO {
   warehouseId?: string | null;
   currencyCode?: string;
   status?: POStatus;
+  orderSeries?: string | null; // GDC 1, GDC 2, GDC 3
   vendorAddress: AddressDTO;
   shipToAddress: AddressDTO;
   items: CreatePOItemDTO[]; // Supplier info is on items
@@ -239,6 +257,7 @@ export interface UpdatePurchaseOrderDTO {
   expectedDeliveryDate?: Date | null;
   warehouseId?: string | null;
   currencyCode?: string;
+  orderSeries?: string | null; // GDC 1, GDC 2, GDC 3
   vendorAddress?: AddressDTO;
   shipToAddress?: AddressDTO;
   vendorNotes?: string | null;
@@ -269,6 +288,7 @@ export interface POListItem {
   poDate: string;
   expectedDeliveryDate: string | null;
   status: POStatus;
+  orderSeries: string | null;
   grandTotal: number; // cents
   currencyCode: string;
   itemCount: number;

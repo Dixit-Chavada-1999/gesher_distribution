@@ -134,12 +134,20 @@ class PickTicketServiceImpl {
         return { success: false, error: 'Pick ticket not found' };
       }
 
-      // Check if pick ticket can be edited (only pending/assigned)
-      if (!['pending', 'assigned'].includes(existing.status)) {
+      // Only block editing cancelled pick tickets
+      if (existing.status === 'cancelled') {
         return {
           success: false,
-          error: `Cannot edit pick ticket in ${existing.status} status`,
+          error: 'Cannot edit cancelled pick ticket',
         };
+      }
+
+      // Update items if provided
+      if (dto.items && dto.items.length > 0) {
+        console.log('[PickTicketService.updatePickTicket] Updating items:', dto.items);
+        await PickTicketRepository.updateItems(dto.items, userId);
+      } else {
+        console.log('[PickTicketService.updatePickTicket] No items to update');
       }
 
       const pickTicket = await PickTicketRepository.update(id, dto, userId);

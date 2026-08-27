@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
-import { MoreHorizontal, Eye, Pencil, Trash2, UserPlus, Play } from 'lucide-react';
+import { MoreHorizontal, Eye, Pencil, Trash2, UserPlus, Play, FileText } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import type { PickTicketListItem } from '../types';
 import {
@@ -143,7 +143,8 @@ export function PickTicketsTableColumns(options: ColumnsOptions = {}): ColumnDef
       id: 'actions',
       cell: ({ row }) => {
         const pickTicket = row.original;
-        const canEdit = ['pending', 'assigned'].includes(pickTicket.status);
+        // Allow editing for all statuses except cancelled (per Ankur/Jenny feedback Aug 26)
+        const canEdit = pickTicket.status !== 'cancelled';
         const canAssign = pickTicket.status === 'pending';
         const canStartPicking = pickTicket.status === 'assigned';
         const canDelete = ['pending', 'cancelled'].includes(pickTicket.status);
@@ -163,6 +164,18 @@ export function PickTicketsTableColumns(options: ColumnsOptions = {}): ColumnDef
                   View
                 </DropdownMenuItem>
               )}
+              {onEdit && canEdit && (
+                <DropdownMenuItem onClick={() => onEdit(pickTicket)}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                onClick={() => window.open(`/api/pick-tickets/${pickTicket.id}/pdf`, '_blank')}
+              >
+                <FileText className="mr-2 h-4 w-4" />
+                View PDF
+              </DropdownMenuItem>
               {onAssign && canAssign && (
                 <DropdownMenuItem onClick={() => onAssign(pickTicket)}>
                   <UserPlus className="mr-2 h-4 w-4" />
@@ -173,12 +186,6 @@ export function PickTicketsTableColumns(options: ColumnsOptions = {}): ColumnDef
                 <DropdownMenuItem onClick={() => onStartPicking(pickTicket)}>
                   <Play className="mr-2 h-4 w-4" />
                   Start Picking
-                </DropdownMenuItem>
-              )}
-              {onEdit && canEdit && (
-                <DropdownMenuItem onClick={() => onEdit(pickTicket)}>
-                  <Pencil className="mr-2 h-4 w-4" />
-                  Edit
                 </DropdownMenuItem>
               )}
               {onDelete && canDelete && (

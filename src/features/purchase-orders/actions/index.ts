@@ -246,6 +246,55 @@ export async function cancelPurchaseOrder(id: string) {
 }
 
 // ============================================
+// INLINE UPDATE ACTIONS
+// ============================================
+
+/**
+ * Update PO supplier (applies to all items)
+ */
+export async function updatePOSupplier(
+  id: string,
+  supplierId: string | null,
+  supplierName: string | null
+): Promise<ActionResult> {
+  const auth = await authorize('purchase_orders.edit');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  const result = await purchaseOrderService.updateSupplier(id, supplierId, supplierName, auth.user.id);
+
+  if (result.success) {
+    revalidatePath('/purchase-orders');
+    revalidatePath(`/purchase-orders/${id}`);
+  }
+
+  return result;
+}
+
+/**
+ * Update PO order series
+ */
+export async function updatePOOrderSeries(
+  id: string,
+  orderSeries: string | null
+): Promise<ActionResult> {
+  const auth = await authorize('purchase_orders.edit');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  const result = await purchaseOrderService.updateOrderSeries(id, orderSeries, auth.user.id);
+
+  if (result.success) {
+    revalidatePath('/purchase-orders');
+    revalidatePath(`/purchase-orders/${id}`);
+  }
+
+  return result;
+}
+
+// ============================================
 // GET SUPPLIERS FOR DROPDOWN
 // ============================================
 
