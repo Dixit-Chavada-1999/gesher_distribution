@@ -41,10 +41,11 @@ import { Pencil, Building2, MapPin, Send, Loader2, Calendar, X, Layers } from 'l
 import { toast } from 'sonner';
 import { cn } from '@/shared/lib/utils';
 import { usePurchaseOrder } from '../hooks/usePurchaseOrder';
-import { sendPurchaseOrder, getSuppliersForDropdown, updatePOSupplier, updatePOOrderSeries } from '../actions';
+import { sendPurchaseOrder, getSuppliersForDropdown, updatePOSupplier } from '../actions';
 import { PO_STATUS_COLORS, PO_STATUS_LABELS } from '../types';
 import type { ViewPurchaseOrderDrawerProps, SupplierSummary } from '../types';
 import { ORDER_SERIES } from '@/shared/lib/global-data';
+import { updateSalesOrderSeries } from '@/features/sales-orders/actions';
 
 export function ViewPurchaseOrderDrawer({
   open,
@@ -59,8 +60,9 @@ export function ViewPurchaseOrderDrawer({
   // Inline editing state
   const [suppliers, setSuppliers] = useState<SupplierSummary[]>([]);
   const [isEditingSupplier, setIsEditingSupplier] = useState(false);
-  const [isEditingOrderSeries, setIsEditingOrderSeries] = useState(false);
   const [isUpdatingSupplier, setIsUpdatingSupplier] = useState(false);
+  // Order Series edit - updates the linked Sales Order
+  const [isEditingOrderSeries, setIsEditingOrderSeries] = useState(false);
   const [isUpdatingOrderSeries, setIsUpdatingOrderSeries] = useState(false);
 
   // Load suppliers when editing
@@ -110,23 +112,27 @@ export function ViewPurchaseOrderDrawer({
     }
   };
 
+  // Order Series edit - updates the linked Sales Order
   const handleUpdateOrderSeries = async (orderSeries: string) => {
-    if (!po) return;
+    if (!po || !po.salesOrderId) {
+      toast.error('No linked Sales Order to update');
+      return;
+    }
 
     const orderSeriesValue = orderSeries === 'none' ? null : orderSeries;
 
     setIsUpdatingOrderSeries(true);
     try {
-      const result = await updatePOOrderSeries(po.id, orderSeriesValue);
+      const result = await updateSalesOrderSeries(po.salesOrderId, orderSeriesValue);
       if (result.success) {
-        toast.success('Order series updated');
+        toast.success('Order Series updated on Sales Order');
         setIsEditingOrderSeries(false);
         refetch();
       } else {
-        toast.error(result.error || 'Failed to update order series');
+        toast.error(result.error || 'Failed to update Order Series');
       }
     } catch {
-      toast.error('Failed to update order series');
+      toast.error('Failed to update Order Series');
     } finally {
       setIsUpdatingOrderSeries(false);
     }
@@ -298,7 +304,7 @@ export function ViewPurchaseOrderDrawer({
                 </div>
               </div>
 
-              {/* Order Series */}
+              {/* Order Series - Editable (updates linked Sales Order) */}
               <div className="flex items-start gap-3">
                 <div className="text-muted-foreground mt-0.5 flex-shrink-0">
                   <Layers className="h-4 w-4" />
@@ -312,11 +318,11 @@ export function ViewPurchaseOrderDrawer({
                         onValueChange={handleUpdateOrderSeries}
                         disabled={isUpdatingOrderSeries}
                       >
-                        <SelectTrigger className="h-8 w-[180px]">
-                          <SelectValue placeholder="Select series" />
+                        <SelectTrigger className="h-8 w-[140px]">
+                          <SelectValue placeholder="Select" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="none">Select order series</SelectItem>
+                          <SelectItem value="none">None</SelectItem>
                           {ORDER_SERIES.map((series) => (
                             <SelectItem key={series.id} value={series.code}>
                               {series.name}
@@ -342,18 +348,23 @@ export function ViewPurchaseOrderDrawer({
                       <p className="text-sm font-medium text-foreground">
                         {po.orderSeries || '-'}
                       </p>
-                      {canInlineEdit && (
+                      {po.salesOrderId && (
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-6 w-6 text-muted-foreground hover:text-foreground"
                           onClick={() => setIsEditingOrderSeries(true)}
-                          title="Edit order series"
+                          title="Edit Order Series (updates Sales Order)"
                         >
                           <Pencil className="h-3 w-3" />
                         </Button>
                       )}
                     </div>
+                  )}
+                  {po.salesOrderId && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      From linked Sales Order
+                    </p>
                   )}
                 </div>
               </div>

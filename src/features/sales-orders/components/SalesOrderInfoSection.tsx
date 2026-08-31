@@ -30,6 +30,7 @@ import { Separator } from '@/shared/components/ui/separator';
 import type { SalesOrderInfoSectionProps } from '../types';
 import { ORDER_STATUS_LABELS, type OrderStatus } from '../types';
 import type { SalesOrderFormInput } from '../lib/schemas';
+import { ORDER_SERIES } from '@/shared/lib/global-data';
 
 // ============================================
 // COMPONENT
@@ -212,6 +213,29 @@ function SalesOrderInfoSectionComponent({
             id="customerPoNumber"
             placeholder="Enter PO number"
             {...register('customerPoNumber')}
+          />
+        </div>
+
+        {/* Order Series */}
+        <div className="space-y-2">
+          <Label htmlFor="orderSeries">Order Series</Label>
+          <Controller
+            name="orderSeries"
+            control={control}
+            render={({ field }) => (
+              <Select value={field.value || ''} onValueChange={field.onChange}>
+                <SelectTrigger id="orderSeries">
+                  <SelectValue placeholder="Select order series" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ORDER_SERIES.map((series) => (
+                    <SelectItem key={series.id} value={series.code}>
+                      {series.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           />
         </div>
 

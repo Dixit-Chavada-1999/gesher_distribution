@@ -47,6 +47,7 @@ const getDefaultFormValues = () => ({
   warehouseId: '',
   currencyId: 'USD',
   customerPoNumber: '',
+  orderSeries: '',
   status: 'draft' as const,
   billingAddress: {
     street: '',

@@ -4,11 +4,12 @@
  * Operations Dashboard Page
  *
  * Jenny's main operations view showing:
- * Tab 1: Executive Summary (KPIs, Story in Brief, Immediate Attention)
+ * Tab 1: Executive Summary (KPIs, Immediate Attention)
  * Tab 2: Shipment Overview
  * Tab 3+: Dynamic GDC tabs (GDC 1, GDC 2, GDC 3) - Purchase Orders by order_series
  *
  * Note: Supplier Schedule tab hidden per Ankur/Jenny feedback Aug 26, 2025
+ * Note: Story in Brief removed per user request Aug 31, 2025
  * GDC tabs now show Purchase Orders filtered by order_series (redesign Aug 27, 2025)
  */
 
@@ -25,7 +26,8 @@ import { ImmediateAttentionTable } from '@/features/operations-dashboard/compone
 import { SKUBreakdown } from '@/features/operations-dashboard/components/SKUBreakdown';
 import { CustomerCommitments } from '@/features/operations-dashboard/components/CustomerCommitments';
 import { ShipmentStatusMix } from '@/features/operations-dashboard/components/ShipmentStatusMix';
-import { StoryInBrief } from '@/features/operations-dashboard/components/StoryInBrief';
+// REMOVED: Story in Brief - per user request Aug 31, 2025
+// import { StoryInBrief } from '@/features/operations-dashboard/components/StoryInBrief';
 import { ShipmentOverviewTable } from '@/features/operations-dashboard/components/ShipmentOverviewTable';
 // HIDDEN: Supplier Schedule - per Ankur/Jenny feedback Aug 26, 2025
 // import { SupplierShipmentScheduleTable } from '@/features/operations-dashboard/components/SupplierShipmentScheduleTable';
@@ -335,8 +337,7 @@ export default function OperationsPage() {
           {/* KPI Stats */}
           <OperationsStatsGrid stats={data.stats} />
 
-          {/* Story in Brief */}
-          <StoryInBrief content={data.storyInBrief} />
+          {/* REMOVED: Story in Brief - per user request Aug 31, 2025 */}
 
           {/* Immediate Attention - This is what Jenny checks FIRST */}
           <ImmediateAttentionTable

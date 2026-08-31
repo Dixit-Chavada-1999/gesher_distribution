@@ -96,7 +96,8 @@ export interface PurchaseOrder {
   warehouseId: string | null;
   currencyCode: string;
   status: POStatus;
-  orderSeries: string | null; // GDC 1, GDC 2, GDC 3
+  // orderSeries is inherited from linked Sales Order (not stored in PO table)
+  orderSeries: string | null;
 
   // Supplier Address (denormalized)
   vendorAddressStreet: string | null;
@@ -179,6 +180,7 @@ export interface SalesOrderSummary {
   id: string;
   orderNumber: string;
   status: string;
+  orderSeries?: string | null; // Inherited by PO
 }
 
 export interface LocationSummary {
@@ -229,7 +231,7 @@ export interface CreatePurchaseOrderDTO {
   warehouseId?: string | null;
   currencyCode?: string;
   status?: POStatus;
-  orderSeries?: string | null; // GDC 1, GDC 2, GDC 3
+  // orderSeries removed - inherited from linked Sales Order
   vendorAddress: AddressDTO;
   shipToAddress: AddressDTO;
   items: CreatePOItemDTO[]; // Supplier info is on items
@@ -257,7 +259,7 @@ export interface UpdatePurchaseOrderDTO {
   expectedDeliveryDate?: Date | null;
   warehouseId?: string | null;
   currencyCode?: string;
-  orderSeries?: string | null; // GDC 1, GDC 2, GDC 3
+  // orderSeries removed - inherited from linked Sales Order
   vendorAddress?: AddressDTO;
   shipToAddress?: AddressDTO;
   vendorNotes?: string | null;

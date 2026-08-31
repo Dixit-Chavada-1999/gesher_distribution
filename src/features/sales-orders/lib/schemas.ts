@@ -111,6 +111,7 @@ export const createSalesOrderSchema = z.object({
   customerPoNumber: z.string().max(100).nullable().optional(),
   status: orderStatusSchema.default('draft'),
   productSource: productSourceSchema.optional(),
+  orderSeries: z.string().max(20).nullable().optional(), // GDC 1, GDC 2, GDC 3
   billingAddress: addressSchema,
   shippingAddress: addressSchema,
   shippingMethod: z.string().max(100).nullable().optional(),
@@ -128,6 +129,7 @@ export const updateSalesOrderSchema = z.object({
   currencyCode: z.string().length(3).optional(),
   customerPoNumber: z.string().max(100).nullable().optional(),
   productSource: productSourceSchema.optional(),
+  orderSeries: z.string().max(20).nullable().optional(), // GDC 1, GDC 2, GDC 3
   billingAddress: addressSchema.optional(),
   shippingAddress: addressSchema.optional(),
   shippingMethod: z.string().max(100).nullable().optional(),
@@ -148,6 +150,7 @@ export const salesOrderFormSchema = z.object({
   warehouseId: z.string().optional().default(''),
   currencyId: z.string().optional().default('USD'),
   customerPoNumber: z.string().optional().default(''),
+  orderSeries: z.string().optional().default(''), // GDC 1, GDC 2, GDC 3
   status: orderStatusSchema.default('draft'),
   billingAddress: addressFormSchema,
   shippingAddress: addressFormSchema,
@@ -215,6 +218,7 @@ export function formToCreateDTO(form: SalesOrderFormInput) {
     warehouseId: form.warehouseId || null,
     currencyCode: form.currencyId || 'USD',
     customerPoNumber: form.customerPoNumber || null,
+    orderSeries: form.orderSeries || null,
     status: form.status as OrderStatus,
     billingAddress: {
       street: form.billingAddress.street || null,
@@ -260,6 +264,7 @@ export function orderToFormValues(order: {
   warehouseId: string | null;
   currencyCode: string;
   customerPoNumber: string | null;
+  orderSeries: string | null;
   status: OrderStatus;
   billingAddressStreet: string | null;
   billingAddressCity: string | null;
@@ -304,6 +309,7 @@ export function orderToFormValues(order: {
     warehouseId: order.warehouseId || '',
     currencyId: order.currencyCode,
     customerPoNumber: order.customerPoNumber || '',
+    orderSeries: order.orderSeries || '',
     status: order.status,
     billingAddress: {
       street: order.billingAddressStreet || '',

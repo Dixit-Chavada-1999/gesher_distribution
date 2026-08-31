@@ -125,6 +125,7 @@ export interface SalesOrder {
   status: OrderStatus;
   creditStatus: OrderCreditStatus;
   productSource: ProductSource;
+  orderSeries: string | null; // GDC 1, GDC 2, GDC 3 - time-based order cycles
 
   // Billing Address
   billingAddressStreet: string | null;
@@ -283,6 +284,7 @@ export interface CreateSalesOrderDTO {
   customerPoNumber?: string | null;
   status?: OrderStatus;
   productSource?: ProductSource;
+  orderSeries?: string | null; // GDC 1, GDC 2, GDC 3
   billingAddress: AddressDTO;
   shippingAddress: AddressDTO;
   shippingMethod?: string | null;
@@ -300,6 +302,7 @@ export interface UpdateSalesOrderDTO {
   currencyCode?: string;
   customerPoNumber?: string | null;
   productSource?: ProductSource;
+  orderSeries?: string | null; // GDC 1, GDC 2, GDC 3
   billingAddress?: AddressDTO;
   shippingAddress?: AddressDTO;
   shippingMethod?: string | null;
@@ -316,7 +319,7 @@ export interface SalesOrderListParams {
   limit?: number;
   search?: string;
   status?: OrderStatus;
-  creditStatus?: OrderCreditStatus;
+  orderSeries?: string;
   customerId?: string;
   salesRepId?: string;
   warehouseId?: string;
@@ -336,6 +339,7 @@ export interface SalesOrderListItem {
   status: OrderStatus;
   creditStatus: OrderCreditStatus;
   productSource: ProductSource;
+  orderSeries: string | null; // GDC 1, GDC 2, GDC 3
   grandTotal: number; // cents
   currencyCode: string;
   itemCount: number;
@@ -520,6 +524,7 @@ export interface SalesOrderFormData {
   customerPoNumber?: string;
   status?: OrderStatus;
   productSource?: ProductSource;
+  orderSeries?: string; // GDC 1, GDC 2, GDC 3
 
   billingAddress: Address;
   shippingAddress: Address;

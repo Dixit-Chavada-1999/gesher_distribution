@@ -45,7 +45,7 @@ import { ScrollArea } from '@/shared/components/ui/scroll-area';
 import { poFormSchema } from '../lib/schemas';
 import { createPurchaseOrder, getSuppliersForDropdown } from '../actions';
 import type { SupplierSummary, CreatePOItemDTO } from '../types';
-import { ORDER_SERIES } from '@/shared/lib/global-data';
+// ORDER_SERIES removed - Order Series is inherited from linked Sales Order (not stored on PO)
 import { POItemsTable } from './POItemsTable';
 
 // ============================================
@@ -59,6 +59,7 @@ interface CreatePurchaseOrderDrawerProps {
   // Pre-filled items (e.g., from Sales Order)
   defaultItems?: CreatePOItemDTO[];
   defaultSalesOrderId?: string;
+  // defaultOrderSeries removed - Order Series is inherited from linked Sales Order
 }
 
 // ============================================
@@ -97,7 +98,7 @@ export function CreatePurchaseOrderDrawer({
       salesOrderId: defaultSalesOrderId || '',
       warehouseId: '',
       currencyCode: 'USD',
-      orderSeries: '',
+      // orderSeries removed - inherited from linked Sales Order
       vendorAddressStreet: '',
       vendorAddressCity: '',
       vendorAddressState: '',
@@ -120,6 +121,8 @@ export function CreatePurchaseOrderDrawer({
       loadSuppliers();
     }
   }, [open]);
+
+  // orderSeries auto-fill removed - Order Series is inherited from linked Sales Order
 
   const loadSuppliers = async () => {
     setIsLoadingSuppliers(true);
@@ -172,7 +175,7 @@ export function CreatePurchaseOrderDrawer({
           warehouseId: (data.warehouseId as string) || null,
           currencyCode: (data.currencyCode as string) || 'USD',
           status: 'draft',
-          orderSeries: (data.orderSeries as string) || null,
+          // orderSeries removed - inherited from linked Sales Order
           vendorAddress: {
             street: (data.vendorAddressStreet as string) || null,
             city: (data.vendorAddressCity as string) || null,
@@ -268,37 +271,13 @@ export function CreatePurchaseOrderDrawer({
 
                 <Separator />
 
-                {/* Order Details - Order Series, PO Date, Expected Delivery in single row */}
+                {/* Order Details - PO Date, Expected Delivery */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-medium">Order Details</h3>
-                  <div className="grid grid-cols-3 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="orderSeries"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Order Series *</FormLabel>
-                          <Select
-                            value={field.value || ''}
-                            onValueChange={field.onChange}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {ORDER_SERIES.map((series) => (
-                                <SelectItem key={series.id} value={series.code}>
-                                  {series.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                  <p className="text-xs text-muted-foreground">
+                    Order Series is inherited from the linked Sales Order
+                  </p>
+                  <div className="grid grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
                       name="poDate"

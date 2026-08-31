@@ -353,6 +353,31 @@ export async function updateSalesOrderFromData(
 }
 
 /**
+ * Update order series only (allowed in any status)
+ * Order Series is a categorization field for tracking on Operations Dashboard
+ */
+export async function updateSalesOrderSeries(
+  id: string,
+  orderSeries: string | null
+): Promise<ActionResult<SalesOrder>> {
+  const auth = await authorize('orders.edit');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  const result = await salesOrderService.updateOrderSeries(id, orderSeries, auth.user.id);
+
+  if (result.success) {
+    revalidatePath('/sales-orders');
+    revalidatePath(`/sales-orders/${id}`);
+    revalidatePath('/api/sales-orders');
+    revalidatePath('/operations');
+  }
+
+  return result;
+}
+
+/**
  * Update order items
  */
 export async function updateSalesOrderItems(
@@ -1098,6 +1123,7 @@ export async function getSalesOrdersOnHold(): Promise<ActionResult<SalesOrderLis
         product_source,
         grand_total,
         currency_code,
+        order_series,
         created_at
       `)
       .eq('credit_status', 'hold')
@@ -1121,6 +1147,7 @@ export async function getSalesOrdersOnHold(): Promise<ActionResult<SalesOrderLis
       productSource: row.product_source || 'dropship',
       grandTotal: row.grand_total,
       currencyCode: row.currency_code,
+      orderSeries: row.order_series,
       itemCount: 0, // Not fetched for this list
       createdAt: new Date(row.created_at),
     }));

@@ -13,12 +13,10 @@ import { Checkbox } from '@/shared/components/ui/checkbox';
 import { DataTableColumnHeader } from '@/shared/components/data-table/DataTableColumnHeader';
 import { DataTableRowActions, createCommonRowActions } from '@/shared/components/data-table/DataTableRowActions';
 
-import type { SalesOrderListItem, OrderCreditStatus } from '../types';
+import type { SalesOrderListItem } from '../types';
 import {
   ORDER_STATUS_LABELS,
   ORDER_STATUS_COLORS,
-  ORDER_CREDIT_STATUS_LABELS,
-  ORDER_CREDIT_STATUS_COLORS,
   canEditOrder,
 } from '../types';
 import { formatDate } from '../lib/mock-data';
@@ -157,21 +155,20 @@ export function getSalesOrdersTableColumns(
       },
     },
 
-    // Credit Status
+    // Order Series
     {
-      accessorKey: 'creditStatus',
+      accessorKey: 'orderSeries',
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Credit" />
+        <DataTableColumnHeader column={column} title="Order Series" />
       ),
       cell: ({ row }) => {
-        const creditStatus = row.getValue('creditStatus') as OrderCreditStatus;
-        // Only show badge if credit status is 'hold'
-        if (creditStatus === 'ok') {
-          return null;
+        const orderSeries = row.getValue('orderSeries') as string | null;
+        if (!orderSeries) {
+          return <span className="text-muted-foreground">-</span>;
         }
         return (
-          <Badge className={ORDER_CREDIT_STATUS_COLORS[creditStatus]}>
-            {ORDER_CREDIT_STATUS_LABELS[creditStatus]}
+          <Badge variant="secondary" className="font-medium">
+            {orderSeries}
           </Badge>
         );
       },

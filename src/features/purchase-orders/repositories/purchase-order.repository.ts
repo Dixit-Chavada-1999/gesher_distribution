@@ -34,7 +34,7 @@ interface DbPurchaseOrder {
   warehouse_id: string | null;
   currency_code: string;
   status: POStatus;
-  order_series: string | null;
+  // order_series removed from PO table - now fetched from linked Sales Order
   vendor_address_street: string | null;
   vendor_address_city: string | null;
   vendor_address_state: string | null;
@@ -115,10 +115,11 @@ class PurchaseOrderRepositoryImpl {
         po_date,
         expected_delivery_date,
         status,
-        order_series,
         grand_total,
         currency_code,
-        created_at
+        created_at,
+        sales_order_id,
+        sales_orders:sales_order_id (order_series)
       `,
         { count: 'exact' }
       )
@@ -208,6 +209,8 @@ class PurchaseOrderRepositoryImpl {
 
     return {
       ...this.mapToPurchaseOrder(po as DbPurchaseOrder),
+      // orderSeries comes from linked Sales Order, not PO table
+      orderSeries: salesOrder?.orderSeries || null,
       items,
       salesOrder: salesOrder || undefined,
       warehouse: warehouse || undefined,
@@ -308,7 +311,7 @@ class PurchaseOrderRepositoryImpl {
         warehouse_id: data.warehouseId || null,
         currency_code: data.currencyCode || 'USD',
         status: data.status || 'draft',
-        order_series: data.orderSeries || null,
+        // order_series removed - inherited from linked Sales Order
         vendor_address_street: data.vendorAddress.street,
         vendor_address_city: data.vendorAddress.city,
         vendor_address_state: data.vendorAddress.state,
@@ -383,7 +386,7 @@ class PurchaseOrderRepositoryImpl {
     }
     if (data.warehouseId !== undefined) {updateData.warehouse_id = data.warehouseId;}
     if (data.currencyCode !== undefined) {updateData.currency_code = data.currencyCode;}
-    if (data.orderSeries !== undefined) {updateData.order_series = data.orderSeries;}
+    // order_series removed - inherited from linked Sales Order
     if (data.vendorAddress !== undefined) {
       updateData.vendor_address_street = data.vendorAddress.street;
       updateData.vendor_address_city = data.vendorAddress.city;
@@ -538,7 +541,7 @@ class PurchaseOrderRepositoryImpl {
   private async getSalesOrderSummary(soId: string): Promise<SalesOrderSummary | null> {
     const { data, error } = await db
       .from('sales_orders')
-      .select('id, order_number, status')
+      .select('id, order_number, status, order_series')
       .eq('id', soId)
       .single();
 
@@ -548,6 +551,7 @@ class PurchaseOrderRepositoryImpl {
       id: data.id,
       orderNumber: data.order_number,
       status: data.status,
+      orderSeries: data.order_series,
     };
   }
 
@@ -581,7 +585,8 @@ class PurchaseOrderRepositoryImpl {
       warehouseId: data.warehouse_id,
       currencyCode: data.currency_code,
       status: data.status,
-      orderSeries: data.order_series,
+      // orderSeries is set separately from linked Sales Order, not from PO table
+      orderSeries: null,
       vendorAddressStreet: data.vendor_address_street,
       vendorAddressCity: data.vendor_address_city,
       vendorAddressState: data.vendor_address_state,
@@ -644,21 +649,26 @@ class PurchaseOrderRepositoryImpl {
       po_date: string;
       expected_delivery_date: string | null;
       status: POStatus;
-      order_series: string | null;
       grand_total: number;
       currency_code: string;
       created_at: string;
+      sales_order_id: string | null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      sales_orders: any; // Joined data from sales_orders table
     },
     itemCounts: Record<string, number>,
     itemSuppliers: Record<string, string[]>
   ): POListItem {
+    // Get orderSeries from linked Sales Order
+    const orderSeries = data.sales_orders?.order_series || null;
+
     return {
       id: data.id,
       poNumber: data.po_number,
       poDate: data.po_date,
       expectedDeliveryDate: data.expected_delivery_date,
       status: data.status,
-      orderSeries: data.order_series,
+      orderSeries,
       grandTotal: data.grand_total,
       currencyCode: data.currency_code,
       itemCount: itemCounts[data.id] || 0,

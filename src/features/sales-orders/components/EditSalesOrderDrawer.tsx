@@ -169,6 +169,7 @@ export function EditSalesOrderDrawer({
     shippingMethod: order.shippingMethod,
     customerNotes: order.customerNotes,
     internalNotes: order.internalNotes,
+    orderSeries: order.orderSeries,
     orderNumber: order.orderNumber,
     items: order.items.map((item) => ({
       id: item.id,

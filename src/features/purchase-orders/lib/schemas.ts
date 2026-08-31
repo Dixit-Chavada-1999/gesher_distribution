@@ -60,7 +60,7 @@ export const createPurchaseOrderSchema = z.object({
   warehouseId: z.string().uuid().nullable().optional(),
   currencyCode: z.string().default('USD'),
   status: z.enum(['draft', 'sent', 'confirmed', 'in_production', 'ready_to_ship', 'in_transit', 'partial', 'received', 'cancelled'] as const).default('draft'),
-  orderSeries: z.string().nullable().optional(), // GDC 1, GDC 2, GDC 3
+  // orderSeries removed - inherited from linked Sales Order
   vendorAddress: addressSchema,
   shipToAddress: addressSchema,
   items: z.array(poItemSchema).min(1, 'At least one item is required'), // Supplier info is on items
@@ -79,7 +79,7 @@ export const updatePurchaseOrderSchema = z.object({
   expectedDeliveryDate: z.coerce.date().nullable().optional(),
   warehouseId: z.string().uuid().nullable().optional(),
   currencyCode: z.string().optional(),
-  orderSeries: z.string().nullable().optional(), // GDC 1, GDC 2, GDC 3
+  // orderSeries removed - inherited from linked Sales Order
   vendorAddress: addressSchema.optional(),
   shipToAddress: addressSchema.optional(),
   vendorNotes: z.string().nullable().optional(),
@@ -143,7 +143,7 @@ export const poFormSchema = z.object({
   salesOrderId: z.string().optional(),
   warehouseId: z.string().optional(),
   currencyCode: z.string().default('USD'),
-  orderSeries: z.string().min(1, 'Order series is required'), // GDC 1, GDC 2, GDC 3
+  // orderSeries removed - inherited from linked Sales Order
   vendorAddressStreet: z.string().optional(),
   vendorAddressCity: z.string().optional(),
   vendorAddressState: z.string().optional(),
@@ -178,7 +178,7 @@ export function formToCreateDTO(
     warehouseId: form.warehouseId || null,
     currencyCode: form.currencyCode || 'USD',
     status: 'draft',
-    orderSeries: form.orderSeries || null, // GDC 1, GDC 2, GDC 3
+    // orderSeries removed - inherited from linked Sales Order
     vendorAddress: {
       street: form.vendorAddressStreet || null,
       city: form.vendorAddressCity || null,

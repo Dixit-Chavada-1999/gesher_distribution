@@ -41,6 +41,7 @@ interface DbSalesOrder {
   status: OrderStatus;
   credit_status?: OrderCreditStatus;
   product_source?: 'dropship' | 'warehouse';
+  order_series?: string | null;
   billing_address_street: string | null;
   billing_address_city: string | null;
   billing_address_state: string | null;
@@ -130,7 +131,7 @@ class SalesOrderRepositoryImpl {
       limit = 10,
       search,
       status,
-      creditStatus,
+      orderSeries,
       customerId,
       salesRepId,
       warehouseId,
@@ -155,6 +156,7 @@ class SalesOrderRepositoryImpl {
         status,
         credit_status,
         product_source,
+        order_series,
         grand_total,
         currency_code,
         created_at,
@@ -178,9 +180,9 @@ class SalesOrderRepositoryImpl {
       query = query.eq('status', status);
     }
 
-    // Apply credit status filter
-    if (creditStatus) {
-      query = query.eq('credit_status', creditStatus);
+    // Apply order series filter
+    if (orderSeries) {
+      query = query.eq('order_series', orderSeries);
     }
 
     // Apply customer filter
@@ -455,6 +457,7 @@ class SalesOrderRepositoryImpl {
         customer_po_number: data.customerPoNumber || null,
         status: data.status || 'draft',
         product_source: data.productSource || 'dropship',
+        order_series: data.orderSeries || null,
         billing_address_street: data.billingAddress.street,
         billing_address_city: data.billingAddress.city,
         billing_address_state: data.billingAddress.state,
@@ -541,6 +544,7 @@ class SalesOrderRepositoryImpl {
     if (data.currencyCode !== undefined) {updateData.currency_code = data.currencyCode;}
     if (data.customerPoNumber !== undefined) {updateData.customer_po_number = data.customerPoNumber;}
     if (data.productSource !== undefined) {updateData.product_source = data.productSource;}
+    if (data.orderSeries !== undefined) {updateData.order_series = data.orderSeries;}
     if (data.billingAddress !== undefined) {
       updateData.billing_address_street = data.billingAddress.street;
       updateData.billing_address_city = data.billingAddress.city;
@@ -953,6 +957,7 @@ class SalesOrderRepositoryImpl {
       status: data.status,
       creditStatus: data.credit_status || 'ok',
       productSource: data.product_source || 'dropship',
+      orderSeries: data.order_series || null,
       billingAddressStreet: data.billing_address_street,
       billingAddressCity: data.billing_address_city,
       billingAddressState: data.billing_address_state,
@@ -1020,6 +1025,7 @@ class SalesOrderRepositoryImpl {
       status: OrderStatus;
       credit_status?: OrderCreditStatus;
       product_source?: 'dropship' | 'warehouse';
+      order_series?: string | null;
       grand_total: number;
       currency_code: string;
       created_at: string;
@@ -1039,6 +1045,7 @@ class SalesOrderRepositoryImpl {
       status: data.status,
       creditStatus: data.credit_status || 'ok',
       productSource: data.product_source || 'dropship',
+      orderSeries: data.order_series || null,
       grandTotal: data.grand_total,
       currencyCode: data.currency_code,
       itemCount: itemCounts[data.id] || 0,
