@@ -7,7 +7,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { Plus, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -36,7 +36,7 @@ import {
 import {
   PurchaseOrdersTable,
   ViewPurchaseOrderDrawer,
-  CreatePurchaseOrderDrawer,
+  // CreatePurchaseOrderDrawer, // Hidden - POs auto-created from SO
   EditPurchaseOrderDrawer,
 } from '@/features/purchase-orders/components';
 import { usePurchaseOrders } from '@/features/purchase-orders/hooks';
@@ -51,7 +51,7 @@ export default function PurchaseOrdersPage() {
 
   // Drawer states
   const [isViewDrawerOpen, setIsViewDrawerOpen] = useState(false);
-  const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
+  // const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false); // Hidden - POs auto-created from SO
   const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
   const [selectedPOId, setSelectedPOId] = useState<string | null>(null);
 
@@ -79,17 +79,16 @@ export default function PurchaseOrdersPage() {
   // HANDLERS
   // ----------------------------------------
 
-  const handleCreateClick = () => {
-    setIsCreateDrawerOpen(true);
-  };
-
-  const handleCreateDrawerClose = () => {
-    setIsCreateDrawerOpen(false);
-  };
-
-  const handleCreateSuccess = async () => {
-    await refetchPOs();
-  };
+  // Create handlers hidden - POs auto-created from SO
+  // const handleCreateClick = () => {
+  //   setIsCreateDrawerOpen(true);
+  // };
+  // const handleCreateDrawerClose = () => {
+  //   setIsCreateDrawerOpen(false);
+  // };
+  // const handleCreateSuccess = async () => {
+  //   await refetchPOs();
+  // };
 
   const handleView = useCallback((po: POListItem) => {
     setSelectedPOId(po.id);
@@ -181,10 +180,13 @@ export default function PurchaseOrdersPage() {
             >
               <RefreshCw className={`h-4 w-4 ${isPOsLoading ? 'animate-spin' : ''}`} />
             </Button>
+            {/* Create PO button hidden - POs are auto-created from Sales Orders
+                Direct PO creation breaks Order Series flow (Order Series is on SO, not PO)
             <Button onClick={handleCreateClick}>
               <Plus className="mr-2 h-4 w-4" />
               Create PO
             </Button>
+            */}
           </div>
         }
       />
@@ -222,12 +224,13 @@ export default function PurchaseOrdersPage() {
         onEdit={handleEdit}
       />
 
-      {/* Create Purchase Order Drawer */}
+      {/* Create Purchase Order Drawer - Hidden (POs auto-created from SO)
       <CreatePurchaseOrderDrawer
         open={isCreateDrawerOpen}
         onClose={handleCreateDrawerClose}
         onSuccess={handleCreateSuccess}
       />
+      */}
 
       {/* Edit Purchase Order Modal */}
       <EditPurchaseOrderDrawer
