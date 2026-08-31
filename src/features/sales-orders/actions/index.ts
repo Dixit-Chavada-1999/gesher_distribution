@@ -453,6 +453,20 @@ export async function confirmSalesOrder(id: string): Promise<ActionResult<SalesO
     return auth.result;
   }
 
+  // Check if Order Series is selected before confirming
+  const { data: soCheck } = await db
+    .from('sales_orders')
+    .select('order_series, product_source')
+    .eq('id', id)
+    .single();
+
+  if (!soCheck?.order_series) {
+    return {
+      success: false,
+      error: 'Order Series is required. Please select an Order Series (GDC 1, GDC 2, or GDC 3) before confirming this order.',
+    };
+  }
+
   const result = await salesOrderService.confirm(id, auth.user.id);
 
   if (result.success) {

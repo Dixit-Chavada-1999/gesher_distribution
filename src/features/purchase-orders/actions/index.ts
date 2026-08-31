@@ -113,6 +113,23 @@ export async function createPurchaseOrder(data: CreatePOInput) {
     return auth.result;
   }
 
+  // If linking to a Sales Order, validate that Order Series is selected
+  if (data.salesOrderId) {
+    const supabase = await createClient();
+    const { data: soCheck } = await supabase
+      .from('sales_orders')
+      .select('order_series')
+      .eq('id', data.salesOrderId)
+      .single();
+
+    if (!soCheck?.order_series) {
+      return {
+        success: false,
+        error: 'Order Series is required. Please select an Order Series (GDC 1, GDC 2, or GDC 3) on the linked Sales Order before creating a Purchase Order.',
+      };
+    }
+  }
+
   const result = await purchaseOrderService.create(data, auth.user.id);
 
   if (result.success) {
