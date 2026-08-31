@@ -27,45 +27,95 @@ import type { OperationsData, OperationsFilters, FilterOptions } from '../types'
 /**
  * Fetches all data needed for the operations dashboard
  * This is the main entry point for the dashboard
+ * Uses Promise.allSettled for graceful error handling - each query can fail independently
  */
 export async function getOperationsData(filters?: OperationsFilters): Promise<OperationsData> {
-  // Fetch all data in parallel for better performance
-  // HIDDEN: Supplier Schedule skipped - per Ankur/Jenny feedback Aug 26, 2025
-  const [
-    stats,
-    skuBreakdown,
-    customerCommitments,
-    shipmentStatusMix,
-    immediateAttention,
-    // supplierScheduleResult, // HIDDEN: Supplier Schedule
-    gdc1InventoryResult,
-    gdcInventories,  // NEW: GDC inventories by order series from Purchase Orders
-    rimInstallationResult,
-  ] = await Promise.all([
-    getOperationsStats(filters),
-    getSKUBreakdown(filters),
-    getCustomerCommitments(undefined, filters),
-    getShipmentStatusMix(filters),
-    getImmediateAttention(filters),
-    // getSupplierShipmentSchedule(filters), // HIDDEN: Supplier Schedule - skipped to save API time
-    getGDC1Inventory(filters),
-    getAllGDCInventories(filters),  // NEW: Fetch all GDC inventories by order series
-    getRimInstallationRequired(filters),
+  // Default values for when queries fail
+  const defaultStats = {
+    availableInventoryQty: 0,
+    availableLoads: 0,
+    availableInventoryValue: 0,
+    committedCustomerQty: 0,
+    inTransitNext7Days: 0,
+    openLoads: 0,
+    outstandingQty: 0,
+    invoiceAmount: 0,
+  };
+
+  // Fetch all data in parallel - use allSettled so one failure doesn't break everything
+  const results = await Promise.allSettled([
+    getOperationsStats(filters),           // 0
+    getSKUBreakdown(filters),              // 1
+    getCustomerCommitments(undefined, filters), // 2
+    getShipmentStatusMix(filters),         // 3
+    getImmediateAttention(filters),        // 4
+    getGDC1Inventory(filters),             // 5
+    getAllGDCInventories(filters),         // 6
+    getRimInstallationRequired(filters),   // 7
   ]);
 
+  // Extract results with fallbacks for failed queries
+  const stats = results[0].status === 'fulfilled' ? results[0].value : defaultStats;
+  if (results[0].status === 'rejected') {
+    console.error('getOperationsStats failed:', results[0].reason);
+  }
+
+  const skuBreakdown = results[1].status === 'fulfilled' ? results[1].value : [];
+  if (results[1].status === 'rejected') {
+    console.error('getSKUBreakdown failed:', results[1].reason);
+  }
+
+  const customerCommitments = results[2].status === 'fulfilled' ? results[2].value : [];
+  if (results[2].status === 'rejected') {
+    console.error('getCustomerCommitments failed:', results[2].reason);
+  }
+
+  const shipmentStatusMix = results[3].status === 'fulfilled' ? results[3].value : [];
+  if (results[3].status === 'rejected') {
+    console.error('getShipmentStatusMix failed:', results[3].reason);
+  }
+
+  const immediateAttention = results[4].status === 'fulfilled' ? results[4].value : [];
+  if (results[4].status === 'rejected') {
+    console.error('getImmediateAttention failed:', results[4].reason);
+  }
+
+  const gdc1InventoryResult = results[5].status === 'fulfilled'
+    ? results[5].value
+    : { data: [], uniqueSkus: [] };
+  if (results[5].status === 'rejected') {
+    console.error('getGDC1Inventory failed:', results[5].reason);
+  }
+
+  const gdcInventories = results[6].status === 'fulfilled' ? results[6].value : [];
+  if (results[6].status === 'rejected') {
+    console.error('getAllGDCInventories failed:', results[6].reason);
+  }
+
+  const rimInstallationResult = results[7].status === 'fulfilled'
+    ? results[7].value
+    : { data: [], uniqueSkus: [] };
+  if (results[7].status === 'rejected') {
+    console.error('getRimInstallationRequired failed:', results[7].reason);
+  }
+
   // HIDDEN: Supplier Schedule - return empty data
-  const supplierScheduleResult = { data: [], uniqueSkus: [] };
+  const supplierShipmentSchedule: never[] = [];
+  const supplierScheduleSkus: never[] = [];
 
   // Extract data and unique SKUs from results
-  const supplierShipmentSchedule = supplierScheduleResult.data;
-  const supplierScheduleSkus = supplierScheduleResult.uniqueSkus;
   const gdc1Inventory = gdc1InventoryResult.data;
   const gdc1InventorySkus = gdc1InventoryResult.uniqueSkus;
   const rimInstallationRequired = rimInstallationResult.data;
   const rimInstallationSkus = rimInstallationResult.uniqueSkus;
 
   // Generate story in brief based on fetched data
-  const storyInBrief = await generateStoryInBrief(stats, skuBreakdown, rimInstallationRequired);
+  let storyInBrief = '';
+  try {
+    storyInBrief = await generateStoryInBrief(stats, skuBreakdown, rimInstallationRequired);
+  } catch (error) {
+    console.error('generateStoryInBrief failed:', error);
+  }
 
   return {
     stats,
@@ -77,7 +127,7 @@ export async function getOperationsData(filters?: OperationsFilters): Promise<Op
     supplierScheduleSkus,
     gdc1Inventory,
     gdc1InventorySkus,
-    gdcInventories,  // NEW: Array of GDC inventories for dynamic tabs
+    gdcInventories,
     rimInstallationRequired,
     rimInstallationSkus,
     storyInBrief,

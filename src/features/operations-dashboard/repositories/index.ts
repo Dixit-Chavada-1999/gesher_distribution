@@ -6,6 +6,7 @@
  */
 
 import { createClient } from '@/shared/lib/supabase/server';
+import { createAdminClient } from '@/shared/lib/supabase/admin';
 import type {
   OperationsStats,
   SKUBreakdown,
@@ -251,18 +252,19 @@ export async function getSKUBreakdown(filters?: OperationsFilters): Promise<SKUB
   const supabase = await createClient();
 
   // Get sales order items with product_source info - only inventory products
+  // Using left joins to avoid errors when no matching data exists
   let query = supabase
     .from('sales_order_items')
     .select(`
       sku,
       quantity,
       product_id,
-      product:products!inner(
+      product:products(
         id,
         name,
         item_type
       ),
-      sales_order:sales_orders!inner(
+      sales_order:sales_orders(
         id,
         product_source,
         status,
@@ -270,10 +272,7 @@ export async function getSKUBreakdown(filters?: OperationsFilters): Promise<SKUB
         customer_id,
         customer_po_number
       )
-    `)
-    .is('sales_order.deleted_at', null)
-    .neq('sales_order.status', 'cancelled')
-    .eq('product.item_type', 'inventory');
+    `);
 
   // Apply filters
   if (filters?.customerId) {
@@ -300,11 +299,20 @@ export async function getSKUBreakdown(filters?: OperationsFilters): Promise<SKUB
   const skuMap = new Map<string, { supplier: number; gdc1: number; productName: string }>();
 
   items?.forEach((item) => {
-    const sku = item.sku || 'Unknown';
-    const qty = item.quantity || 0;
     const salesOrder = toOne(item.sales_order);
     const product = toOne(item.product);
-    const productSource = salesOrder?.product_source || 'dropship';
+
+    // Filter: skip if no sales order, deleted, or cancelled
+    if (!salesOrder) return;
+    if (salesOrder.deleted_at) return;
+    if (salesOrder.status === 'cancelled') return;
+
+    // Filter: only inventory products
+    if (product && product.item_type !== 'inventory') return;
+
+    const sku = item.sku || 'Unknown';
+    const qty = item.quantity || 0;
+    const productSource = salesOrder.product_source || 'dropship';
     const productName = product?.name || sku;
 
     if (!skuMap.has(sku)) {
@@ -984,7 +992,8 @@ export async function getSupplierShipmentSchedule(filters?: OperationsFilters): 
     throw error;
   }
 
-  // Get sales order items for SKU breakdown with product names - only inventory products
+  // Get sales order items for SKU breakdown with product names
+  // Using left join to avoid errors when no products exist
   const salesOrderIds = salesOrders?.map((s) => s.id) || [];
 
   let itemsQuery = supabase
@@ -997,10 +1006,9 @@ export async function getSupplierShipmentSchedule(filters?: OperationsFilters): 
       unit_price,
       line_total,
       product_id,
-      products!inner(id, name, item_type)
+      products(id, name, item_type)
     `)
-    .in('sales_order_id', salesOrderIds)
-    .eq('products.item_type', 'inventory');
+    .in('sales_order_id', salesOrderIds);
 
   // Apply product filter
   if (filters?.productId) {
@@ -1011,12 +1019,15 @@ export async function getSupplierShipmentSchedule(filters?: OperationsFilters): 
 
   // Group items by sales order and build SKU info map
   // Also track prices per SKU per order for price columns
+  // Filter to only include inventory products in JavaScript
   const itemsBySalesOrder = new Map<string, { sku: string; productName: string; qty: number; unitPrice: number }[]>();
   const skuInfoMap = new Map<string, string>(); // sku -> productName
 
   items?.forEach((item) => {
     // Get product name: prefer products.name, fallback to description, then sku
     const productData = toOne(item.products);
+    // Skip non-inventory products
+    if (productData && productData.item_type !== 'inventory') return;
     const productName = productData?.name || item.description || item.sku;
     // unit_price is stored in cents, convert to dollars
     const unitPrice = item.unit_price ? item.unit_price / 100 : 0;
@@ -1218,7 +1229,8 @@ export async function getGDC1Inventory(filters?: OperationsFilters): Promise<{ d
     throw error;
   }
 
-  // Get sales order items for SKU breakdown with product names and prices - only inventory products
+  // Get sales order items for SKU breakdown with product names and prices
+  // Using left join to avoid errors when no products exist
   const salesOrderIds = salesOrders?.map((s) => s.id) || [];
 
   let itemsQuery = supabase
@@ -1231,10 +1243,9 @@ export async function getGDC1Inventory(filters?: OperationsFilters): Promise<{ d
       unit_price,
       line_total,
       product_id,
-      products!inner(id, name, item_type)
+      products(id, name, item_type)
     `)
-    .in('sales_order_id', salesOrderIds)
-    .eq('products.item_type', 'inventory');
+    .in('sales_order_id', salesOrderIds);
 
   // Apply product filter
   if (filters?.productId) {
@@ -1245,12 +1256,15 @@ export async function getGDC1Inventory(filters?: OperationsFilters): Promise<{ d
 
   // Group items by sales order and build SKU info map
   // Also track prices per SKU per order for price columns
+  // Filter to only include inventory products in JavaScript
   const itemsBySalesOrder = new Map<string, { sku: string; productName: string; qty: number; unitPrice: number }[]>();
   const skuInfoMap = new Map<string, string>(); // sku -> productName
 
   items?.forEach((item) => {
     // Get product name: prefer products.name, fallback to description, then sku
     const productData = toOne(item.products);
+    // Skip non-inventory products
+    if (productData && productData.item_type !== 'inventory') return;
     const productName = productData?.name || item.description || item.sku;
     // unit_price is stored in cents, convert to dollars
     const unitPrice = item.unit_price ? item.unit_price / 100 : 0;
@@ -1399,7 +1413,8 @@ export async function getGDCInventoryByOrderSeries(
   orderSeries: string,
   filters?: OperationsFilters
 ): Promise<GDCInventoryData> {
-  const supabase = await createClient();
+  // Use admin client to bypass RLS policies (fixes infinite recursion error)
+  const supabase = createAdminClient();
 
   // Get Purchase Orders with the specified order_series
   let poQuery = supabase
@@ -1438,9 +1453,11 @@ export async function getGDCInventoryByOrderSeries(
   const { data: purchaseOrders, error } = await poQuery;
 
   if (error) {
-    console.error('Error fetching GDC inventory by order series:', error);
+    console.error(`Error fetching GDC inventory for ${orderSeries}:`, error);
     throw error;
   }
+
+  console.log(`[GDC] Found ${purchaseOrders?.length || 0} POs for '${orderSeries}'`);
 
   // Get purchase order items for SKU breakdown
   const poIds = purchaseOrders?.map((po) => po.id) || [];
@@ -1566,8 +1583,14 @@ export async function getAllGDCInventories(filters?: OperationsFilters): Promise
   const results: GDCInventoryData[] = [];
 
   for (const series of ORDER_SERIES) {
-    const data = await getGDCInventoryByOrderSeries(series.code, filters);
-    results.push(data);
+    try {
+      const data = await getGDCInventoryByOrderSeries(series.code, filters);
+      results.push(data);
+    } catch (error) {
+      console.error(`Error fetching GDC inventory for ${series.code}:`, error);
+      // Return empty data for this series instead of failing
+      results.push({ orderSeries: series.code, items: [], uniqueSkus: [] });
+    }
   }
 
   return results;

@@ -185,7 +185,7 @@ const NAV_SECTIONS = [
       },
       {
         id: 'inventory',
-        label: 'Stock Levels',
+        label: 'Inventory',
         href: '/inventory',
         icon: Warehouse,
         permission: 'inventory.view_module',
