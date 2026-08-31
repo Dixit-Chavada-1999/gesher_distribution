@@ -259,6 +259,7 @@ export const MOCK_SALES_ORDERS_LIST: SalesOrderListItem[] = [
     productSource: 'dropship',
     grandTotal: 384250, // cents
     currencyCode: 'USD',
+    orderSeries: 'GDC 1',
     itemCount: 3,
     createdAt: new Date('2024-01-15'),
   },
@@ -274,6 +275,7 @@ export const MOCK_SALES_ORDERS_LIST: SalesOrderListItem[] = [
     productSource: 'dropship',
     grandTotal: 215675, // cents
     currencyCode: 'USD',
+    orderSeries: 'GDC 2',
     itemCount: 2,
     createdAt: new Date('2024-01-16'),
   },
@@ -289,6 +291,7 @@ export const MOCK_SALES_ORDERS_LIST: SalesOrderListItem[] = [
     productSource: 'dropship',
     grandTotal: 158000, // cents
     currencyCode: 'USD',
+    orderSeries: 'GDC 1',
     itemCount: 1,
     createdAt: new Date('2024-01-17'),
   },
@@ -304,6 +307,7 @@ export const MOCK_SALES_ORDERS_LIST: SalesOrderListItem[] = [
     productSource: 'dropship',
     grandTotal: 542525, // cents
     currencyCode: 'USD',
+    orderSeries: 'GDC 3',
     itemCount: 4,
     createdAt: new Date('2024-01-18'),
   },
@@ -319,6 +323,7 @@ export const MOCK_SALES_ORDERS_LIST: SalesOrderListItem[] = [
     productSource: 'dropship',
     grandTotal: 875000, // cents
     currencyCode: 'USD',
+    orderSeries: 'GDC 2',
     itemCount: 5,
     createdAt: new Date('2024-01-19'),
   },

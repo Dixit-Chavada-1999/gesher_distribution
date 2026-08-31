@@ -1405,8 +1405,8 @@ export async function getGDC1Inventory(filters?: OperationsFilters): Promise<{ d
 }
 
 // ============================================
-// GET GDC INVENTORY BY ORDER SERIES (from Purchase Orders)
-// Shows Purchase Orders filtered by order_series field
+// GET GDC INVENTORY BY ORDER SERIES (from Sales Orders)
+// Shows Purchase Orders filtered by order_series from linked Sales Order
 // ============================================
 
 export async function getGDCInventoryByOrderSeries(
@@ -1416,7 +1416,7 @@ export async function getGDCInventoryByOrderSeries(
   // Use admin client to bypass RLS policies (fixes infinite recursion error)
   const supabase = createAdminClient();
 
-  // Get Purchase Orders with the specified order_series
+  // Get Purchase Orders where linked Sales Order has the specified order_series
   let poQuery = supabase
     .from('purchase_orders')
     .select(`
@@ -1425,7 +1425,6 @@ export async function getGDCInventoryByOrderSeries(
       po_date,
       expected_delivery_date,
       status,
-      order_series,
       internal_notes,
       ship_to_address_street,
       ship_to_address_city,
@@ -1433,15 +1432,16 @@ export async function getGDCInventoryByOrderSeries(
       ship_to_address_postal_code,
       sales_order_id,
       created_at,
-      sales_orders(
+      sales_orders!inner(
         id,
         order_number,
+        order_series,
         customer_id,
         customers(id, name)
       )
     `)
     .is('deleted_at', null)
-    .eq('order_series', orderSeries)
+    .eq('sales_orders.order_series', orderSeries)
     .neq('status', 'cancelled')
     .order('created_at', { ascending: false });
 
@@ -1543,7 +1543,7 @@ export async function getGDCInventoryByOrderSeries(
       no: index + 1,
       poNumber: po.po_number,
       soNumber: salesOrderData?.order_number || null,
-      orderSeries: po.order_series || orderSeries,
+      orderSeries: salesOrderData?.order_series || orderSeries,
       items: poItems.map(item => ({
         sku: item.sku,
         productName: item.productName,

@@ -339,7 +339,7 @@ export interface SalesOrderListItem {
   status: OrderStatus;
   creditStatus: OrderCreditStatus;
   productSource: ProductSource;
-  orderSeries: string | null; // GDC 1, GDC 2, GDC 3
+  orderSeries?: string | null; // GDC 1, GDC 2, GDC 3 (optional)
   grandTotal: number; // cents
   currencyCode: string;
   itemCount: number;
