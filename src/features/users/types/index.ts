@@ -56,6 +56,15 @@ export interface UserWithRole extends User {
   fullName: string;
 }
 
+/**
+ * Simple user list item for dropdown selections
+ */
+export interface UserListItem {
+  id: string;
+  fullName: string;
+  email: string;
+}
+
 // ============================================
 // DTO TYPES
 // ============================================

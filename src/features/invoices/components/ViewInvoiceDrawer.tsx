@@ -285,7 +285,7 @@ export function ViewInvoiceDrawer({
             {/* Actions */}
             <Separator />
             <div className="flex gap-2">
-              {onEdit && invoice.status === 'draft' && (
+              {onEdit && ['draft', 'sent'].includes(invoice.status) && (
                 <Button onClick={() => onEdit(invoice)} variant="outline" className="flex-1">
                   <Pencil className="mr-2 h-4 w-4" />
                   Edit

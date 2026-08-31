@@ -33,6 +33,7 @@ import {
 import {
   InvoicesTable,
   ViewInvoiceDrawer,
+  EditInvoiceDrawer,
   useInvoices,
 } from '@/features/invoices';
 import { deleteInvoice } from '@/features/invoices/actions';
@@ -46,6 +47,7 @@ export default function InvoicesPage() {
 
   // Drawer states
   const [isViewDrawerOpen, setIsViewDrawerOpen] = useState(false);
+  const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
 
   // Delete confirmation
@@ -86,9 +88,20 @@ export default function InvoicesPage() {
     setSelectedInvoiceId(null);
   }, []);
 
-  const handleEdit = useCallback((_invoice: InvoiceListItem | InvoiceWithItems) => {
-    toast.info('Edit invoice functionality coming soon');
+  const handleEdit = useCallback((invoice: InvoiceListItem | InvoiceWithItems) => {
+    setSelectedInvoiceId(invoice.id);
+    setIsViewDrawerOpen(false);
+    setIsEditDrawerOpen(true);
   }, []);
+
+  const handleEditDrawerClose = useCallback(() => {
+    setIsEditDrawerOpen(false);
+    setSelectedInvoiceId(null);
+  }, []);
+
+  const handleEditSuccess = useCallback(async () => {
+    await refetchInvoices();
+  }, [refetchInvoices]);
 
   const handleRecordPayment = useCallback((_invoice: InvoiceListItem | InvoiceWithItems) => {
     toast.info('Record payment functionality coming soon');
@@ -200,6 +213,14 @@ export default function InvoicesPage() {
         onClose={handleViewDrawerClose}
         onEdit={handleEdit}
         onRecordPayment={handleRecordPayment}
+      />
+
+      {/* Edit Invoice Drawer */}
+      <EditInvoiceDrawer
+        invoiceId={selectedInvoiceId || ''}
+        open={isEditDrawerOpen}
+        onClose={handleEditDrawerClose}
+        onSuccess={handleEditSuccess}
       />
 
       {/* Delete Confirmation Dialog */}

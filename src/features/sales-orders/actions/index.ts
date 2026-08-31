@@ -492,6 +492,81 @@ export async function confirmSalesOrder(id: string): Promise<ActionResult<SalesO
   return result;
 }
 
+/**
+ * Regenerate Purchase Order from Sales Order
+ * Used when PO was deleted and needs to be recreated
+ */
+export async function regeneratePurchaseOrder(salesOrderId: string): Promise<ActionResult<{ poNumber: string }>> {
+  const auth = await authorize('purchase_orders.create');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  // Check SO exists and is valid for PO creation
+  const { data: so, error: soError } = await db
+    .from('sales_orders')
+    .select('id, status, product_source, order_series')
+    .eq('id', salesOrderId)
+    .is('deleted_at', null)
+    .single();
+
+  if (soError || !so) {
+    return { success: false, error: 'Sales Order not found' };
+  }
+
+  // Validate status - must be confirmed or processing
+  if (!['confirmed', 'processing'].includes(so.status)) {
+    return { success: false, error: 'Sales Order must be confirmed or processing to create a PO' };
+  }
+
+  // Validate product source - must be dropship
+  if (so.product_source !== 'dropship') {
+    return { success: false, error: 'Only dropship orders can have Purchase Orders' };
+  }
+
+  // Validate order series
+  if (!so.order_series) {
+    return { success: false, error: 'Order Series is required. Please select an Order Series before creating a PO.' };
+  }
+
+  // Check if PO already exists for this SO
+  const { data: existingPO } = await db
+    .from('purchase_orders')
+    .select('id, po_number')
+    .eq('sales_order_id', salesOrderId)
+    .is('deleted_at', null)
+    .single();
+
+  if (existingPO) {
+    return { success: false, error: `Purchase Order ${existingPO.po_number} already exists for this Sales Order` };
+  }
+
+  try {
+    await createPurchaseOrderFromSalesOrder(salesOrderId, auth.user.id);
+
+    // Get the created PO number
+    const { data: newPO } = await db
+      .from('purchase_orders')
+      .select('po_number')
+      .eq('sales_order_id', salesOrderId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    revalidatePath('/sales-orders');
+    revalidatePath(`/sales-orders/${salesOrderId}`);
+    revalidatePath('/purchase-orders');
+
+    return {
+      success: true,
+      data: { poNumber: newPO?.po_number || 'Unknown' }
+    };
+  } catch (error) {
+    console.error('Failed to regenerate PO:', error);
+    return { success: false, error: 'Failed to create Purchase Order' };
+  }
+}
 
 /**
  * Helper: Create Purchase Order from Sales Order

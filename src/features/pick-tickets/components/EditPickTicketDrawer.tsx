@@ -423,7 +423,7 @@ export function EditPickTicketDrawer({
 
               <Separator />
 
-              {/* Assigned To */}
+              {/* Assigned To - Shows system users */}
               <FormField
                 control={form.control}
                 name="assignedTo"
@@ -437,7 +437,7 @@ export function EditPickTicketDrawer({
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder={isLoadingOptions ? 'Loading...' : 'Select user'} />
+                          <SelectValue placeholder="Select user" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>

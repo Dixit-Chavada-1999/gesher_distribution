@@ -31,7 +31,7 @@ import {
   ClipboardList, // Purchase Orders
   BarChart3, // Operations dashboard
   Truck, // Shipments (commented out)
-  // Receipt, // Uncomment when Invoices module is enabled
+  Receipt, // Invoices
   Factory, // Suppliers
   ClipboardCheck, // Pick Tickets
   PackageCheck, // Packing Lists
@@ -116,6 +116,13 @@ const NAV_SECTIONS = [
         href: '/sales-orders',
         icon: ShoppingCart,
         permission: 'orders.view_module',
+      },
+      {
+        id: 'invoices',
+        label: 'Invoices',
+        href: '/invoices',
+        icon: Receipt,
+        permission: 'orders.view_module', // Using orders permission since invoices are created from SO
       },
     ],
   },

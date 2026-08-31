@@ -626,7 +626,8 @@ export async function createPickTicketFromSalesOrder(
   salesOrderId: string,
   warehouseId: string,
   notifyContactIds?: string[],
-  specialInstructions?: string
+  specialInstructions?: string,
+  assignedToId?: string
 ): Promise<CreateFromSOResult> {
   const auth = await authorize('pick_tickets.create');
   if (!auth.ok) {
@@ -792,7 +793,10 @@ export async function createPickTicketFromSalesOrder(
     const createDTO: CreatePickTicketDTO = {
       salesOrderId,
       warehouseId: warehouseId || salesOrder.warehouse_id,
+      assignedTo: assignedToId || null,
       priority: 'normal',
+      specialInstructions: specialInstructions || null,
+      notifiedContactIds: notifyContactIds || [],
       items,
     };
 

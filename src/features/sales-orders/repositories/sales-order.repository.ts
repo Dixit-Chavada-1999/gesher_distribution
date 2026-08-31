@@ -295,7 +295,7 @@ class SalesOrderRepositoryImpl {
   private async getPickTicketsSummary(salesOrderId: string): Promise<{ id: string; ticketNumber: string; status: string }[] | null> {
     const { data, error } = await db
       .from('pick_tickets')
-      .select('id, ticket_number, status')
+      .select('id, pick_ticket_number, status')
       .eq('sales_order_id', salesOrderId)
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
@@ -306,7 +306,7 @@ class SalesOrderRepositoryImpl {
 
     return data.map((row) => ({
       id: row.id,
-      ticketNumber: row.ticket_number,
+      ticketNumber: row.pick_ticket_number,
       status: row.status,
     }));
   }

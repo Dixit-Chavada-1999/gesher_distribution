@@ -124,7 +124,8 @@ export interface PickTicket {
   pickTicketNumber: string;
   salesOrderId: string;
   warehouseId: string;
-  assignedTo: string | null;
+  assignedTo: string | null;           // User ID (from users table)
+  assignedContactId: string | null;    // Location Contact ID (from location_contacts table)
   assignedAt: Date | null;
   priority: PickTicketPriority;
   status: PickTicketStatus;
@@ -212,6 +213,7 @@ export interface PickTicketWithItems extends PickTicket {
   salesOrder?: SalesOrderSummary;
   warehouse?: WarehouseSummary;
   assignedUser?: UserSummary;
+  assignedContact?: ContactSummary;
   packingList?: PackingListSummary;
 }
 
@@ -246,6 +248,12 @@ export interface UserSummary {
   id: string;
   firstName: string;
   lastName: string;
+  email: string;
+}
+
+export interface ContactSummary {
+  id: string;
+  name: string;
   email: string;
 }
 
@@ -300,6 +308,7 @@ export interface CreatePickTicketDTO {
   priority?: PickTicketPriority;
   notes?: string | null;
   specialInstructions?: string | null;
+  notifiedContactIds?: string[];
   items: CreatePickTicketItemDTO[];
 }
 
@@ -311,7 +320,8 @@ export interface UpdatePickTicketItemDTO {
 
 export interface UpdatePickTicketDTO {
   status?: PickTicketStatus;
-  assignedTo?: string | null;
+  assignedTo?: string | null;           // User ID
+  assignedContactId?: string | null;    // Location Contact ID
   warehouseId?: string;
   priority?: PickTicketPriority;
   notes?: string | null;

@@ -50,12 +50,14 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 
-import { getSalesOrder, releaseSalesOrderHold, confirmSalesOrder, cancelSalesOrder, getSalesOrderMasterData, updateSalesOrderSeries } from '../actions';
+import { getSalesOrder, releaseSalesOrderHold, confirmSalesOrder, cancelSalesOrder, getSalesOrderMasterData, updateSalesOrderSeries, regeneratePurchaseOrder } from '../actions';
 import { ORDER_SERIES } from '@/shared/lib/global-data';
 import { createPickTicketFromSalesOrder } from '@/features/pick-tickets/actions';
 import { createInvoiceFromSalesOrder } from '@/features/invoices/actions';
 import { getActiveLocationContacts } from '@/features/locations/actions/location-contacts';
+import { getUsers } from '@/features/users/actions';
 import type { LocationContact } from '@/features/locations/repositories/location-contacts.repository';
+import type { UserListItem } from '@/features/users/types';
 import type { SalesOrderWithItems } from '../types';
 import {
   Popover,
@@ -224,10 +226,17 @@ const [isReleasingHold, setIsReleasingHold] = useState(false);
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
   const [contactsPopoverOpen, setContactsPopoverOpen] = useState(false);
   const [specialInstructions, setSpecialInstructions] = useState('');
+  const [warehouseUsers, setWarehouseUsers] = useState<UserListItem[]>([]);
+  const [selectedAssignedTo, setSelectedAssignedTo] = useState<string>('');
 
   // Order Series inline edit
   const [isEditingOrderSeries, setIsEditingOrderSeries] = useState(false);
   const [isUpdatingOrderSeries, setIsUpdatingOrderSeries] = useState(false);
+
+  // Purchase Order regeneration
+  const [hasPurchaseOrder, setHasPurchaseOrder] = useState(false);
+  const [showCreatePODialog, setShowCreatePODialog] = useState(false);
+  const [isCreatingPO, setIsCreatingPO] = useState(false);
 
   // ----------------------------------------
   // EFFECTS
@@ -255,7 +264,7 @@ const [isReleasingHold, setIsReleasingHold] = useState(false);
     }
   };
 
-  // Fetch location contacts when warehouse changes
+  // Fetch location contacts and users when warehouse changes
   useEffect(() => {
     const fetchLocationContacts = async () => {
       if (!selectedWarehouseId) {
@@ -289,6 +298,33 @@ const [isReleasingHold, setIsReleasingHold] = useState(false);
     }
   }, [selectedWarehouseId, showPickTicketDialog]);
 
+  // Fetch users for assignment when dialog opens
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const result = await getUsers({ status: 'active', limit: 100 });
+        if (result.success && result.data) {
+          const usersData = result.data as { data: Array<{ id: string; fullName: string; email: string }> };
+          if (usersData.data) {
+            setWarehouseUsers(
+              usersData.data.map((user) => ({
+                id: user.id,
+                fullName: user.fullName,
+                email: user.email,
+              }))
+            );
+          }
+        }
+      } catch {
+        console.error('Failed to fetch users');
+      }
+    };
+
+    if (showPickTicketDialog) {
+      fetchUsers();
+    }
+  }, [showPickTicketDialog]);
+
   // ----------------------------------------
   // DATA FETCHING
   // ----------------------------------------
@@ -303,6 +339,10 @@ const [isReleasingHold, setIsReleasingHold] = useState(false);
       const result = await getSalesOrder(orderId);
       if (result.success && result.data) {
         setOrder(result.data);
+        // Check if PO exists for this SO (for dropship orders)
+        if (result.data.productSource === 'dropship') {
+          checkPurchaseOrderExists(orderId);
+        }
       } else {
         setError(result.error || 'Failed to load order');
       }
@@ -310,6 +350,23 @@ const [isReleasingHold, setIsReleasingHold] = useState(false);
       setError('Failed to load order');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const checkPurchaseOrderExists = async (salesOrderId: string) => {
+    try {
+      // Import db directly for this check
+      const { createClient } = await import('@/shared/lib/supabase/client');
+      const supabase = createClient();
+      const { data } = await supabase
+        .from('purchase_orders')
+        .select('id')
+        .eq('sales_order_id', salesOrderId)
+        .is('deleted_at', null)
+        .limit(1);
+      setHasPurchaseOrder((data?.length ?? 0) > 0);
+    } catch {
+      setHasPurchaseOrder(false);
     }
   };
 
@@ -444,7 +501,13 @@ const handleReleaseHold = async () => {
 
     startTransition(async () => {
       try {
-        const result = await createPickTicketFromSalesOrder(order.id, warehouseId, selectedContactIds, specialInstructions || undefined);
+        const result = await createPickTicketFromSalesOrder(
+          order.id,
+          warehouseId,
+          selectedContactIds,
+          specialInstructions || undefined,
+          selectedAssignedTo || undefined
+        );
         if (result.success) {
           toast.success(`Pick ticket created for ${order.orderNumber}`);
           setShowPickTicketDialog(false);
@@ -453,6 +516,7 @@ const handleReleaseHold = async () => {
           setSelectedContactIds([]);
           setContactsPopoverOpen(false);
           setSpecialInstructions('');
+          setSelectedAssignedTo('');
           fetchOrder(); // Refresh order data
         } else {
           toast.error(result.error || 'Failed to create pick ticket');
@@ -485,6 +549,29 @@ const handleReleaseHold = async () => {
     });
   };
 
+  const handleCreatePO = async () => {
+    if (!order) {
+      return;
+    }
+
+    setIsCreatingPO(true);
+    try {
+      const result = await regeneratePurchaseOrder(order.id);
+      if (result.success && result.data) {
+        toast.success(`Purchase Order ${result.data.poNumber} created`);
+        setShowCreatePODialog(false);
+        setHasPurchaseOrder(true);
+      } else {
+        toast.error(result.error || 'Failed to create Purchase Order');
+      }
+    } catch (error) {
+      console.error('Error creating PO:', error);
+      toast.error('Failed to create Purchase Order');
+    } finally {
+      setIsCreatingPO(false);
+    }
+  };
+
   // Toggle contact selection
   const handleContactToggle = (contactId: string) => {
     setSelectedContactIds(prev =>
@@ -510,6 +597,7 @@ const handleReleaseHold = async () => {
     setSelectedContactIds([]);
     setContactsPopoverOpen(false);
     setSpecialInstructions('');
+    setSelectedAssignedTo('');
     setShowPickTicketDialog(true);
   };
 
@@ -532,6 +620,13 @@ const handleReleaseHold = async () => {
   // Can create invoice for confirmed, processing, shipped, or delivered orders
   const canCreateInvoice = order &&
     ['confirmed', 'processing', 'shipped', 'delivered'].includes(order.status) &&
+    canEditPermission;
+
+  // Can create PO for confirmed/processing dropship orders that don't have a PO
+  const canCreatePO = order &&
+    ['confirmed', 'processing'].includes(order.status) &&
+    order.productSource === 'dropship' &&
+    !hasPurchaseOrder &&
     canEditPermission;
 
   // Check if order is on credit hold
@@ -929,6 +1024,17 @@ const handleReleaseHold = async () => {
                     Create Pick Ticket
                   </Button>
                 )}
+                {canCreatePO && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowCreatePODialog(true)}
+                    disabled={isPending || isCreatingPO}
+                  >
+                    <ClipboardList className="mr-2 h-4 w-4" />
+                    Create PO
+                  </Button>
+                )}
                 {canCreateInvoice && (
                   <Button
                     variant="outline"
@@ -1036,6 +1142,29 @@ const handleReleaseHold = async () => {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Assigned To Selection */}
+              {selectedWarehouseId && (
+                <div>
+                  <Label htmlFor="assignedTo">Assign To (Warehouse Worker)</Label>
+                  <Select
+                    value={selectedAssignedTo}
+                    onValueChange={setSelectedAssignedTo}
+                  >
+                    <SelectTrigger className="mt-2">
+                      <SelectValue placeholder="Select worker (optional)..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Unassigned</SelectItem>
+                      {warehouseUsers.map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.fullName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               {/* Contacts Selection */}
               {selectedWarehouseId && (
@@ -1147,6 +1276,28 @@ const handleReleaseHold = async () => {
                 {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 <ClipboardList className="mr-2 h-4 w-4" />
                 Create Pick Ticket
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Create PO Dialog */}
+        <AlertDialog open={showCreatePODialog} onOpenChange={setShowCreatePODialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Create Purchase Order</AlertDialogTitle>
+              <AlertDialogDescription>
+                Create a Purchase Order for <span className="font-semibold">{order?.orderNumber}</span>.
+                <br /><br />
+                This will create a PO with all items from this sales order and send it to the supplier.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isCreatingPO}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleCreatePO} disabled={isCreatingPO}>
+                {isCreatingPO && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <ClipboardList className="mr-2 h-4 w-4" />
+                Create PO
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

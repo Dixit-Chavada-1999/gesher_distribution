@@ -234,6 +234,7 @@ export function formToCreateDTO(form: QuoteFormInput) {
     customerNotes: form.customerNotes || null,
     internalNotes: form.internalNotes || null,
     termsAndConditions: form.termsAndConditions || null,
+    customerPoNumber: form.customerPoNumber || null,
   };
 }
 

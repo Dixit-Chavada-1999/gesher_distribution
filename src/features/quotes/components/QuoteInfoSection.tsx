@@ -265,6 +265,20 @@ function QuoteInfoSectionComponent({
             <p className="text-sm text-destructive">{errors.productSource.message}</p>
           )}
         </div>
+
+        {/* Customer PO Number */}
+        <div className="space-y-2">
+          <Label htmlFor="customerPoNumber">Customer PO Number</Label>
+          <Input
+            id="customerPoNumber"
+            placeholder="Enter customer PO number"
+            className={errors.customerPoNumber ? 'border-destructive' : ''}
+            {...register('customerPoNumber')}
+          />
+          {errors.customerPoNumber && (
+            <p className="text-sm text-destructive">{errors.customerPoNumber.message}</p>
+          )}
+        </div>
       </div>
     </div>
   );

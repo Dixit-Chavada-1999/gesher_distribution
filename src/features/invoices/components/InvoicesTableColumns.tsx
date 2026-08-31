@@ -125,7 +125,7 @@ export function InvoicesTableColumns(options: ColumnsOptions = {}): ColumnDef<In
                   View
                 </DropdownMenuItem>
               )}
-              {onEdit && invoice.status === 'draft' && (
+              {onEdit && ['draft', 'sent'].includes(invoice.status) && (
                 <DropdownMenuItem onClick={() => onEdit(invoice)}>
                   <Pencil className="mr-2 h-4 w-4" />
                   Edit
