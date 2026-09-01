@@ -14,6 +14,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getUser } from '@/shared/lib/supabase/server';
+import { getAppUserByAuthId } from '@/shared/lib/auth';
 import { pipedriveProvider } from '@/modules/integrations/providers/crm/pipedrive';
 import {
   PIPEDRIVE_STATE_COOKIE_NAME,
@@ -60,12 +61,18 @@ export async function GET(request: Request) {
   cookieStore.delete(PIPEDRIVE_STATE_COOKIE_NAME);
 
   try {
-    // Get current user ID (optional)
-    const user = await getUser();
-    const userId = user?.id;
+    // Get current user ID from application users table (not Supabase Auth ID)
+    // The connected_by field references users(id), not auth.users(id)
+    const authUser = await getUser();
+    let appUserId: string | undefined;
+
+    if (authUser?.id) {
+      const appUser = await getAppUserByAuthId(authUser.id);
+      appUserId = appUser?.id;
+    }
 
     // Handle the OAuth callback using the provider
-    await pipedriveProvider.handleOAuthCallback({ code }, userId);
+    await pipedriveProvider.handleOAuthCallback({ code }, appUserId);
 
     // Success - redirect to settings
     return NextResponse.redirect(`${origin}${PIPEDRIVE_REDIRECT_PATHS.SUCCESS}`);

@@ -1,36 +1,23 @@
 'use client';
 
 /**
- * Pipedrive — connection panel
+ * Pipedrive — OAuth connection panel
  *
- * UI ONLY. Nothing here talks to Pipedrive yet; every action moves local state.
- * When the backend lands, the seams are:
+ * Uses OAuth 2.0 flow for authentication:
+ * - Connect: Redirects to /api/pipedrive/auth to initiate OAuth
+ * - Status: Fetches from /api/pipedrive/status
+ * - Disconnect: Calls /api/pipedrive/disconnect
  *
- *   handleConnect    -> POST the token to a server action that verifies it via
- *                       /users/me, then stores it encrypted (never in the client)
- *   handleTest       -> re-run that verify call against the stored token
- *   handleDisconnect -> soft-delete the connection row
- *
- * The token is held in component state only long enough to submit it. It is
- * never echoed back once the connection exists — the connected view shows the
- * domain and the account, not the secret.
- *
- * Pipeline options below are placeholders. Per the brief the real pipeline
- * structure has to be confirmed with the client before this is wired.
- *
- * Performance Optimizations:
- * - Uses React.memo to prevent unnecessary re-renders
- * - Memoized callbacks with useCallback
+ * No API token or domain input needed - OAuth handles everything.
  */
 
-import { memo, useState, useCallback } from 'react';
+import { memo, useState, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { format } from 'date-fns';
-import { Eye, EyeOff, Handshake, Info, Loader2, Plug, RefreshCw, Unplug } from 'lucide-react';
+import { Handshake, Loader2, RefreshCw, Unplug, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
-import { Input } from '@/shared/components/ui/input';
-import { Label } from '@/shared/components/ui/label';
 import { Separator } from '@/shared/components/ui/separator';
 import {
   Select,
@@ -54,7 +41,28 @@ import {
   IntegrationDetails,
   IntegrationToggle,
 } from './IntegrationCard';
-import type { PipedriveConnection } from '../types';
+
+// ============================================
+// TYPES
+// ============================================
+
+interface PipedriveStatus {
+  connected: boolean;
+  accountId?: string;
+  accountName?: string;
+  companyDomain?: string;
+  connectedAs?: string;
+  connectedAt?: string;
+  lastSyncAt?: string | null;
+  expiresAt?: string;
+  error?: string;
+}
+
+interface PipedriveSettings {
+  pipelineId: string;
+  pushQuotes: boolean;
+  pullWonDeals: boolean;
+}
 
 // ============================================
 // CONSTANTS
@@ -69,7 +77,7 @@ const PIPELINE_OPTIONS = [
 
 const DEFAULT_PIPELINE_ID = PIPELINE_OPTIONS[0].id;
 
-const formatStamp = (iso: string | null) =>
+const formatStamp = (iso: string | null | undefined) =>
   iso ? format(new Date(iso), 'd MMM yyyy, HH:mm') : 'Never';
 
 // ============================================
@@ -77,77 +85,149 @@ const formatStamp = (iso: string | null) =>
 // ============================================
 
 function PipedriveCardComponent() {
-  const [connection, setConnection] = useState<PipedriveConnection | null>(null);
-  const [token, setToken] = useState('');
-  const [domain, setDomain] = useState('');
-  const [showToken, setShowToken] = useState(false);
+  const searchParams = useSearchParams();
+
+  const [status, setStatus] = useState<PipedriveStatus | null>(null);
+  const [settings, setSettings] = useState<PipedriveSettings>({
+    pipelineId: DEFAULT_PIPELINE_ID,
+    pushQuotes: true,
+    pullWonDeals: true,
+  });
+  const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
   const [disconnectOpen, setDisconnectOpen] = useState(false);
 
-  const canConnect = token.trim().length > 0 && domain.trim().length > 0;
+  // Fetch connection status on mount
+  useEffect(() => {
+    fetchStatus();
+  }, []);
+
+  // Handle OAuth callback result from URL params
+  useEffect(() => {
+    const pipedriveParam = searchParams.get('pipedrive');
+    if (pipedriveParam) {
+      switch (pipedriveParam) {
+        case 'connected':
+          toast.success('Pipedrive connected successfully!');
+          fetchStatus();
+          break;
+        case 'cancelled':
+          toast.info('Pipedrive connection cancelled');
+          break;
+        case 'invalid_state':
+          toast.error('Connection failed: Invalid state. Please try again.');
+          break;
+        case 'token_error':
+          toast.error('Connection failed: Could not get access token.');
+          break;
+        case 'network_error':
+          toast.error('Connection failed: Network error. Please try again.');
+          break;
+      }
+      // Clear the URL param
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [searchParams]);
+
+  const fetchStatus = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/pipedrive/status');
+      const data = await response.json();
+      setStatus(data);
+    } catch (error) {
+      console.error('Failed to fetch Pipedrive status:', error);
+      setStatus({ connected: false });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleConnect = useCallback(() => {
-    if (!canConnect) {
-      return;
-    }
     setConnecting(true);
+    // Redirect to OAuth initiation endpoint
+    window.location.href = '/api/pipedrive/auth';
+  }, []);
 
-    // Stands in for the token-verification call.
-    window.setTimeout(() => {
-      setConnection({
-        companyDomain: domain.trim(),
-        connectedAs: 'andy@gesher.com',
-        pipelineId: DEFAULT_PIPELINE_ID,
-        connectedAt: new Date().toISOString(),
-        lastSyncAt: null,
-        pushQuotes: true,
-        pullWonDeals: true,
+  const handleTest = useCallback(async () => {
+    setTesting(true);
+    try {
+      const response = await fetch('/api/pipedrive/status');
+      const data = await response.json();
+      if (data.connected) {
+        toast.success('Connection healthy');
+        setStatus(data);
+      } else {
+        toast.error('Connection lost. Please reconnect.');
+        setStatus(data);
+      }
+    } catch (error) {
+      toast.error('Failed to test connection');
+    } finally {
+      setTesting(false);
+    }
+  }, []);
+
+  const handleDisconnect = useCallback(async () => {
+    setDisconnecting(true);
+    try {
+      const response = await fetch('/api/pipedrive/disconnect', {
+        method: 'POST',
       });
 
-      // Drop the secret from client state the moment it is no longer needed.
-      setToken('');
-      setShowToken(false);
-      setConnecting(false);
-      toast.success('Pipedrive connected');
-    }, 700);
-  }, [canConnect, domain]);
-
-  const handleTest = useCallback(() => {
-    setTesting(true);
-    window.setTimeout(() => {
-      setTesting(false);
-      toast.success('Connection healthy');
-    }, 700);
+      if (response.ok) {
+        setStatus({ connected: false });
+        toast.success('Pipedrive disconnected');
+      } else {
+        toast.error('Failed to disconnect');
+      }
+    } catch (error) {
+      toast.error('Failed to disconnect');
+    } finally {
+      setDisconnecting(false);
+      setDisconnectOpen(false);
+    }
   }, []);
 
-  const handleDisconnect = useCallback(() => {
-    setConnection(null);
-    setDomain('');
-    setDisconnectOpen(false);
-    toast.success('Pipedrive disconnected');
+  const handlePipelineChange = useCallback((value: string) => {
+    setSettings((prev) => ({ ...prev, pipelineId: value }));
   }, []);
 
-  const handlePipelineChange = useCallback(
-    (value: string) => setConnection((prev) => prev ? { ...prev, pipelineId: value } : null),
-    []
-  );
+  const handlePushQuotesChange = useCallback((checked: boolean) => {
+    setSettings((prev) => ({ ...prev, pushQuotes: checked }));
+  }, []);
 
-  const handlePushQuotesChange = useCallback(
-    (checked: boolean) => setConnection((prev) => prev ? { ...prev, pushQuotes: checked } : null),
-    []
-  );
-
-  const handlePullWonDealsChange = useCallback(
-    (checked: boolean) => setConnection((prev) => prev ? { ...prev, pullWonDeals: checked } : null),
-    []
-  );
+  const handlePullWonDealsChange = useCallback((checked: boolean) => {
+    setSettings((prev) => ({ ...prev, pullWonDeals: checked }));
+  }, []);
 
   // ============================================
-  // DISCONNECTED
+  // LOADING STATE
   // ============================================
 
-  if (!connection) {
+  if (loading) {
+    return (
+      <IntegrationCard
+        name="Pipedrive"
+        description="Two-way CRM sync. A sent quote creates or updates a deal; a won deal reflects back onto the quote."
+        icon={Handshake}
+        iconClassName="bg-sky-50 text-sky-700"
+        status="disconnected"
+      >
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      </IntegrationCard>
+    );
+  }
+
+  // ============================================
+  // DISCONNECTED STATE
+  // ============================================
+
+  if (!status?.connected) {
     return (
       <IntegrationCard
         name="Pipedrive"
@@ -156,74 +236,20 @@ function PipedriveCardComponent() {
         iconClassName="bg-sky-50 text-sky-700"
         status="disconnected"
         footer={
-          <Button onClick={handleConnect} disabled={!canConnect || connecting}>
+          <Button onClick={handleConnect} disabled={connecting}>
             {connecting ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
-              <Plug className="mr-2 h-4 w-4" />
+              <ExternalLink className="mr-2 h-4 w-4" />
             )}
-            Connect
+            Connect with Pipedrive
           </Button>
         }
       >
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="pipedrive-domain">Company domain</Label>
-            <Input
-              id="pipedrive-domain"
-              placeholder="gesher.pipedrive.com"
-              value={domain}
-              onChange={(event) => setDomain(event.target.value)}
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              data-form-type="other"
-              data-lpignore="true"
-            />
-            <p className="text-xs text-muted-foreground">
-              Found in your Pipedrive URL.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="pipedrive-token">API token</Label>
-            <div className="flex gap-2">
-              <Input
-                id="pipedrive-token"
-                type={showToken ? 'text' : 'password'}
-                placeholder="Paste your personal API token"
-                value={token}
-                onChange={(event) => setToken(event.target.value)}
-                className="font-mono"
-                autoComplete="new-password"
-                autoCorrect="off"
-                autoCapitalize="off"
-                spellCheck={false}
-                data-form-type="other"
-                data-lpignore="true"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={() => setShowToken((previous) => !previous)}
-                aria-label={showToken ? 'Hide API token' : 'Show API token'}
-              >
-                {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Personal preferences &rsaquo; API in Pipedrive.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex gap-3 rounded-lg border bg-muted/40 p-3">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        <div className="rounded-lg border bg-muted/40 p-4">
           <p className="text-sm text-muted-foreground">
-            The token is stored encrypted on the server and is never shown again once
-            saved. Confirm the pipeline structure with the client before enabling sync.
+            Click the button below to connect your Pipedrive account using secure OAuth authentication.
+            You&apos;ll be redirected to Pipedrive to authorize access.
           </p>
         </div>
       </IntegrationCard>
@@ -231,7 +257,7 @@ function PipedriveCardComponent() {
   }
 
   // ============================================
-  // CONNECTED
+  // CONNECTED STATE
   // ============================================
 
   return (
@@ -256,8 +282,13 @@ function PipedriveCardComponent() {
               variant="outline"
               className="text-destructive hover:text-destructive"
               onClick={() => setDisconnectOpen(true)}
+              disabled={disconnecting}
             >
-              <Unplug className="mr-2 h-4 w-4" />
+              {disconnecting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Unplug className="mr-2 h-4 w-4" />
+              )}
               Disconnect
             </Button>
           </>
@@ -265,20 +296,21 @@ function PipedriveCardComponent() {
       >
         <IntegrationDetails
           items={[
-            { label: 'Domain', value: connection.companyDomain },
-            { label: 'Connected as', value: connection.connectedAs },
-            { label: 'Connected', value: formatStamp(connection.connectedAt) },
-            { label: 'Last sync', value: formatStamp(connection.lastSyncAt) },
-            { label: 'API token', value: <span className="font-mono text-xs">••••••••</span> },
+            { label: 'Account', value: status.accountName || status.companyDomain || 'Unknown' },
+            { label: 'Connected as', value: status.connectedAs || 'Unknown' },
+            { label: 'Connected', value: formatStamp(status.connectedAt) },
+            { label: 'Last sync', value: formatStamp(status.lastSyncAt) },
           ]}
         />
 
         <Separator />
 
         <div className="max-w-xs space-y-2">
-          <Label htmlFor="pipedrive-pipeline">Target pipeline</Label>
+          <label htmlFor="pipedrive-pipeline" className="text-sm font-medium">
+            Target pipeline
+          </label>
           <Select
-            value={connection.pipelineId}
+            value={settings.pipelineId}
             onValueChange={handlePipelineChange}
           >
             <SelectTrigger id="pipedrive-pipeline">
@@ -305,7 +337,7 @@ function PipedriveCardComponent() {
           <IntegrationToggle
             label="Quote sent creates or updates a deal"
             description="Sending a quote pushes it to Pipedrive as a deal on the pipeline above."
-            checked={connection.pushQuotes}
+            checked={settings.pushQuotes}
             onCheckedChange={handlePushQuotesChange}
           />
 
@@ -314,7 +346,7 @@ function PipedriveCardComponent() {
           <IntegrationToggle
             label="Deal won updates the quote"
             description="Marking a deal won in Pipedrive reflects onto the linked quote and sales order."
-            checked={connection.pullWonDeals}
+            checked={settings.pullWonDeals}
             onCheckedChange={handlePullWonDealsChange}
           />
         </div>
@@ -325,9 +357,9 @@ function PipedriveCardComponent() {
           <AlertDialogHeader>
             <AlertDialogTitle>Disconnect Pipedrive?</AlertDialogTitle>
             <AlertDialogDescription>
-              Quotes will stop creating deals and won deals will stop updating quotes. The
-              stored API token is removed — you&apos;ll need a new one to reconnect. Deals
-              already in Pipedrive are not affected.
+              Quotes will stop creating deals and won deals will stop updating quotes.
+              You&apos;ll need to reconnect via OAuth to restore sync. Deals already
+              in Pipedrive are not affected.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
