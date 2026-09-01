@@ -11,16 +11,14 @@
  * - dashboard.view_inventory: Inventory overview
  *
  * Data: All data is fetched from database (no mock data fallback)
+ * Date Filters: This Month, Last Month, This Quarter, Last Quarter, YTD, Last Year, etc.
  */
 
 import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
 import {
-  DashboardHeader,
-  DashboardStatsGrid,
-  DashboardChartsGrid,
-  InventoryOverview,
+  DashboardContent,
   // Actions - fetch real data from database
   getUnitsBySKUData,
   getChannelPerformanceData,
@@ -28,6 +26,8 @@ import {
   getDashboardStatsData,
   getMarginAnalysisData,
   getRevenueTrendData,
+  // Types
+  getDateRangeFromPreset,
 } from '@/features/dashboard';
 import { getCurrentUser, hasPermission } from '@/shared/lib/auth';
 
@@ -99,19 +99,23 @@ export default async function DashboardPage() {
   const canViewAnalytics = hasPermission(user, 'dashboard.view_analytics');
   const canViewInventory = hasPermission(user, 'dashboard.view_inventory');
 
-  // Fetch real data from database (no mock data fallback)
+  // Default date range: This Month
+  const defaultDateRange = getDateRangeFromPreset('this_month');
+
+  // Fetch real data from database with default date filter (no mock data fallback)
   const [unitsBySKUResult, channelResult, inventoryResult, statsResult, marginResult, revenueResult] = await Promise.all([
-    getUnitsBySKUData(),
-    getChannelPerformanceData(),
-    getInventoryByLocationData(),
-    getDashboardStatsData(),
-    getMarginAnalysisData(),
-    getRevenueTrendData(),
+    getUnitsBySKUData(defaultDateRange),
+    getChannelPerformanceData(defaultDateRange),
+    getInventoryByLocationData(), // Inventory doesn't need date filter
+    getDashboardStatsData(defaultDateRange),
+    getMarginAnalysisData(defaultDateRange),
+    getRevenueTrendData(defaultDateRange),
   ]);
 
   // Use real data only - empty arrays if no data
-  const dynamicUnitsBySKU = unitsBySKUResult.success ? unitsBySKUResult.data?.data || [] : [];
-  const unitsProducts = unitsBySKUResult.success ? unitsBySKUResult.data?.products : undefined;
+  const dynamicUnitsBySKU = unitsBySKUResult.success && unitsBySKUResult.data
+    ? unitsBySKUResult.data
+    : { data: [], products: [] };
   const dynamicChannelData = channelResult.success ? channelResult.data || [] : [];
   const dynamicInventory = inventoryResult.success ? inventoryResult.data || [] : [];
   const dynamicStats = statsResult.success ? statsResult.data || [] : [];
@@ -119,30 +123,15 @@ export default async function DashboardPage() {
   const dynamicRevenueData = revenueResult.success ? revenueResult.data || [] : [];
 
   return (
-    <div className="space-y-6">
-      {/* Welcome Header */}
-      <DashboardHeader />
-
-      {/* KPI Stats Grid - requires dashboard.view_analytics */}
-      {canViewAnalytics && (
-        <DashboardStatsGrid stats={dynamicStats} />
-      )}
-
-      {/* Charts Grid - requires dashboard.view_analytics */}
-      {canViewAnalytics && (
-        <DashboardChartsGrid
-          revenueData={dynamicRevenueData}
-          unitsData={dynamicUnitsBySKU}
-          unitsProducts={unitsProducts}
-          channelData={dynamicChannelData}
-          marginData={dynamicMarginData}
-        />
-      )}
-
-      {/* Inventory Overview - requires dashboard.view_inventory */}
-      {canViewInventory && (
-        <InventoryOverview byLocation={dynamicInventory} />
-      )}
-    </div>
+    <DashboardContent
+      canViewAnalytics={canViewAnalytics}
+      canViewInventory={canViewInventory}
+      initialStats={dynamicStats}
+      initialUnitsBySKU={dynamicUnitsBySKU}
+      initialChannelData={dynamicChannelData}
+      initialInventory={dynamicInventory}
+      initialMarginData={dynamicMarginData}
+      initialRevenueData={dynamicRevenueData}
+    />
   );
 }

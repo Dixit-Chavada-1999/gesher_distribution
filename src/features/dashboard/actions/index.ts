@@ -4,11 +4,12 @@
  * Dashboard Server Actions
  *
  * API layer for dashboard data.
+ * Supports date range filtering for all data fetches.
  */
 
 import { createClient } from '@/shared/lib/supabase/server';
 import * as dashboardRepo from '../repositories';
-import type { UnitsBySKUChartData, ChannelPerformanceDataPoint, InventoryByLocation, DashboardStat, MarginDataPoint, RevenueDataPoint } from '../types';
+import type { UnitsBySKUChartData, ChannelPerformanceDataPoint, InventoryByLocation, DashboardStat, MarginDataPoint, RevenueDataPoint, DateRange } from '../types';
 
 // ============================================
 // UNITS BY SKU
@@ -23,7 +24,7 @@ interface ActionResult<T> {
 /**
  * Get units sold by ALL products grouped by month
  */
-export async function getUnitsBySKUData(): Promise<ActionResult<UnitsBySKUChartData>> {
+export async function getUnitsBySKUData(dateRange?: DateRange): Promise<ActionResult<UnitsBySKUChartData>> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -33,7 +34,7 @@ export async function getUnitsBySKUData(): Promise<ActionResult<UnitsBySKUChartD
     return { success: false, error: 'Authentication required' };
   }
 
-  const data = await dashboardRepo.getUnitsBySKU();
+  const data = await dashboardRepo.getUnitsBySKU(dateRange);
 
   return {
     success: true,
@@ -48,7 +49,7 @@ export async function getUnitsBySKUData(): Promise<ActionResult<UnitsBySKUChartD
 /**
  * Get channel performance data (OEM vs Dealer)
  */
-export async function getChannelPerformanceData(): Promise<ActionResult<ChannelPerformanceDataPoint[]>> {
+export async function getChannelPerformanceData(dateRange?: DateRange): Promise<ActionResult<ChannelPerformanceDataPoint[]>> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -58,7 +59,7 @@ export async function getChannelPerformanceData(): Promise<ActionResult<ChannelP
     return { success: false, error: 'Authentication required' };
   }
 
-  const data = await dashboardRepo.getChannelPerformance();
+  const data = await dashboardRepo.getChannelPerformance(dateRange);
 
   return {
     success: true,
@@ -98,7 +99,7 @@ export async function getInventoryByLocationData(): Promise<ActionResult<Invento
 /**
  * Get dashboard KPI stats
  */
-export async function getDashboardStatsData(): Promise<ActionResult<DashboardStat[]>> {
+export async function getDashboardStatsData(dateRange?: DateRange): Promise<ActionResult<DashboardStat[]>> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -108,7 +109,7 @@ export async function getDashboardStatsData(): Promise<ActionResult<DashboardSta
     return { success: false, error: 'Authentication required' };
   }
 
-  const data = await dashboardRepo.getDashboardStats();
+  const data = await dashboardRepo.getDashboardStats(dateRange);
 
   return {
     success: true,
@@ -123,7 +124,7 @@ export async function getDashboardStatsData(): Promise<ActionResult<DashboardSta
 /**
  * Get margin analysis data for last 6 months
  */
-export async function getMarginAnalysisData(): Promise<ActionResult<MarginDataPoint[]>> {
+export async function getMarginAnalysisData(dateRange?: DateRange): Promise<ActionResult<MarginDataPoint[]>> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -133,7 +134,7 @@ export async function getMarginAnalysisData(): Promise<ActionResult<MarginDataPo
     return { success: false, error: 'Authentication required' };
   }
 
-  const data = await dashboardRepo.getMarginAnalysis();
+  const data = await dashboardRepo.getMarginAnalysis(dateRange);
 
   return {
     success: true,
@@ -148,7 +149,7 @@ export async function getMarginAnalysisData(): Promise<ActionResult<MarginDataPo
 /**
  * Get revenue trend data for last 8 months
  */
-export async function getRevenueTrendData(): Promise<ActionResult<RevenueDataPoint[]>> {
+export async function getRevenueTrendData(dateRange?: DateRange): Promise<ActionResult<RevenueDataPoint[]>> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -158,7 +159,7 @@ export async function getRevenueTrendData(): Promise<ActionResult<RevenueDataPoi
     return { success: false, error: 'Authentication required' };
   }
 
-  const data = await dashboardRepo.getRevenueTrend();
+  const data = await dashboardRepo.getRevenueTrend(dateRange);
 
   return {
     success: true,

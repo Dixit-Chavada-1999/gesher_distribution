@@ -4,10 +4,19 @@
  * Dashboard Repository
  *
  * Database queries for dashboard data.
+ * Supports date range filtering for all queries.
  */
 
 import { createClient } from '@/shared/lib/supabase/server';
-import type { UnitsBySKUDataPoint, UnitsBySKUChartData, ProductLegendItem, ChannelPerformanceDataPoint, InventoryByLocation, DashboardStat, MarginDataPoint, RevenueDataPoint } from '../types';
+import type { UnitsBySKUDataPoint, UnitsBySKUChartData, ProductLegendItem, ChannelPerformanceDataPoint, InventoryByLocation, DashboardStat, MarginDataPoint, RevenueDataPoint, DateRange } from '../types';
+
+// Helper to format date as YYYY-MM-DD string
+function formatDateString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 // Color palette for products
 const PRODUCT_COLORS = [
@@ -25,15 +34,26 @@ const PRODUCT_COLORS = [
 
 /**
  * Get units sold by ALL products grouped by month
- * Uses confirmed/processing/shipped/delivered orders from the last 6 months
+ * Uses confirmed/processing/shipped/delivered orders from the specified date range
+ * @param dateRange - Optional date range filter. Defaults to last 6 months if not provided.
  */
-export async function getUnitsBySKU(): Promise<UnitsBySKUChartData> {
+export async function getUnitsBySKU(dateRange?: DateRange): Promise<UnitsBySKUChartData> {
   const supabase = await createClient();
 
-  // Get date 6 months ago
-  const sixMonthsAgo = new Date();
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
-  sixMonthsAgo.setDate(1); // Start of that month
+  // Use provided date range or default to last 6 months
+  let startDate: string;
+  let endDate: string;
+
+  if (dateRange) {
+    startDate = dateRange.startDate;
+    endDate = dateRange.endDate;
+  } else {
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+    sixMonthsAgo.setDate(1);
+    startDate = formatDateString(sixMonthsAgo);
+    endDate = formatDateString(new Date());
+  }
 
   // Query sales_order_items joined with sales_orders and products
   // Only include inventory products (exclude service and non_inventory)
@@ -55,7 +75,8 @@ export async function getUnitsBySKU(): Promise<UnitsBySKUChartData> {
         item_type
       )
     `)
-    .gte('sales_orders.order_date', sixMonthsAgo.toISOString().split('T')[0])
+    .gte('sales_orders.order_date', startDate)
+    .lte('sales_orders.order_date', endDate)
     .is('sales_orders.deleted_at', null)
     .in('sales_orders.status', ['confirmed', 'processing', 'shipped', 'delivered'])
     .eq('products.item_type', 'inventory');
@@ -144,13 +165,24 @@ const CHANNEL_COLORS: Record<string, string> = {
 /**
  * Get channel performance data (OEM vs Dealer)
  * Groups sales by customer channel
+ * @param dateRange - Optional date range filter. Defaults to current month if not provided.
  */
-export async function getChannelPerformance(): Promise<ChannelPerformanceDataPoint[]> {
+export async function getChannelPerformance(dateRange?: DateRange): Promise<ChannelPerformanceDataPoint[]> {
   const supabase = await createClient();
 
-  // Get current month start
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  // Use provided date range or default to current month
+  let startDate: string;
+  let endDate: string;
+
+  if (dateRange) {
+    startDate = dateRange.startDate;
+    endDate = dateRange.endDate;
+  } else {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    startDate = formatDateString(monthStart);
+    endDate = formatDateString(now);
+  }
 
   // Query sales_orders with customer channel
   const { data: ordersData, error: ordersError } = await supabase
@@ -163,7 +195,8 @@ export async function getChannelPerformance(): Promise<ChannelPerformanceDataPoi
         channel
       )
     `)
-    .gte('order_date', monthStart.toISOString().split('T')[0])
+    .gte('order_date', startDate)
+    .lte('order_date', endDate)
     .is('deleted_at', null)
     .in('status', ['confirmed', 'processing', 'shipped', 'delivered']);
 
@@ -336,7 +369,7 @@ export async function getInventoryByLocation(): Promise<InventoryByLocation[]> {
         warehouse_id
       )
     `)
-    .gte('sales_orders.order_date', thirtyDaysAgo.toISOString().split('T')[0])
+    .gte('sales_orders.order_date', thirtyDaysAgo)
     .is('sales_orders.deleted_at', null)
     .in('sales_orders.status', ['confirmed', 'processing', 'shipped', 'delivered']);
 
@@ -384,12 +417,13 @@ export async function getInventoryByLocation(): Promise<InventoryByLocation[]> {
 
 /**
  * Get dashboard KPI stats
- * Revenue MTD, Units Sold MTD, Blended Margin, Open Orders
+ * Revenue, Units Sold, Blended Margin, Open Orders
+ * @param dateRange - Optional date range filter. Affects revenue and units calculations.
  */
-export async function getDashboardStats(): Promise<DashboardStat[]> {
+export async function getDashboardStats(dateRange?: DateRange): Promise<DashboardStat[]> {
   const supabase = await createClient();
 
-  // Current month dates
+  // Current dates for comparison periods
   const now = new Date();
   const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -400,11 +434,33 @@ export async function getDashboardStats(): Promise<DashboardStat[]> {
   const lastYearStart = new Date(now.getFullYear() - 1, 0, 1); // Jan 1 of last year
   const lastYearSameDay = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()); // Same day last year
 
-  // Fetch current month orders
+  // Determine date range for primary calculations
+  let primaryStartDate: string;
+  let primaryEndDate: string;
+  let periodLabel = 'MTD'; // Default label
+
+  if (dateRange) {
+    primaryStartDate = dateRange.startDate;
+    primaryEndDate = dateRange.endDate;
+    // Determine label based on preset
+    if (dateRange.preset === 'ytd') periodLabel = 'YTD';
+    else if (dateRange.preset === 'last_year') periodLabel = 'Last Year';
+    else if (dateRange.preset === 'this_quarter' || dateRange.preset === 'last_quarter') periodLabel = 'QTD';
+    else if (dateRange.preset === 'last_6_months') periodLabel = 'Last 6 Mo';
+    else if (dateRange.preset === 'last_12_months') periodLabel = 'Last 12 Mo';
+    else if (dateRange.preset === 'last_month') periodLabel = 'Last Month';
+    else periodLabel = 'MTD';
+  } else {
+    primaryStartDate = formatDateString(currentMonthStart);
+    primaryEndDate = formatDateString(now);
+  }
+
+  // Fetch orders for the selected period
   const { data: currentMonthOrders } = await supabase
     .from('sales_orders')
     .select('id, grand_total, subtotal')
-    .gte('order_date', currentMonthStart.toISOString().split('T')[0])
+    .gte('order_date', primaryStartDate)
+    .lte('order_date', primaryEndDate)
     .is('deleted_at', null)
     .in('status', ['confirmed', 'processing', 'shipped', 'delivered']);
 
@@ -412,8 +468,8 @@ export async function getDashboardStats(): Promise<DashboardStat[]> {
   const { data: lastMonthOrders } = await supabase
     .from('sales_orders')
     .select('id, grand_total, subtotal')
-    .gte('order_date', lastMonthStart.toISOString().split('T')[0])
-    .lte('order_date', lastMonthEnd.toISOString().split('T')[0])
+    .gte('order_date', lastMonthStart)
+    .lte('order_date', lastMonthEnd)
     .is('deleted_at', null)
     .in('status', ['confirmed', 'processing', 'shipped', 'delivered']);
 
@@ -421,7 +477,7 @@ export async function getDashboardStats(): Promise<DashboardStat[]> {
   const { data: ytdOrders } = await supabase
     .from('sales_orders')
     .select('id, grand_total, subtotal')
-    .gte('order_date', currentYearStart.toISOString().split('T')[0])
+    .gte('order_date', currentYearStart)
     .is('deleted_at', null)
     .in('status', ['confirmed', 'processing', 'shipped', 'delivered']);
 
@@ -429,8 +485,8 @@ export async function getDashboardStats(): Promise<DashboardStat[]> {
   const { data: lastYearYtdOrders } = await supabase
     .from('sales_orders')
     .select('id, grand_total, subtotal')
-    .gte('order_date', lastYearStart.toISOString().split('T')[0])
-    .lte('order_date', lastYearSameDay.toISOString().split('T')[0])
+    .gte('order_date', lastYearStart)
+    .lte('order_date', lastYearSameDay)
     .is('deleted_at', null)
     .in('status', ['confirmed', 'processing', 'shipped', 'delivered']);
 
@@ -621,7 +677,7 @@ export async function getDashboardStats(): Promise<DashboardStat[]> {
   const stats: DashboardStat[] = [
     {
       id: 'revenue-mtd',
-      title: 'Revenue (MTD)',
+      title: `Revenue (${periodLabel})`,
       value: formatCurrency(currentRevenue),
       change: `${revenueChange >= 0 ? '+' : ''}${revenueChange.toFixed(1)}%`,
       trend: revenueChange >= 0 ? 'up' : 'down',
@@ -641,7 +697,7 @@ export async function getDashboardStats(): Promise<DashboardStat[]> {
     },
     {
       id: 'units-sold',
-      title: 'Units Sold (MTD)',
+      title: `Units Sold (${periodLabel})`,
       value: currentMonthUnits.toLocaleString(),
       change: `${unitsChange >= 0 ? '+' : ''}${unitsChange.toFixed(1)}%`,
       trend: unitsChange >= 0 ? 'up' : 'down',
@@ -688,14 +744,25 @@ export async function getDashboardStats(): Promise<DashboardStat[]> {
 /**
  * Get margin analysis data for last 6 months
  * Calculates monthly margin % based on selling price vs cost
+ * @param dateRange - Optional date range filter. Defaults to last 6 months if not provided.
  */
-export async function getMarginAnalysis(): Promise<MarginDataPoint[]> {
+export async function getMarginAnalysis(dateRange?: DateRange): Promise<MarginDataPoint[]> {
   const supabase = await createClient();
 
-  // Get date 6 months ago
-  const sixMonthsAgo = new Date();
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
-  sixMonthsAgo.setDate(1); // Start of that month
+  // Use provided date range or default to last 6 months
+  let startDate: string;
+  let endDate: string;
+
+  if (dateRange) {
+    startDate = dateRange.startDate;
+    endDate = dateRange.endDate;
+  } else {
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+    sixMonthsAgo.setDate(1);
+    startDate = formatDateString(sixMonthsAgo);
+    endDate = formatDateString(new Date());
+  }
 
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -718,7 +785,8 @@ export async function getMarginAnalysis(): Promise<MarginDataPoint[]> {
         name
       )
     `)
-    .gte('sales_orders.order_date', sixMonthsAgo.toISOString().split('T')[0])
+    .gte('sales_orders.order_date', startDate)
+    .lte('sales_orders.order_date', endDate)
     .is('sales_orders.deleted_at', null)
     .in('sales_orders.status', ['confirmed', 'processing', 'shipped', 'delivered']);
 
@@ -828,8 +896,9 @@ export async function getMarginAnalysis(): Promise<MarginDataPoint[]> {
 /**
  * Get revenue trend data for last 8 months
  * Shows current year revenue, target, and last year comparison
+ * @param dateRange - Optional date range filter. Affects the data period shown.
  */
-export async function getRevenueTrend(): Promise<RevenueDataPoint[]> {
+export async function getRevenueTrend(dateRange?: DateRange): Promise<RevenueDataPoint[]> {
   const supabase = await createClient();
 
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -839,16 +908,27 @@ export async function getRevenueTrend(): Promise<RevenueDataPoint[]> {
   const currentYear = now.getFullYear();
   const lastYear = currentYear - 1;
 
-  // Get date 7 months ago (to show 8 months including current)
-  const eightMonthsAgo = new Date();
-  eightMonthsAgo.setMonth(eightMonthsAgo.getMonth() - 7);
-  eightMonthsAgo.setDate(1);
+  // Determine date range - if provided, use it; otherwise use last 8 months
+  let queryStartDate: string;
+  let queryEndDate: string;
+
+  if (dateRange) {
+    queryStartDate = dateRange.startDate;
+    queryEndDate = dateRange.endDate;
+  } else {
+    const eightMonthsAgo = new Date();
+    eightMonthsAgo.setMonth(eightMonthsAgo.getMonth() - 7);
+    eightMonthsAgo.setDate(1);
+    queryStartDate = formatDateString(eightMonthsAgo);
+    queryEndDate = formatDateString(now);
+  }
 
   // Query current year orders
   const { data: currentYearData, error: currentError } = await supabase
     .from('sales_orders')
     .select('order_date, grand_total')
-    .gte('order_date', `${currentYear}-01-01`)
+    .gte('order_date', queryStartDate)
+    .lte('order_date', queryEndDate)
     .is('deleted_at', null)
     .in('status', ['confirmed', 'processing', 'shipped', 'delivered']);
 

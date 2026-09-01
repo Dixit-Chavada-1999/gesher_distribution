@@ -20,3 +20,7 @@ export { NeedsAttention } from './NeedsAttention';
 export { OrderPipeline } from './OrderPipeline';
 export { InventoryOverview } from './InventoryOverview';
 export { ARAgingChart, APSummaryCard, ARAPSummary } from './ARAPSummary';
+
+// Date filter components
+export { DateRangeFilter } from './DateRangeFilter';
+export { DashboardContent } from './DashboardContent';
