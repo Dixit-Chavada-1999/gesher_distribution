@@ -711,3 +711,89 @@ export async function updateShipmentOrOrder(
     };
   }
 }
+
+// ============================================
+// UPDATE SHIPMENT NOTES (Quick Edit)
+// ============================================
+
+/**
+ * Quick update for shipment action_required notes
+ * Used by EditNotesDialog for fast note updates
+ */
+export async function updateShipmentNotes(
+  shipmentId: string,
+  notes: string
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: 'Authentication required' };
+    }
+
+    const { error } = await db
+      .from('shipments')
+      .update({
+        action_required: notes,
+        updated_at: new Date().toISOString(),
+        updated_by: user.id,
+      })
+      .eq('id', shipmentId);
+
+    if (error) {
+      console.error('Error updating shipment notes:', error);
+      return { success: false, error: error.message };
+    }
+
+    // Revalidate operations dashboard
+    revalidatePath('/operations');
+
+    return { success: true, data: { id: shipmentId } };
+  } catch (error) {
+    console.error('Error updating shipment notes:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to update notes',
+    };
+  }
+}
+
+/**
+ * Quick update for sales order internal notes
+ * Used when the item is a sales order (not shipment)
+ */
+export async function updateSalesOrderNotes(
+  salesOrderId: string,
+  notes: string
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: 'Authentication required' };
+    }
+
+    const { error } = await db
+      .from('sales_orders')
+      .update({
+        internal_notes: notes,
+        updated_at: new Date().toISOString(),
+        updated_by: user.id,
+      })
+      .eq('id', salesOrderId);
+
+    if (error) {
+      console.error('Error updating sales order notes:', error);
+      return { success: false, error: error.message };
+    }
+
+    // Revalidate operations dashboard
+    revalidatePath('/operations');
+
+    return { success: true, data: { id: salesOrderId } };
+  } catch (error) {
+    console.error('Error updating sales order notes:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to update notes',
+    };
+  }
+}

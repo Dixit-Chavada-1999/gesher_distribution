@@ -343,6 +343,7 @@ export default function OperationsPage() {
           <ImmediateAttentionTable
             items={data.immediateAttention}
             onEdit={handleEditAttentionItem}
+            onRefresh={handleRefresh}
           />
 
           {/* Two column layout for breakdown and status */}

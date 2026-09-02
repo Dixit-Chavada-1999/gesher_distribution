@@ -101,17 +101,18 @@ export const STATUS_CONFIG: Record<ShipmentStatus, StatusConfig> = {
 interface StatusBadgeProps {
   status: ShipmentStatus | string;
   isOverdue?: boolean;
+  isDelayed?: boolean;
 }
 
 /**
  * Shared status badge component
  * Use this in all Operations Dashboard tables for consistent styling
  */
-export function StatusBadge({ status, isOverdue = false }: StatusBadgeProps) {
-  // Show DELAYED badge if overdue
-  if (isOverdue) {
+export function StatusBadge({ status, isOverdue = false, isDelayed = false }: StatusBadgeProps) {
+  // Show DELAYED badge if delayed or overdue
+  if (isDelayed || isOverdue) {
     return (
-      <Badge variant="destructive" className="gap-1">
+      <Badge variant="outline" className="gap-1 bg-yellow-100 text-yellow-800 border-yellow-400">
         <AlertTriangle className="h-3 w-3" />
         Delayed
       </Badge>

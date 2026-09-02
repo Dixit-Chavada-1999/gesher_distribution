@@ -93,6 +93,14 @@ export interface ImmediateAttentionItem {
   isOverdue: boolean;
   isThisWeek: boolean;
   productSource?: 'dropship' | 'warehouse';  // For filtering Shipment Overview
+  // LFD (Last Free Day) Alert fields
+  lfdDate?: string | null;        // Last Free Day - deadline before demurrage charges
+  isLFDApproaching?: boolean;     // LFD within 3 days
+  isLFDCritical?: boolean;        // LFD is today or tomorrow
+  deliveryAddress?: string | null; // Delivery destination address
+  // Delay Alert fields
+  isDelayed?: boolean;            // Shipment is delayed (manual flag OR auto-detected from dates)
+  delayReason?: string | null;    // Reason for delay (from Seaair email or manual entry)
 }
 
 // ============================================
