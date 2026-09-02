@@ -7,6 +7,7 @@
  * Based on the redesign from Aug 24 call - GDC is "order series" not warehouse location.
  */
 
+import { useState } from 'react';
 import { Pencil } from 'lucide-react';
 
 import {
@@ -46,6 +47,18 @@ const PO_STATUS_COLORS: Record<string, string> = {
 };
 
 export function GDCInventoryTable({ orderSeries, data, uniqueSkus, onEdit }: GDCInventoryTableProps) {
+  // State for expanded addresses and notes
+  const [expandedAddressId, setExpandedAddressId] = useState<string | null>(null);
+  const [expandedNotesId, setExpandedNotesId] = useState<string | null>(null);
+
+  const toggleAddressExpand = (id: string) => {
+    setExpandedAddressId(expandedAddressId === id ? null : id);
+  };
+
+  const toggleNotesExpand = (id: string) => {
+    setExpandedNotesId(expandedNotesId === id ? null : id);
+  };
+
   const formatDate = (dateString: string | null) => {
     if (!dateString) { return '-'; }
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -150,16 +163,54 @@ export function GDCInventoryTable({ orderSeries, data, uniqueSkus, onEdit }: GDC
                     <TableCell>{item.customer || 'Unallocated'}</TableCell>
                     <TableCell>{item.supplierName || '-'}</TableCell>
                     <TableCell>{formatDate(item.expectedDelivery)}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate" title={item.deliveryAddress || ''}>
-                      {item.deliveryAddress || '-'}
+                    <TableCell className="max-w-[200px]">
+                      {item.deliveryAddress ? (
+                        expandedAddressId === item.id ? (
+                          <div className="text-xs text-muted-foreground">
+                            <span>{item.deliveryAddress}</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center text-xs text-muted-foreground">
+                            <span className="truncate">{item.deliveryAddress.substring(0, 20)}</span>
+                            <button
+                              className="text-primary hover:underline text-xs ml-1 flex-shrink-0"
+                              onClick={() => toggleAddressExpand(item.id)}
+                            >
+                              ...
+                            </button>
+                          </div>
+                        )
+                      ) : (
+                        <span className="text-xs text-muted-foreground">-</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge className={PO_STATUS_COLORS[item.status] || 'bg-gray-100 text-gray-700'}>
                         {item.status}
                       </Badge>
                     </TableCell>
-                    <TableCell className="max-w-[150px] text-xs text-muted-foreground truncate" title={item.actionRequired || ''}>
-                      {item.actionRequired || '-'}
+                    <TableCell className="max-w-[150px]">
+                      {item.actionRequired ? (
+                        expandedNotesId === item.id ? (
+                          <div className="text-xs text-muted-foreground">
+                            <span>{item.actionRequired}</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center text-xs text-muted-foreground">
+                            <span className="truncate">{item.actionRequired.substring(0, 20)}</span>
+                            {item.actionRequired.length > 20 && (
+                              <button
+                                className="text-primary hover:underline text-xs ml-1 flex-shrink-0"
+                                onClick={() => toggleNotesExpand(item.id)}
+                              >
+                                ...
+                              </button>
+                            )}
+                          </div>
+                        )
+                      ) : (
+                        <span className="text-xs text-muted-foreground">-</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Button

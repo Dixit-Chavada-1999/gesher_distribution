@@ -65,11 +65,16 @@ export function ImmediateAttentionTable({
   onEdit,
   onRefresh: _onRefresh,
 }: ImmediateAttentionTableProps) {
-  // State for expanded addresses
+  // State for expanded addresses and notes
   const [expandedAddressId, setExpandedAddressId] = useState<string | null>(null);
+  const [expandedNotesId, setExpandedNotesId] = useState<string | null>(null);
 
   const toggleAddressExpand = (id: string) => {
     setExpandedAddressId(expandedAddressId === id ? null : id);
+  };
+
+  const toggleNotesExpand = (id: string) => {
+    setExpandedNotesId(expandedNotesId === id ? null : id);
   };
 
   // Sort by priority: LFD critical > LFD approaching > Delayed > Overdue > This week
@@ -210,12 +215,6 @@ export function ImmediateAttentionTable({
                           expandedAddressId === item.id ? (
                             <div className="text-sm">
                               <span>{item.deliveryAddress}</span>
-                              <button
-                                className="ml-1 text-primary hover:underline text-xs"
-                                onClick={() => toggleAddressExpand(item.id)}
-                              >
-                                Show less
-                              </button>
                             </div>
                           ) : (
                             <div className="flex items-center">
@@ -233,8 +232,28 @@ export function ImmediateAttentionTable({
                         )}
                       </TableCell>
                       <TableCell><StatusBadge status={item.status} isOverdue={item.isOverdue} isDelayed={item.isDelayed} /></TableCell>
-                      <TableCell className="max-w-[200px] truncate">
-                        {item.actionRequired || '-'}
+                      <TableCell className="max-w-[200px]">
+                        {item.actionRequired ? (
+                          expandedNotesId === item.id ? (
+                            <div className="text-sm">
+                              <span>{item.actionRequired}</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center">
+                              <span className="truncate">{item.actionRequired.substring(0, 20)}</span>
+                              {item.actionRequired.length > 20 && (
+                                <button
+                                  className="text-primary hover:underline text-xs ml-1 flex-shrink-0"
+                                  onClick={() => toggleNotesExpand(item.id)}
+                                >
+                                  ...
+                                </button>
+                              )}
+                            </div>
+                          )
+                        ) : (
+                          '-'
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
