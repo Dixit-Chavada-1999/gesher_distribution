@@ -126,6 +126,28 @@ export interface Shipment {
   deliveryInstructions: string | null;
 
   // ============================================
+  // Shipping Details (from Supplier Portal)
+  // ============================================
+
+  // Container & Vessel Info
+  containerNumber: string | null;
+  billOfLading: string | null;
+  vesselName: string | null;
+
+  // Ports
+  portOfLoading: string | null;
+  portOfDischarge: string | null;
+
+  // Shipping Dates
+  etd: Date | null;           // Estimated Time of Departure
+  etaPort: Date | null;       // ETA to US Port
+  etaCustomer: Date | null;   // ETA to Customer
+
+  // Supplier tracking
+  supplierUpdatedAt: Date | null;
+  supplierUpdatedBy: string | null;
+
+  // ============================================
   // Operations Dashboard Fields (Jenny)
   // ============================================
 
@@ -153,6 +175,9 @@ export interface Shipment {
   // Operations Notes
   actionRequired: string | null;
   executiveNotes: string | null;
+
+  // Last Free Day (LFD)
+  lfdDate: Date | null;
 
   // Flags & Status
   isDelayed: boolean;
@@ -210,6 +235,20 @@ export interface SalesOrderSummary {
   id: string;
   orderNumber: string;
   status: string;
+  customerPoNumber: string | null;
+  customer: CustomerSummary | null;
+}
+
+export interface CustomerSummary {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  addressStreet: string | null;
+  addressCity: string | null;
+  addressState: string | null;
+  addressPostalCode: string | null;
+  addressCountry: string | null;
 }
 
 export interface PurchaseOrderSummary {
@@ -324,6 +363,7 @@ export interface UpdateShipmentDTO {
   remaining50DueDate?: Date | null;
   actionRequired?: string | null;
   executiveNotes?: string | null;
+  lfdDate?: Date | null;
   isDelayed?: boolean;
   loadStatus?: LoadStatus;
   customerShipWindowStart?: Date | null;

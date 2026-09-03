@@ -10,7 +10,7 @@
  */
 
 import { useState } from 'react';
-import { Truck, Pencil, Clock, AlertTriangle } from 'lucide-react';
+import { Truck, Pencil, Clock, AlertTriangle, Eye } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Button } from '@/shared/components/ui/button';
@@ -60,7 +60,7 @@ function formatDate(dateString: string | null): string {
 
 export function ImmediateAttentionTable({
   items,
-  onViewDetails: _onViewDetails,
+  onViewDetails,
   onAddNote: _onAddNote,
   onEdit,
   onRefresh: _onRefresh,
@@ -257,6 +257,15 @@ export function ImmediateAttentionTable({
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => onViewDetails?.(item)}
+                            title="View Details"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"

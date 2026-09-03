@@ -79,6 +79,7 @@ const editShipmentSchema = z.object({
   shipmentDate: z.string().min(1, 'Shipment date is required'),
   estimatedArrival: z.string(),
   actualArrival: z.string(),
+  lfdDate: z.string(),
   carrier: z.string(),
   trackingNumber: z.string(),
   serviceType: z.string(),
@@ -150,6 +151,7 @@ export function EditShipmentDrawer({
       shipmentDate: '',
       estimatedArrival: '',
       actualArrival: '',
+      lfdDate: '',
       carrier: '',
       trackingNumber: '',
       serviceType: '',
@@ -188,6 +190,7 @@ export function EditShipmentDrawer({
           shipmentDate: toDateInput(data.shipmentDate),
           estimatedArrival: toDateInput(data.estimatedArrival),
           actualArrival: toDateInput(data.actualArrival),
+          lfdDate: toDateInput(data.lfdDate),
           carrier: data.carrier || '',
           trackingNumber: data.trackingNumber || '',
           serviceType: data.serviceType || '',
@@ -236,6 +239,7 @@ export function EditShipmentDrawer({
         shipmentDate: new Date(data.shipmentDate),
         estimatedArrival: data.estimatedArrival ? new Date(data.estimatedArrival) : null,
         actualArrival: data.actualArrival ? new Date(data.actualArrival) : null,
+        lfdDate: data.lfdDate ? new Date(data.lfdDate) : null,
         carrier: data.carrier || null,
         trackingNumber: data.trackingNumber || null,
         serviceType: data.serviceType || null,
@@ -378,7 +382,7 @@ export function EditShipmentDrawer({
                 className="space-y-6"
               >
                 {/* Dates */}
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   <FormField
                     control={form.control}
                     name="shipmentDate"
@@ -411,6 +415,19 @@ export function EditShipmentDrawer({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Actual arrival</FormLabel>
+                        <FormControl>
+                          <Input type="date" disabled={isLocked} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="lfdDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Last Free Day (LFD)</FormLabel>
                         <FormControl>
                           <Input type="date" disabled={isLocked} {...field} />
                         </FormControl>

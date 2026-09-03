@@ -73,6 +73,7 @@ export const updateShipmentSchema = z.object({
   totalPackages: z.number().int().min(1).optional(),
   notes: z.string().nullable().optional(),
   deliveryInstructions: z.string().nullable().optional(),
+  lfdDate: z.coerce.date().nullable().optional(),
 });
 
 export type UpdateShipmentInput = z.infer<typeof updateShipmentSchema>;

@@ -797,3 +797,293 @@ export async function updateSalesOrderNotes(
     };
   }
 }
+
+// ============================================
+// GET SHIPMENT DETAIL BY ID (View Modal)
+// ============================================
+
+export interface ShipmentDetailData {
+  id: string;
+  shipmentNumber: string;
+  shipmentDate: string;
+  status: string;
+  // Shipping Details
+  containerNumber: string | null;
+  billOfLading: string | null;
+  vesselName: string | null;
+  // Ports
+  portOfLoading: string | null;
+  portOfDischarge: string | null;
+  // Dates
+  etd: string | null;
+  etaPort: string | null;
+  etaCustomer: string | null;
+  estimatedArrival: string | null;
+  actualArrival: string | null;
+  lastFreeDay: string | null;
+  // Customer
+  customerName: string | null;
+  customerPo: string | null;
+  salesOrderNumber: string | null;
+  // Ship To
+  shipToName: string | null;
+  shipToAddressStreet: string | null;
+  shipToAddressCity: string | null;
+  shipToAddressState: string | null;
+  shipToAddressPostalCode: string | null;
+  shipToAddressCountry: string | null;
+  // Carrier
+  carrier: string | null;
+  trackingNumber: string | null;
+  serviceType: string | null;
+  // Items
+  items: Array<{
+    id: string;
+    sku: string;
+    description: string | null;
+    quantityShipped: number;
+  }>;
+  // Package Info
+  totalWeight: number | null;
+  weightUnit: string;
+  totalPackages: number;
+  // Notes
+  notes: string | null;
+  actionRequired: string | null;
+  deliveryInstructions: string | null;
+  // Flags
+  isDelayed: boolean;
+}
+
+/**
+ * Get full shipment details for view modal
+ * Handles both shipment IDs and sales order IDs (for orders without shipments)
+ */
+export async function getShipmentDetailById(
+  itemId: string
+): Promise<ShipmentDetailData> {
+  console.log('[getShipmentDetailById] Looking for ID:', itemId);
+
+  // First, try a simple check if shipment exists
+  const { data: shipmentCheck, error: checkError } = await db
+    .from('shipments')
+    .select('id, shipment_number')
+    .eq('id', itemId)
+    .maybeSingle();
+
+  console.log('[getShipmentDetailById] Simple check:', {
+    found: !!shipmentCheck,
+    shipmentNumber: shipmentCheck?.shipment_number,
+    error: checkError?.message,
+  });
+
+  // If shipment exists, get full details
+  if (shipmentCheck) {
+    const { data: shipmentData, error: shipmentError } = await db
+      .from('shipments')
+      .select(`
+        id,
+        shipment_number,
+        shipment_date,
+        status,
+        container_number,
+        bill_of_lading,
+        vessel_name,
+        port_of_loading,
+        port_of_discharge,
+        etd,
+        eta_port,
+        eta_customer,
+        estimated_arrival,
+        actual_arrival,
+        lfd_date,
+        ship_to_name,
+        ship_to_address_street,
+        ship_to_address_city,
+        ship_to_address_state,
+        ship_to_address_postal_code,
+        ship_to_address_country,
+        carrier,
+        tracking_number,
+        service_type,
+        total_weight,
+        weight_unit,
+        total_packages,
+        notes,
+        action_required,
+        delivery_instructions,
+        is_delayed,
+        sales_order_id,
+        sales_orders(
+          id,
+          order_number,
+          customer_po_number,
+          customers(
+            id,
+            name
+          )
+        ),
+        shipment_items(
+          id,
+          sku,
+          description,
+          quantity_shipped
+        )
+      `)
+      .eq('id', itemId)
+      .single();
+
+    if (shipmentError) {
+      console.error('[getShipmentDetailById] Full shipment query error:', shipmentError);
+      throw new Error(`Failed to load shipment details: ${shipmentError.message}`);
+    }
+
+    if (shipmentData) {
+      const salesOrder = Array.isArray(shipmentData.sales_orders)
+        ? shipmentData.sales_orders[0]
+        : shipmentData.sales_orders;
+      const customer = salesOrder?.customers
+        ? (Array.isArray(salesOrder.customers) ? salesOrder.customers[0] : salesOrder.customers)
+        : null;
+
+      return {
+        id: shipmentData.id,
+        shipmentNumber: shipmentData.shipment_number,
+        shipmentDate: shipmentData.shipment_date,
+        status: shipmentData.status,
+        containerNumber: shipmentData.container_number,
+        billOfLading: shipmentData.bill_of_lading,
+        vesselName: shipmentData.vessel_name,
+        portOfLoading: shipmentData.port_of_loading,
+        portOfDischarge: shipmentData.port_of_discharge,
+        etd: shipmentData.etd,
+        etaPort: shipmentData.eta_port,
+        etaCustomer: shipmentData.eta_customer,
+        estimatedArrival: shipmentData.estimated_arrival,
+        actualArrival: shipmentData.actual_arrival,
+        lastFreeDay: shipmentData.lfd_date,
+        customerName: customer?.name || null,
+        customerPo: salesOrder?.customer_po_number || null,
+        salesOrderNumber: salesOrder?.order_number || null,
+        shipToName: shipmentData.ship_to_name,
+        shipToAddressStreet: shipmentData.ship_to_address_street,
+        shipToAddressCity: shipmentData.ship_to_address_city,
+        shipToAddressState: shipmentData.ship_to_address_state,
+        shipToAddressPostalCode: shipmentData.ship_to_address_postal_code,
+        shipToAddressCountry: shipmentData.ship_to_address_country,
+        carrier: shipmentData.carrier,
+        trackingNumber: shipmentData.tracking_number,
+        serviceType: shipmentData.service_type,
+        items: (shipmentData.shipment_items || []).map((item: { id: string; sku: string; description: string | null; quantity_shipped: number }) => ({
+          id: item.id,
+          sku: item.sku,
+          description: item.description,
+          quantityShipped: item.quantity_shipped,
+        })),
+        totalWeight: shipmentData.total_weight,
+        weightUnit: shipmentData.weight_unit || 'lbs',
+        totalPackages: shipmentData.total_packages || 1,
+        notes: shipmentData.notes,
+        actionRequired: shipmentData.action_required,
+        deliveryInstructions: shipmentData.delivery_instructions,
+        isDelayed: shipmentData.is_delayed || false,
+      };
+    }
+  }
+
+  // If not found in shipments, try sales_orders table (for items without shipments)
+  console.log('[getShipmentDetailById] Not found in shipments, trying sales_orders...');
+  const { data: salesOrderData, error: salesOrderError } = await db
+    .from('sales_orders')
+    .select(`
+      id,
+      order_number,
+      order_date,
+      status,
+      customer_po_number,
+      requested_delivery_date,
+      shipping_address_street,
+      shipping_address_city,
+      shipping_address_state,
+      shipping_address_postal_code,
+      shipping_address_country,
+      internal_notes,
+      customers(
+        id,
+        name
+      ),
+      sales_order_items(
+        id,
+        sku,
+        description,
+        quantity
+      )
+    `)
+    .eq('id', itemId)
+    .maybeSingle();
+
+  console.log('[getShipmentDetailById] Sales order query result:', {
+    found: !!salesOrderData,
+    error: salesOrderError?.message,
+  });
+
+  if (salesOrderError) {
+    console.error('Sales order query error:', salesOrderError);
+    throw new Error(`Record not found: ${salesOrderError.message}`);
+  }
+
+  if (!salesOrderData) {
+    // Log the ID that wasn't found for debugging
+    console.error('Record not found for ID:', itemId);
+    throw new Error('Record not found - ID does not exist in shipments or sales_orders tables');
+  }
+
+  // Extract customer data
+  const customer = Array.isArray(salesOrderData.customers)
+    ? salesOrderData.customers[0]
+    : salesOrderData.customers;
+
+  // Map sales order data to ShipmentDetailData format
+  return {
+    id: salesOrderData.id,
+    shipmentNumber: salesOrderData.order_number,
+    shipmentDate: salesOrderData.order_date,
+    status: salesOrderData.status,
+    containerNumber: null,
+    billOfLading: null,
+    vesselName: null,
+    portOfLoading: null,
+    portOfDischarge: null,
+    etd: null,
+    etaPort: null,
+    etaCustomer: salesOrderData.requested_delivery_date,
+    estimatedArrival: salesOrderData.requested_delivery_date,
+    actualArrival: null,
+    lastFreeDay: null,
+    customerName: customer?.name || null,
+    customerPo: salesOrderData.customer_po_number,
+    salesOrderNumber: salesOrderData.order_number,
+    shipToName: customer?.name || null,
+    shipToAddressStreet: salesOrderData.shipping_address_street,
+    shipToAddressCity: salesOrderData.shipping_address_city,
+    shipToAddressState: salesOrderData.shipping_address_state,
+    shipToAddressPostalCode: salesOrderData.shipping_address_postal_code,
+    shipToAddressCountry: salesOrderData.shipping_address_country,
+    carrier: null,
+    trackingNumber: null,
+    serviceType: null,
+    items: (salesOrderData.sales_order_items || []).map((item: { id: string; sku: string; description: string | null; quantity: number }) => ({
+      id: item.id,
+      sku: item.sku,
+      description: item.description,
+      quantityShipped: item.quantity,
+    })),
+    totalWeight: null,
+    weightUnit: 'lbs',
+    totalPackages: 1,
+    notes: salesOrderData.internal_notes,
+    actionRequired: null,
+    deliveryInstructions: null,
+    isDelayed: false,
+  };
+}

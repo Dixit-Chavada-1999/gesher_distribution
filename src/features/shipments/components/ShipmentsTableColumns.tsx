@@ -104,7 +104,7 @@ export function ShipmentsTableColumns(options: ColumnsOptions = {}): ColumnDef<S
                   View
                 </DropdownMenuItem>
               )}
-              {onEdit && shipment.status === 'pending' && (
+              {onEdit && (
                 <DropdownMenuItem onClick={() => onEdit(shipment)}>
                   <Pencil className="mr-2 h-4 w-4" />
                   Edit

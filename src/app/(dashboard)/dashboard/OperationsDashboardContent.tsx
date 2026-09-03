@@ -29,9 +29,10 @@ import { StoryInBrief } from '@/features/operations-dashboard/components/StoryIn
 import { ShipmentOverviewTable } from '@/features/operations-dashboard/components/ShipmentOverviewTable';
 import { SupplierShipmentScheduleTable } from '@/features/operations-dashboard/components/SupplierShipmentScheduleTable';
 import { GDC1InventoryTable } from '@/features/operations-dashboard/components/GDC1InventoryTable';
+import { ViewShipmentDetailDialog } from '@/features/operations-dashboard/components/ViewShipmentDetailDialog';
 import { fetchOperationsData } from '@/features/operations-dashboard/actions';
 import { exportToXLSX, type XLSXExportType } from '@/features/operations-dashboard/lib/xlsx-export';
-import type { OperationsData } from '@/features/operations-dashboard/types';
+import type { OperationsData, ImmediateAttentionItem } from '@/features/operations-dashboard/types';
 
 // Default empty data structure
 const emptyData: OperationsData = {
@@ -64,6 +65,9 @@ export function OperationsDashboardContent() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [data, setData] = useState<OperationsData>(emptyData);
+
+  // View shipment detail dialog state
+  const [viewShipmentId, setViewShipmentId] = useState<string | null>(null);
 
   // Fetch data on mount
   const loadData = useCallback(async () => {
@@ -98,6 +102,12 @@ export function OperationsDashboardContent() {
   const handleExport = (type: ExportOption) => {
     // Export to XLSX
     exportToXLSX(type as XLSXExportType, data);
+  };
+
+  // Handle view shipment details
+  const handleViewDetails = (item: ImmediateAttentionItem) => {
+    console.log('View details clicked for item:', item.id, item);
+    setViewShipmentId(item.id);
   };
 
   if (isLoading) {
@@ -139,7 +149,10 @@ export function OperationsDashboardContent() {
           <StoryInBrief content={data.storyInBrief} />
 
           {/* Immediate Attention - This is what Jenny checks FIRST */}
-          <ImmediateAttentionTable items={data.immediateAttention} />
+          <ImmediateAttentionTable
+            items={data.immediateAttention}
+            onViewDetails={handleViewDetails}
+          />
 
           {/* Two column layout for breakdown and status */}
           <div className="grid gap-6 lg:grid-cols-2">
@@ -178,6 +191,13 @@ export function OperationsDashboardContent() {
           />
         </TabsContent>
       </Tabs>
+
+      {/* View Shipment Detail Dialog */}
+      <ViewShipmentDetailDialog
+        open={!!viewShipmentId}
+        onClose={() => setViewShipmentId(null)}
+        shipmentId={viewShipmentId}
+      />
     </div>
   );
 }
