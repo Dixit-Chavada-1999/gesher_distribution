@@ -7,10 +7,10 @@
  * Includes supplier selection dropdown.
  */
 
-import { useState, useEffect, useTransition } from 'react';
+import { useState, useEffect, useTransition, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -43,9 +43,9 @@ import { Separator } from '@/shared/components/ui/separator';
 import { ScrollArea } from '@/shared/components/ui/scroll-area';
 
 import { poFormSchema } from '../lib/schemas';
-import { createPurchaseOrder, getSuppliersForDropdown } from '../actions';
+import { createPurchaseOrder, getSuppliersForDropdown, getNextPONumber } from '../actions';
 import type { SupplierSummary, CreatePOItemDTO } from '../types';
-// ORDER_SERIES removed - Order Series is inherited from linked Sales Order (not stored on PO)
+import { ORDER_SERIES } from '@/shared/lib/global-data';
 import { POItemsTable } from './POItemsTable';
 
 // ============================================
@@ -90,15 +90,19 @@ export function CreatePurchaseOrderDrawer({
   // Track selected supplier for auto-assigning to items
   const [supplierIdForItems, setSupplierIdForItems] = useState<string>('');
 
+  // State for auto-generating PO number
+  const [isGeneratingPONumber, setIsGeneratingPONumber] = useState(false);
+
   const form = useForm({
     resolver: zodResolver(poFormSchema),
     defaultValues: {
+      poNumber: '',
       poDate: new Date().toISOString().split('T')[0],
       expectedDeliveryDate: '',
       salesOrderId: defaultSalesOrderId || '',
       warehouseId: '',
       currencyCode: 'USD',
-      // orderSeries removed - inherited from linked Sales Order
+      orderSeries: '',
       vendorAddressStreet: '',
       vendorAddressCity: '',
       vendorAddressState: '',
@@ -146,6 +150,24 @@ export function CreatePurchaseOrderDrawer({
     // For now, just set the supplier
   };
 
+  // Auto-generate PO number handler
+  const handleAutoGeneratePONumber = useCallback(async () => {
+    setIsGeneratingPONumber(true);
+    try {
+      const result = await getNextPONumber();
+      if (result.success && result.data) {
+        form.setValue('poNumber', result.data);
+      } else {
+        toast.error('Failed to generate PO number');
+      }
+    } catch (error) {
+      console.error('Failed to generate PO number:', error);
+      toast.error('Failed to generate PO number');
+    } finally {
+      setIsGeneratingPONumber(false);
+    }
+  }, [form]);
+
   const onSubmit = async (data: Record<string, unknown>) => {
     if (items.length === 0) {
       toast.error('Please add at least one item');
@@ -167,6 +189,7 @@ export function CreatePurchaseOrderDrawer({
         });
 
         const result = await createPurchaseOrder({
+          poNumber: (data.poNumber as string) || undefined, // Optional - auto-generate if empty
           poDate: new Date(data.poDate as string),
           expectedDeliveryDate: data.expectedDeliveryDate
             ? new Date(data.expectedDeliveryDate as string)
@@ -175,7 +198,7 @@ export function CreatePurchaseOrderDrawer({
           warehouseId: (data.warehouseId as string) || null,
           currencyCode: (data.currencyCode as string) || 'USD',
           status: 'draft',
-          // orderSeries removed - inherited from linked Sales Order
+          orderSeries: (data.orderSeries as string) || null,
           vendorAddress: {
             street: (data.vendorAddressStreet as string) || null,
             city: (data.vendorAddressCity as string) || null,
@@ -224,7 +247,7 @@ export function CreatePurchaseOrderDrawer({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
-      <DialogContent className="flex max-h-[90vh] h-[90vh] w-full max-w-4xl flex-col overflow-hidden p-0">
+      <DialogContent className="flex max-h-[90vh] h-[90vh] w-full max-w-6xl flex-col overflow-hidden p-0">
         {/* Header */}
         <DialogHeader className="flex-shrink-0 border-b px-6 py-4">
           <DialogTitle className="text-xl font-semibold">Create Purchase Order</DialogTitle>
@@ -271,13 +294,41 @@ export function CreatePurchaseOrderDrawer({
 
                 <Separator />
 
-                {/* Order Details - PO Date, Expected Delivery */}
+                {/* Order Details - PO Number, PO Date, Expected Delivery, Order Series */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-medium">Order Details</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Order Series is inherited from the linked Sales Order
-                  </p>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-4 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="poNumber"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>PO Number</FormLabel>
+                          <div className="flex gap-2">
+                            <FormControl>
+                              <Input
+                                placeholder="Enter or auto-generate"
+                                {...field}
+                              />
+                            </FormControl>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              onClick={handleAutoGeneratePONumber}
+                              disabled={isGeneratingPONumber}
+                              title="Auto-generate PO number"
+                            >
+                              <Wand2 className={`h-4 w-4 ${isGeneratingPONumber ? 'animate-pulse' : ''}`} />
+                            </Button>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Enter a custom number or click the wand to auto-generate
+                          </p>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                     <FormField
                       control={form.control}
                       name="poDate"
@@ -300,6 +351,30 @@ export function CreatePurchaseOrderDrawer({
                           <FormControl>
                             <Input type="date" {...field} />
                           </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="orderSeries"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Order Series *</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select order series" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {ORDER_SERIES.map((series) => (
+                                <SelectItem key={series.id} value={series.code}>
+                                  {series.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           <FormMessage />
                         </FormItem>
                       )}

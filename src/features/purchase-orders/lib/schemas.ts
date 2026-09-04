@@ -54,13 +54,14 @@ export const updatePOItemSchema = z.object({
 // ============================================
 
 export const createPurchaseOrderSchema = z.object({
+  poNumber: z.string().optional(), // Optional - auto-generate if empty
   poDate: z.coerce.date(),
   expectedDeliveryDate: z.coerce.date().nullable().optional(),
   salesOrderId: z.string().uuid().nullable().optional(),
   warehouseId: z.string().uuid().nullable().optional(),
   currencyCode: z.string().default('USD'),
   status: z.enum(['draft', 'sent', 'confirmed', 'in_production', 'ready_to_ship', 'in_transit', 'partial', 'received', 'cancelled'] as const).default('draft'),
-  // orderSeries removed - inherited from linked Sales Order
+  orderSeries: z.string().nullable().optional(), // For unallocated POs (no linked SO)
   vendorAddress: addressSchema,
   shipToAddress: addressSchema,
   items: z.array(poItemSchema).min(1, 'At least one item is required'), // Supplier info is on items
@@ -79,7 +80,7 @@ export const updatePurchaseOrderSchema = z.object({
   expectedDeliveryDate: z.coerce.date().nullable().optional(),
   warehouseId: z.string().uuid().nullable().optional(),
   currencyCode: z.string().optional(),
-  // orderSeries removed - inherited from linked Sales Order
+  orderSeries: z.string().nullable().optional(), // For unallocated POs (no linked SO)
   vendorAddress: addressSchema.optional(),
   shipToAddress: addressSchema.optional(),
   vendorNotes: z.string().nullable().optional(),
@@ -138,12 +139,13 @@ export function calculatePOTotals(
 // ============================================
 
 export const poFormSchema = z.object({
+  poNumber: z.string().optional(), // Optional - auto-generate if empty
   poDate: z.string().min(1, 'PO date is required'),
   expectedDeliveryDate: z.string().optional(),
   salesOrderId: z.string().optional(),
   warehouseId: z.string().optional(),
   currencyCode: z.string().default('USD'),
-  // orderSeries removed - inherited from linked Sales Order
+  orderSeries: z.string().optional(), // For unallocated POs (no linked SO)
   vendorAddressStreet: z.string().optional(),
   vendorAddressCity: z.string().optional(),
   vendorAddressState: z.string().optional(),
@@ -170,6 +172,7 @@ export function formToCreateDTO(
   items: CreatePOItemDTO[]
 ): CreatePurchaseOrderDTO {
   return {
+    poNumber: form.poNumber?.trim() || undefined, // Optional - auto-generate if empty
     poDate: new Date(form.poDate),
     expectedDeliveryDate: form.expectedDeliveryDate
       ? new Date(form.expectedDeliveryDate)
@@ -178,7 +181,7 @@ export function formToCreateDTO(
     warehouseId: form.warehouseId || null,
     currencyCode: form.currencyCode || 'USD',
     status: 'draft',
-    // orderSeries removed - inherited from linked Sales Order
+    orderSeries: form.orderSeries || null, // For unallocated POs
     vendorAddress: {
       street: form.vendorAddressStreet || null,
       city: form.vendorAddressCity || null,

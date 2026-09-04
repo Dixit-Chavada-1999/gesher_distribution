@@ -49,7 +49,7 @@ import { Label } from '@/shared/components/ui/label';
 import { poFormSchema } from '../lib/schemas';
 import { getPurchaseOrder, updatePurchaseOrder, getSuppliersForDropdown } from '../actions';
 import type { PurchaseOrderWithItems, SupplierSummary, EditPurchaseOrderDrawerProps } from '../types';
-// ORDER_SERIES import removed - Order Series is now read-only, inherited from Sales Order
+import { ORDER_SERIES } from '@/shared/lib/global-data';
 
 // ============================================
 // COMPONENT
@@ -83,7 +83,7 @@ export function EditPurchaseOrderDrawer({
       salesOrderId: '',
       warehouseId: '',
       currencyCode: 'USD',
-      // orderSeries removed - inherited from linked Sales Order
+      orderSeries: '',  // For unallocated POs (no linked SO)
       vendorAddressStreet: '',
       vendorAddressCity: '',
       vendorAddressState: '',
@@ -141,7 +141,7 @@ export function EditPurchaseOrderDrawer({
             salesOrderId: result.data.salesOrderId || '',
             warehouseId: result.data.warehouseId || '',
             currencyCode: result.data.currencyCode || 'USD',
-            // orderSeries removed - inherited from linked Sales Order
+            orderSeries: result.data.orderSeries || '',  // For unallocated POs
             vendorAddressStreet: result.data.vendorAddressStreet || '',
             vendorAddressCity: result.data.vendorAddressCity || '',
             vendorAddressState: result.data.vendorAddressState || '',
@@ -262,7 +262,8 @@ export function EditPurchaseOrderDrawer({
             : null,
           warehouseId: (data.warehouseId as string) || null,
           currencyCode: (data.currencyCode as string) || 'USD',
-          // orderSeries removed - inherited from linked Sales Order
+          // Only include orderSeries if PO is unallocated (no linked SO)
+          orderSeries: !po.salesOrderId ? ((data.orderSeries as string) || null) : undefined,
           vendorAddress: {
             street: (data.vendorAddressStreet as string) || null,
             city: (data.vendorAddressCity as string) || null,
@@ -336,12 +337,18 @@ export function EditPurchaseOrderDrawer({
             ) : po ? (
               <Form {...form}>
                 <form id="edit-po-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                  {/* Order Details - PO Date, Expected Delivery */}
+                  {/* Order Details - PO Date, Expected Delivery, Order Series */}
                   <div className="space-y-4">
                     <h3 className="text-sm font-medium">Order Details</h3>
-                    <p className="text-xs text-muted-foreground">
-                      Order Series is inherited from the linked Sales Order
-                    </p>
+                    {po.salesOrderId ? (
+                      <p className="text-xs text-muted-foreground">
+                        Order Series is inherited from the linked Sales Order
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        This is an unallocated PO (no linked Sales Order). Select Order Series for GDC tracking.
+                      </p>
+                    )}
                     <div className="grid grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
@@ -370,6 +377,36 @@ export function EditPurchaseOrderDrawer({
                         )}
                       />
                     </div>
+                    {/* Order Series - only show for unallocated POs */}
+                    {!po.salesOrderId && (
+                      <FormField
+                        control={form.control}
+                        name="orderSeries"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Order Series *</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select Order Series" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {ORDER_SERIES.map((series) => (
+                                  <SelectItem key={series.code} value={series.code}>
+                                    {series.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                              Select which GDC cycle this order belongs to
+                            </p>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
                   </div>
 
                   <Separator />

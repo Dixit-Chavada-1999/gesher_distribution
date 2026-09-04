@@ -96,7 +96,9 @@ export interface PurchaseOrder {
   warehouseId: string | null;
   currencyCode: string;
   status: POStatus;
-  // orderSeries is inherited from linked Sales Order (not stored in PO table)
+  // orderSeries can be:
+  // - Set directly on PO for unallocated POs (no linked SO)
+  // - Inherited from linked Sales Order when PO has a linked SO
   orderSeries: string | null;
 
   // Supplier Address (denormalized)
@@ -225,13 +227,16 @@ export interface CreatePOItemDTO {
 }
 
 export interface CreatePurchaseOrderDTO {
+  poNumber?: string; // Optional - auto-generate if not provided
   poDate: Date;
   expectedDeliveryDate?: Date | null;
   salesOrderId?: string | null;
   warehouseId?: string | null;
   currencyCode?: string;
   status?: POStatus;
-  // orderSeries removed - inherited from linked Sales Order
+  // orderSeries can be set directly for unallocated POs (no linked SO)
+  // For POs with linked SO, this is inherited from the SO
+  orderSeries?: string | null;
   vendorAddress: AddressDTO;
   shipToAddress: AddressDTO;
   items: CreatePOItemDTO[]; // Supplier info is on items
@@ -259,7 +264,8 @@ export interface UpdatePurchaseOrderDTO {
   expectedDeliveryDate?: Date | null;
   warehouseId?: string | null;
   currencyCode?: string;
-  // orderSeries removed - inherited from linked Sales Order
+  // orderSeries can be updated for unallocated POs
+  orderSeries?: string | null;
   vendorAddress?: AddressDTO;
   shipToAddress?: AddressDTO;
   vendorNotes?: string | null;

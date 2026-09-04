@@ -574,6 +574,11 @@ class SalesOrderRepositoryImpl {
       throw new Error(`Failed to update sales order: ${error.message}`);
     }
 
+    // Sync order_series to linked POs if order_series was updated
+    if (data.orderSeries !== undefined) {
+      await this.syncOrderSeriesToLinkedPOs(id, data.orderSeries, userId);
+    }
+
     return this.mapToSalesOrder(result as DbSalesOrder);
   }
 
@@ -1051,6 +1056,62 @@ class SalesOrderRepositoryImpl {
       itemCount: itemCounts[data.id] || 0,
       createdAt: new Date(data.created_at),
     };
+  }
+
+  /**
+   * Sync order_series from SO to all linked Purchase Orders
+   * Called when order_series is updated on a Sales Order
+   */
+  async syncOrderSeriesToLinkedPOs(
+    salesOrderId: string,
+    orderSeries: string | null,
+    userId?: string
+  ): Promise<void> {
+    // Update all POs linked to this SO
+    const { data: updatedPOs, error } = await db
+      .from('purchase_orders')
+      .update({
+        order_series: orderSeries,
+        updated_by: userId || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('sales_order_id', salesOrderId)
+      .select('id');
+
+    if (error) {
+      console.error('Failed to sync order_series to linked POs:', error);
+      throw new Error(`Failed to sync order_series to linked POs: ${error.message}`);
+    }
+
+    if (updatedPOs && updatedPOs.length > 0) {
+      console.log(`[SO] Synced order_series '${orderSeries}' to ${updatedPOs.length} linked PO(s)`);
+    }
+  }
+
+  /**
+   * Update order_series on SO and sync to all linked POs
+   */
+  async updateOrderSeries(
+    salesOrderId: string,
+    orderSeries: string | null,
+    userId?: string
+  ): Promise<void> {
+    // Update the SO's order_series
+    const { error: soError } = await db
+      .from('sales_orders')
+      .update({
+        order_series: orderSeries,
+        updated_by: userId || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', salesOrderId);
+
+    if (soError) {
+      throw new Error(`Failed to update SO order_series: ${soError.message}`);
+    }
+
+    // Sync to all linked POs
+    await this.syncOrderSeriesToLinkedPOs(salesOrderId, orderSeries, userId);
   }
 }
 

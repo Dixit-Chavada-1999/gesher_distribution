@@ -312,6 +312,32 @@ export async function updatePOOrderSeries(
 }
 
 // ============================================
+// GET NEXT PO NUMBER
+// ============================================
+
+export async function getNextPONumber(): Promise<ActionResult<string>> {
+  const auth = await authorize('purchase_orders.create');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc('generate_po_number');
+
+    if (error) {
+      console.error('[getNextPONumber] Error:', error);
+      return { success: false, error: 'Failed to generate PO number' };
+    }
+
+    return { success: true, data: data as string };
+  } catch (err) {
+    console.error('[getNextPONumber] Error:', err);
+    return { success: false, error: 'Failed to generate PO number' };
+  }
+}
+
+// ============================================
 // GET SUPPLIERS FOR DROPDOWN
 // ============================================
 

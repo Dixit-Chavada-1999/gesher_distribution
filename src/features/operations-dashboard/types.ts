@@ -239,7 +239,7 @@ export interface GDCInventoryItem {
   orderSeries: string;        // GDC 1, GDC 2, GDC 3
   items: ShipmentItemDetail[];
   totalQty: number;
-  customer: string | null;    // Customer name (from linked SO or "Unallocated")
+  customer: string | null;    // Customer name (from linked SO) or "Gesher" for unallocated
   supplierName: string | null;
   etaToUsPort: string | null;
   deliveryAddress: string;
@@ -247,6 +247,7 @@ export interface GDCInventoryItem {
   status: string;             // PO status: draft, sent, confirmed, etc.
   actionRequired: string;
   notes: string;
+  isUnallocated?: boolean;    // True if PO has no linked Sales Order (speculative inventory)
 }
 
 export interface GDCInventoryData {

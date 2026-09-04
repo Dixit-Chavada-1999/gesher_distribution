@@ -34,7 +34,7 @@ interface DbPurchaseOrder {
   warehouse_id: string | null;
   currency_code: string;
   status: POStatus;
-  // order_series removed from PO table - now fetched from linked Sales Order
+  order_series: string | null;  // Can be set directly for unallocated POs or inherited from SO
   vendor_address_street: string | null;
   vendor_address_city: string | null;
   vendor_address_state: string | null;
@@ -115,6 +115,7 @@ class PurchaseOrderRepositoryImpl {
         po_date,
         expected_delivery_date,
         status,
+        order_series,
         grand_total,
         currency_code,
         created_at,
@@ -298,7 +299,8 @@ class PurchaseOrderRepositoryImpl {
    * Create a new PO with items
    */
   async create(data: CreatePurchaseOrderDTO, userId?: string): Promise<PurchaseOrderWithItems> {
-    const poNumber = await this.getNextPONumber();
+    // Use provided PO number or auto-generate
+    const poNumber = data.poNumber?.trim() || await this.getNextPONumber();
     const totals = calculatePOTotals(data.items, 0);
 
     const { data: po, error: poError } = await db
@@ -311,7 +313,7 @@ class PurchaseOrderRepositoryImpl {
         warehouse_id: data.warehouseId || null,
         currency_code: data.currencyCode || 'USD',
         status: data.status || 'draft',
-        // order_series removed - inherited from linked Sales Order
+        order_series: data.orderSeries || null,  // For unallocated POs
         vendor_address_street: data.vendorAddress.street,
         vendor_address_city: data.vendorAddress.city,
         vendor_address_state: data.vendorAddress.state,
@@ -386,7 +388,7 @@ class PurchaseOrderRepositoryImpl {
     }
     if (data.warehouseId !== undefined) {updateData.warehouse_id = data.warehouseId;}
     if (data.currencyCode !== undefined) {updateData.currency_code = data.currencyCode;}
-    // order_series removed - inherited from linked Sales Order
+    if (data.orderSeries !== undefined) {updateData.order_series = data.orderSeries;}
     if (data.vendorAddress !== undefined) {
       updateData.vendor_address_street = data.vendorAddress.street;
       updateData.vendor_address_city = data.vendorAddress.city;
@@ -427,6 +429,11 @@ class PurchaseOrderRepositoryImpl {
     // Update items if provided
     if (data.items && data.items.length > 0) {
       await this.updateItems(id, data.items, userId);
+    }
+
+    // Sync order_series to linked SO if order_series was updated
+    if (data.orderSeries !== undefined) {
+      await this.syncOrderSeriesToLinkedSO(id, data.orderSeries, userId);
     }
 
     return this.mapToPurchaseOrder(result as DbPurchaseOrder);
@@ -649,6 +656,7 @@ class PurchaseOrderRepositoryImpl {
       po_date: string;
       expected_delivery_date: string | null;
       status: POStatus;
+      order_series: string | null;
       grand_total: number;
       currency_code: string;
       created_at: string;
@@ -659,8 +667,8 @@ class PurchaseOrderRepositoryImpl {
     itemCounts: Record<string, number>,
     itemSuppliers: Record<string, string[]>
   ): POListItem {
-    // Get orderSeries from linked Sales Order
-    const orderSeries = data.sales_orders?.order_series || null;
+    // Get orderSeries: prefer PO's own order_series, fallback to linked Sales Order
+    const orderSeries = data.order_series || data.sales_orders?.order_series || null;
 
     return {
       id: data.id,
@@ -675,6 +683,96 @@ class PurchaseOrderRepositoryImpl {
       createdAt: new Date(data.created_at),
       suppliers: itemSuppliers[data.id] || [],
     };
+  }
+
+  /**
+   * Sync order_series from PO to linked Sales Order
+   * Called when order_series is updated on a PO that has a linked SO
+   */
+  async syncOrderSeriesToLinkedSO(
+    poId: string,
+    orderSeries: string | null,
+    userId?: string
+  ): Promise<void> {
+    // Get the PO to find linked SO
+    const { data: po, error: poError } = await db
+      .from('purchase_orders')
+      .select('sales_order_id')
+      .eq('id', poId)
+      .single();
+
+    if (poError || !po?.sales_order_id) {
+      // No linked SO, nothing to sync
+      return;
+    }
+
+    // Update the linked SO's order_series
+    const { error: soError } = await db
+      .from('sales_orders')
+      .update({
+        order_series: orderSeries,
+        updated_by: userId || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', po.sales_order_id);
+
+    if (soError) {
+      console.error('Failed to sync order_series to linked SO:', soError);
+      throw new Error(`Failed to sync order_series to linked SO: ${soError.message}`);
+    }
+
+    console.log(`[PO] Synced order_series '${orderSeries}' to SO ${po.sales_order_id}`);
+  }
+
+  /**
+   * Update order_series on PO and sync to linked SO if exists
+   */
+  async updateOrderSeries(
+    poId: string,
+    orderSeries: string | null,
+    userId?: string
+  ): Promise<void> {
+    // Update the PO's order_series
+    const { error: poError } = await db
+      .from('purchase_orders')
+      .update({
+        order_series: orderSeries,
+        updated_by: userId || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', poId);
+
+    if (poError) {
+      throw new Error(`Failed to update PO order_series: ${poError.message}`);
+    }
+
+    // Sync to linked SO if exists
+    await this.syncOrderSeriesToLinkedSO(poId, orderSeries, userId);
+  }
+
+  /**
+   * Update order_series on multiple POs (called when SO's order_series changes)
+   */
+  async updateOrderSeriesForSalesOrder(
+    salesOrderId: string,
+    orderSeries: string | null,
+    userId?: string
+  ): Promise<void> {
+    const { error } = await db
+      .from('purchase_orders')
+      .update({
+        order_series: orderSeries,
+        updated_by: userId || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('sales_order_id', salesOrderId);
+
+    if (error) {
+      console.error('Failed to update order_series on linked POs:', error);
+      throw new Error(`Failed to sync order_series to linked POs: ${error.message}`);
+    }
+
+    console.log(`[PO] Updated order_series '${orderSeries}' on all POs linked to SO ${salesOrderId}`);
   }
 }
 
