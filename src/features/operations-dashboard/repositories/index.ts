@@ -650,6 +650,11 @@ export async function getImmediateAttention(filters?: OperationsFilters): Promis
       is_delayed,
       estimated_arrival,
       sales_order_id,
+      lfd_date,
+      ship_to_address_street,
+      ship_to_address_city,
+      ship_to_address_state,
+      ship_to_address_postal_code,
       sales_orders(
         id,
         order_number,
@@ -722,13 +727,35 @@ export async function getImmediateAttention(filters?: OperationsFilters): Promis
     const status = s.load_status as string;
     const isActive = status === 'open' || status === 'in_transit' || !status;
 
+    // LFD (Last Free Day) Alert calculations
+    const lfdDateStr = s.lfd_date as string | null;
+    const lfdDate = lfdDateStr ? new Date(lfdDateStr) : null;
+    const tomorrow = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000);
+    const in3Days = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+
+    // LFD Critical: LFD is today or tomorrow
+    const isLFDCritical = lfdDate ? (lfdDate <= tomorrow) : false;
+    // LFD Approaching: LFD is within 3 days (but not critical)
+    const isLFDApproaching = lfdDate ? (lfdDate > tomorrow && lfdDate <= in3Days) : false;
+
+    // Delay Detection:
+    // 1. Manual flag: is_delayed = true (set by AI from Seaair emails or manually)
+    // 2. Auto-detect: ETA passed but status is not 'delivered'
+    const isManuallyDelayed = s.is_delayed === true;
+    const isAutoDelayed = etaPort && etaPort < now && status !== 'delivered';
+    const isDelayed = isManuallyDelayed || isAutoDelayed;
+
     // If status filter is applied, include all matching items
     // Otherwise, only include active/urgent items
     const shouldInclude = filters?.status
       ? true  // Status filter already applied in query
-      : (isActive || isThisWeek || isOverdue || s.is_delayed);
+      : (isActive || isThisWeek || isOverdue || isDelayed);
 
-    if (shouldInclude) {
+    // Include if LFD is approaching/critical or delayed
+    const hasLFDAlert = isLFDCritical || isLFDApproaching;
+    const shouldIncludeFinal = shouldInclude || hasLFDAlert || isDelayed;
+
+    if (shouldIncludeFinal) {
       result.push({
         id: s.id,
         loadNumber: s.shipment_number || s.supplier_reference_number || 'N/A',
@@ -742,6 +769,18 @@ export async function getImmediateAttention(filters?: OperationsFilters): Promis
         isOverdue,
         isThisWeek,
         productSource: productSource || 'dropship',
+        // LFD Alert fields
+        lfdDate: lfdDateStr,
+        isLFDApproaching,
+        isLFDCritical,
+        deliveryAddress: [
+          s.ship_to_address_street,
+          s.ship_to_address_city,
+          s.ship_to_address_state,
+          s.ship_to_address_postal_code
+        ].filter(Boolean).join(', ') || undefined,
+        // Delay Alert fields
+        isDelayed: isDelayed || false,
       });
     }
   });
@@ -835,14 +874,18 @@ export async function getImmediateAttention(filters?: OperationsFilters): Promis
     const isThisWeek = deliveryDate ? (deliveryDate >= now && deliveryDate <= next7Days) : false;
     const isOverdue = deliveryDate ? deliveryDate < now : false;
 
-    // Include if due this week, overdue, or in active status
+    // Delay Detection for Sales Orders:
+    // Auto-detect: Delivery date passed but status is not 'delivered'
+    const isDelayed = deliveryDate && deliveryDate < now && so.status !== 'delivered';
+
+    // Include if due this week, overdue, delayed, or in active status
     const isActive = so.status === 'pending' || so.status === 'confirmed' || so.status === 'processing';
 
     // If status filter is applied, include all matching items
     // Otherwise, only include active/urgent items
     const shouldInclude = filters?.status
       ? true  // Status filter already applied in query
-      : (isThisWeek || isOverdue || isActive);
+      : (isThisWeek || isOverdue || isDelayed || isActive);
 
     if (shouldInclude) {
       // Calculate total qty from items
@@ -875,14 +918,27 @@ export async function getImmediateAttention(filters?: OperationsFilters): Promis
         isOverdue,
         isThisWeek,
         productSource: so.product_source as 'dropship' | 'warehouse',
+        // Delay Alert
+        isDelayed: isDelayed || false,
       });
     }
   });
 
-  // Sort by: overdue first, then this week, then by date
+  // Sort by priority: LFD critical > LFD approaching > Delayed > Overdue > This week
   result.sort((a, b) => {
+    // LFD Critical items first (highest priority)
+    if (a.isLFDCritical && !b.isLFDCritical) { return -1; }
+    if (!a.isLFDCritical && b.isLFDCritical) { return 1; }
+    // LFD Approaching items next
+    if (a.isLFDApproaching && !b.isLFDApproaching) { return -1; }
+    if (!a.isLFDApproaching && b.isLFDApproaching) { return 1; }
+    // Delayed items next
+    if (a.isDelayed && !b.isDelayed) { return -1; }
+    if (!a.isDelayed && b.isDelayed) { return 1; }
+    // Then overdue items
     if (a.isOverdue && !b.isOverdue) { return -1; }
     if (!a.isOverdue && b.isOverdue) { return 1; }
+    // Then this week items
     if (a.isThisWeek && !b.isThisWeek) { return -1; }
     if (!a.isThisWeek && b.isThisWeek) { return 1; }
     return 0;

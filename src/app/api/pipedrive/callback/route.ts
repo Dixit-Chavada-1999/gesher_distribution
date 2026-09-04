@@ -11,7 +11,6 @@
  * - Redirects to settings page
  */
 
-import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getUser } from '@/shared/lib/supabase/server';
 import { getAppUserByAuthId } from '@/shared/lib/auth';
@@ -29,21 +28,58 @@ export async function GET(request: Request) {
   const state = searchParams.get('state');
   const error = searchParams.get('error');
 
+  // Helper to return HTML that closes popup
+  const closePopupWithError = (message: string) => new Response(
+    `<!DOCTYPE html>
+    <html>
+      <head><title>Connection Failed</title></head>
+      <body>
+        <script>
+          if (window.opener) {
+            setTimeout(() => window.close(), 2000);
+          } else {
+            window.location.href = '${origin}${PIPEDRIVE_REDIRECT_PATHS.TOKEN_ERROR}';
+          }
+        </script>
+        <p>${message}</p>
+      </body>
+    </html>`,
+    { headers: { 'Content-Type': 'text/html' } }
+  );
+
+  const closePopupCancelled = () => new Response(
+    `<!DOCTYPE html>
+    <html>
+      <head><title>Connection Cancelled</title></head>
+      <body>
+        <script>
+          if (window.opener) {
+            window.close();
+          } else {
+            window.location.href = '${origin}${PIPEDRIVE_REDIRECT_PATHS.CANCELLED}';
+          }
+        </script>
+        <p>Connection cancelled. You can close this window.</p>
+      </body>
+    </html>`,
+    { headers: { 'Content-Type': 'text/html' } }
+  );
+
   // Handle user cancellation
   if (error === 'access_denied') {
-    return NextResponse.redirect(`${origin}${PIPEDRIVE_REDIRECT_PATHS.CANCELLED}`);
+    return closePopupCancelled();
   }
 
   // Handle other OAuth errors
   if (error) {
     console.error('Pipedrive OAuth error:', error, searchParams.get('error_description'));
-    return NextResponse.redirect(`${origin}${PIPEDRIVE_REDIRECT_PATHS.TOKEN_ERROR}`);
+    return closePopupWithError('OAuth error occurred. This window will close automatically.');
   }
 
   // Validate required parameters
   if (!code || !state) {
     console.error('Missing required callback parameters');
-    return NextResponse.redirect(`${origin}${PIPEDRIVE_REDIRECT_PATHS.TOKEN_ERROR}`);
+    return closePopupWithError('Missing parameters. This window will close automatically.');
   }
 
   // Validate state parameter against cookie
@@ -54,7 +90,7 @@ export async function GET(request: Request) {
     console.error('State mismatch - possible CSRF attack');
     // Clear the cookie
     cookieStore.delete(PIPEDRIVE_STATE_COOKIE_NAME);
-    return NextResponse.redirect(`${origin}${PIPEDRIVE_REDIRECT_PATHS.INVALID_STATE}`);
+    return closePopupWithError('Invalid state. Please try again.');
   }
 
   // Clear the state cookie
@@ -74,10 +110,48 @@ export async function GET(request: Request) {
     // Handle the OAuth callback using the provider
     await pipedriveProvider.handleOAuthCallback({ code }, appUserId);
 
-    // Success - redirect to settings
-    return NextResponse.redirect(`${origin}${PIPEDRIVE_REDIRECT_PATHS.SUCCESS}`);
+    // Success - return HTML that closes the popup (like QuickBooks)
+    return new Response(
+      `<!DOCTYPE html>
+      <html>
+        <head><title>Pipedrive Connected</title></head>
+        <body>
+          <script>
+            if (window.opener) {
+              window.close();
+            } else {
+              window.location.href = '${origin}${PIPEDRIVE_REDIRECT_PATHS.SUCCESS}';
+            }
+          </script>
+          <p>Pipedrive connected successfully! You can close this window.</p>
+        </body>
+      </html>`,
+      {
+        headers: { 'Content-Type': 'text/html' },
+      }
+    );
   } catch (error) {
     console.error('Pipedrive callback handling failed:', error);
-    return NextResponse.redirect(`${origin}${PIPEDRIVE_REDIRECT_PATHS.TOKEN_ERROR}`);
+
+    // Return HTML that shows error and closes popup
+    return new Response(
+      `<!DOCTYPE html>
+      <html>
+        <head><title>Connection Failed</title></head>
+        <body>
+          <script>
+            if (window.opener) {
+              setTimeout(() => window.close(), 2000);
+            } else {
+              window.location.href = '${origin}${PIPEDRIVE_REDIRECT_PATHS.TOKEN_ERROR}';
+            }
+          </script>
+          <p>Connection failed. This window will close automatically.</p>
+        </body>
+      </html>`,
+      {
+        headers: { 'Content-Type': 'text/html' },
+      }
+    );
   }
 }

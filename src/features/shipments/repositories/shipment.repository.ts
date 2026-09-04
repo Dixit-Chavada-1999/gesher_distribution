@@ -50,6 +50,17 @@ interface DbShipment {
   status: ShipmentStatus;
   notes: string | null;
   delivery_instructions: string | null;
+  // Shipping details (from Supplier Portal - migration 062)
+  container_number: string | null;
+  bill_of_lading: string | null;
+  vessel_name: string | null;
+  port_of_loading: string | null;
+  port_of_discharge: string | null;
+  etd: string | null;
+  eta_port: string | null;
+  eta_customer: string | null;
+  supplier_updated_at: string | null;
+  supplier_updated_by: string | null;
   // Operations dashboard columns (migrations 071 and 077)
   supplier_reference_number: string | null;
   eta_to_port: string | null;
@@ -64,6 +75,7 @@ interface DbShipment {
   remaining_50_due_date: string | null;
   action_required: string | null;
   executive_notes: string | null;
+  lfd_date: string | null;
   is_delayed: boolean | null;
   load_status: LoadStatus | null;
   source: ShipmentSource | null;
@@ -456,6 +468,9 @@ class ShipmentRepositoryImpl {
     if (data.totalPackages !== undefined) {updateData.total_packages = data.totalPackages;}
     if (data.notes !== undefined) {updateData.notes = data.notes;}
     if (data.deliveryInstructions !== undefined) {updateData.delivery_instructions = data.deliveryInstructions;}
+    if (data.lfdDate !== undefined) {
+      updateData.lfd_date = data.lfdDate?.toISOString().split('T')[0] || null;
+    }
 
     const { data: result, error } = await db
       .from('shipments')
@@ -528,16 +543,47 @@ class ShipmentRepositoryImpl {
   private async getSalesOrderSummary(soId: string): Promise<SalesOrderSummary | null> {
     const { data, error } = await db
       .from('sales_orders')
-      .select('id, order_number, status')
+      .select(`
+        id,
+        order_number,
+        status,
+        customer_po_number,
+        customers(
+          id,
+          name,
+          email,
+          phone,
+          address_1,
+          city,
+          state,
+          zip,
+          country
+        )
+      `)
       .eq('id', soId)
       .single();
 
     if (error || !data) {return null;}
 
+    // Supabase types an embedded to-one relation as an array; PostgREST returns a single object
+    const customerData = Array.isArray(data.customers) ? data.customers[0] : data.customers;
+
     return {
       id: data.id,
       orderNumber: data.order_number,
       status: data.status,
+      customerPoNumber: data.customer_po_number ?? null,
+      customer: customerData ? {
+        id: customerData.id,
+        name: customerData.name,
+        email: customerData.email ?? null,
+        phone: customerData.phone ?? null,
+        addressStreet: customerData.address_1 ?? null,
+        addressCity: customerData.city ?? null,
+        addressState: customerData.state ?? null,
+        addressPostalCode: customerData.zip ?? null,
+        addressCountry: customerData.country ?? null,
+      } : null,
     };
   }
 
@@ -603,6 +649,18 @@ class ShipmentRepositoryImpl {
       notes: data.notes,
       deliveryInstructions: data.delivery_instructions,
 
+      // Shipping details (from Supplier Portal)
+      containerNumber: data.container_number,
+      billOfLading: data.bill_of_lading,
+      vesselName: data.vessel_name,
+      portOfLoading: data.port_of_loading,
+      portOfDischarge: data.port_of_discharge,
+      etd: data.etd ? new Date(data.etd) : null,
+      etaPort: data.eta_port ? new Date(data.eta_port) : null,
+      etaCustomer: data.eta_customer ? new Date(data.eta_customer) : null,
+      supplierUpdatedAt: data.supplier_updated_at ? new Date(data.supplier_updated_at) : null,
+      supplierUpdatedBy: data.supplier_updated_by,
+
       // Operations dashboard fields
       supplierReferenceNumber: data.supplier_reference_number,
       etaToPort: data.eta_to_port ? new Date(data.eta_to_port) : null,
@@ -623,6 +681,7 @@ class ShipmentRepositoryImpl {
         : null,
       actionRequired: data.action_required,
       executiveNotes: data.executive_notes,
+      lfdDate: data.lfd_date ? new Date(data.lfd_date) : null,
       isDelayed: data.is_delayed ?? false,
       loadStatus: data.load_status ?? 'open',
       source: data.source,

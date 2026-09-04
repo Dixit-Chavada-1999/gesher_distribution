@@ -147,8 +147,31 @@ function PipedriveCardComponent() {
 
   const handleConnect = useCallback(() => {
     setConnecting(true);
-    // Redirect to OAuth initiation endpoint
-    window.location.href = '/api/pipedrive/auth';
+    // Open OAuth in popup window (like QuickBooks)
+    const width = 600;
+    const height = 700;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+    const popup = window.open(
+      '/api/pipedrive/auth',
+      'pipedrive_oauth',
+      `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no`
+    );
+
+    // Poll for popup closure and refresh status
+    const pollTimer = setInterval(() => {
+      if (popup?.closed) {
+        clearInterval(pollTimer);
+        setConnecting(false);
+        fetchStatus();
+      }
+    }, 500);
+
+    // Cleanup after 5 minutes max
+    setTimeout(() => {
+      clearInterval(pollTimer);
+      setConnecting(false);
+    }, 5 * 60 * 1000);
   }, []);
 
   const handleTest = useCallback(async () => {

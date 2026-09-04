@@ -818,7 +818,7 @@ export interface ShipmentDetailData {
   // Ports
   portOfLoading: string | null;
   portOfDischarge: string | null;
-  finalDestination: string | null;
+finalDestination: string | null;
   // Dates
   etd: string | null;
   etaPort: string | null;
@@ -896,7 +896,7 @@ export async function getShipmentDetailById(
         vessel_name,
         port_of_loading,
         port_of_discharge,
-        final_destination,
+final_destination,
         etd,
         eta_port,
         eta_customer,
@@ -962,7 +962,7 @@ export async function getShipmentDetailById(
         vesselName: shipmentData.vessel_name,
         portOfLoading: shipmentData.port_of_loading,
         portOfDischarge: shipmentData.port_of_discharge,
-        finalDestination: shipmentData.final_destination,
+finalDestination: shipmentData.final_destination,
         etd: shipmentData.etd,
         etaPort: shipmentData.eta_port,
         etaCustomer: shipmentData.eta_customer,
@@ -1061,7 +1061,7 @@ export async function getShipmentDetailById(
     vesselName: null,
     portOfLoading: null,
     portOfDischarge: null,
-    finalDestination: null,
+finalDestination: null,
     etd: null,
     etaPort: null,
     etaCustomer: salesOrderData.requested_delivery_date,

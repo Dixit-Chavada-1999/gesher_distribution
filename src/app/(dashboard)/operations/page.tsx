@@ -35,6 +35,7 @@ import { ShipmentOverviewTable } from '@/features/operations-dashboard/component
 // import { GDC1InventoryTable } from '@/features/operations-dashboard/components/GDC1InventoryTable';
 import { GDCInventoryTable } from '@/features/operations-dashboard/components/GDCInventoryTable';
 import { EditShipmentDialog, type EditSource } from '@/features/operations-dashboard/components/EditShipmentDialog';
+import { ViewShipmentDetailDialog } from '@/features/operations-dashboard/components/ViewShipmentDetailDialog';
 
 // Global data for dynamic tabs
 import { ORDER_SERIES } from '@/shared/lib/global-data';
@@ -121,6 +122,9 @@ export default function OperationsPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingShipment, setEditingShipment] = useState<EditableShipment | null>(null);
   const [editSource, setEditSource] = useState<EditSource>('shipment');
+
+  // View detail dialog state
+  const [viewShipmentId, setViewShipmentId] = useState<string | null>(null);
 
   // Set initial date on client side only to avoid hydration mismatch
   useEffect(() => {
@@ -220,6 +224,11 @@ export default function OperationsPage() {
     } finally {
       setIsExporting(false);
     }
+  };
+
+  // Handle view details from Immediate Attention table
+  const handleViewDetails = (item: ImmediateAttentionItem) => {
+    setViewShipmentId(item.id);
   };
 
   // Handle edit from Immediate Attention table
@@ -342,7 +351,9 @@ export default function OperationsPage() {
           {/* Immediate Attention - This is what Jenny checks FIRST */}
           <ImmediateAttentionTable
             items={data.immediateAttention}
+            onViewDetails={handleViewDetails}
             onEdit={handleEditAttentionItem}
+            onRefresh={handleRefresh}
           />
 
           {/* Two column layout for breakdown and status */}
@@ -402,6 +413,13 @@ export default function OperationsPage() {
         shipment={editingShipment}
         onSuccess={handleEditSuccess}
         source={editSource}
+      />
+
+      {/* View Shipment Detail Dialog */}
+      <ViewShipmentDetailDialog
+        open={!!viewShipmentId}
+        onClose={() => setViewShipmentId(null)}
+        shipmentId={viewShipmentId}
       />
     </div>
   );

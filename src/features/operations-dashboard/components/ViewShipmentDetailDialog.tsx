@@ -55,7 +55,7 @@ interface ShipmentDetail {
   // Ports
   portOfLoading: string | null;
   portOfDischarge: string | null;
-  finalDestination: string | null;
+finalDestination: string | null;
   // Dates
   etd: string | null;
   etaPort: string | null;
