@@ -9,7 +9,22 @@ import 'server-only';
 
 import * as repo from '../repositories/suppliers.repository';
 import { createSupplierUserAccount } from './create-supplier-user';
+import { auditService } from '@/shared/lib/audit';
 import type { Supplier, CreateSupplierInput, UpdateSupplierInput } from '../types';
+
+// Helper to convert supplier to audit data
+function supplierToAuditData(supplier: Supplier): Record<string, unknown> {
+  return {
+    id: supplier.id,
+    supplierCode: supplier.supplierCode,
+    name: supplier.name,
+    status: supplier.status,
+    primaryContactName: supplier.primaryContactName,
+    primaryContactEmail: supplier.primaryContactEmail,
+    primaryContactPhone: supplier.primaryContactPhone,
+    paymentTerms: supplier.paymentTerms,
+  };
+}
 
 export interface GetSuppliersOptions {
   status?: string;
@@ -81,6 +96,18 @@ export async function createSupplier(
     return result;
   }
 
+  // Log audit event (fire and forget)
+  auditService.logCreate(
+    'suppliers',
+    'Supplier',
+    result.data.id,
+    supplierToAuditData(result.data),
+    { userId },
+    `Created supplier: ${result.data.name}`
+  ).catch((err) => {
+    console.error('Failed to log supplier create audit:', err);
+  });
+
   // Create user account if requested
   if (input.createUserAccount && input.primaryContactEmail && input.primaryContactName) {
     const userResult = await createSupplierUserAccount({
@@ -129,7 +156,27 @@ export async function updateSupplier(
     }
   }
 
-  return repo.updateSupplier(input, userId);
+  // Capture old data for audit
+  const oldAuditData = supplierToAuditData(existing);
+
+  const result = await repo.updateSupplier(input, userId);
+
+  if (result.data) {
+    // Log audit event (fire and forget)
+    auditService.logUpdate(
+      'suppliers',
+      'Supplier',
+      result.data.id,
+      oldAuditData,
+      supplierToAuditData(result.data),
+      { userId },
+      `Updated supplier: ${result.data.name}`
+    ).catch((err) => {
+      console.error('Failed to log supplier update audit:', err);
+    });
+  }
+
+  return result;
 }
 
 export async function deleteSupplier(
@@ -142,5 +189,21 @@ export async function deleteSupplier(
     return { success: false, error: 'Supplier not found' };
   }
 
-  return repo.deleteSupplier(id, userId);
+  const result = await repo.deleteSupplier(id, userId);
+
+  if (result.success) {
+    // Log audit event (fire and forget)
+    auditService.logDelete(
+      'suppliers',
+      'Supplier',
+      id,
+      supplierToAuditData(existing),
+      { userId },
+      `Deleted supplier: ${existing.name}`
+    ).catch((err) => {
+      console.error('Failed to log supplier delete audit:', err);
+    });
+  }
+
+  return result;
 }

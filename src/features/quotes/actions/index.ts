@@ -1433,3 +1433,91 @@ export async function updateQuoteProductSource(
     };
   }
 }
+
+// ============================================
+// PIPEDRIVE SYNC
+// ============================================
+
+/**
+ * Sync quote value to Pipedrive deal
+ * Called when quote is approved or manually triggered
+ * Only syncs if customer is linked to a Pipedrive deal
+ */
+export async function syncQuoteToPipedriveDeal(
+  quoteId: string
+): Promise<ActionResult<{ synced: boolean; message: string }>> {
+  const auth = await authorize('quotes.view_module');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  try {
+    // Get quote with customer info
+    const { data: quote, error: quoteError } = await db
+      .from('quotes')
+      .select(`
+        id,
+        quote_number,
+        total,
+        currency,
+        status,
+        customer_id,
+        customers (
+          id,
+          name,
+          pipedrive_deal_id
+        )
+      `)
+      .eq('id', quoteId)
+      .single();
+
+    if (quoteError || !quote) {
+      return { success: false, error: 'Quote not found' };
+    }
+
+    // Handle both array and single object cases from Supabase join
+    type CustomerType = {
+      id: string;
+      name: string;
+      pipedrive_deal_id: number | null
+    };
+    const customersData = quote.customers as CustomerType | CustomerType[] | null;
+    const customer = Array.isArray(customersData) ? customersData[0] : customersData;
+
+    // Check if customer is linked to Pipedrive
+    if (!customer?.pipedrive_deal_id) {
+      return {
+        success: true,
+        data: {
+          synced: false,
+          message: 'Customer not linked to Pipedrive deal',
+        },
+      };
+    }
+
+    // Import and use the push service
+    const { syncQuoteToPipedrive } = await import('@/features/pipedrive/actions');
+    const syncResult = await syncQuoteToPipedrive(quoteId);
+
+    if (syncResult.success) {
+      return {
+        success: true,
+        data: {
+          synced: true,
+          message: `Quote synced to Pipedrive deal`,
+        },
+      };
+    } else {
+      return {
+        success: false,
+        error: syncResult.error || 'Failed to sync to Pipedrive',
+      };
+    }
+  } catch (error) {
+    console.error('syncQuoteToPipedriveDeal error:', error);
+    return {
+      success: false,
+      error: 'Failed to sync quote to Pipedrive',
+    };
+  }
+}

@@ -23,6 +23,23 @@ import type {
   CreateQuoteItemDTO,
 } from '../types';
 import { QUOTE_STATUS_TRANSITIONS as STATUS_TRANSITIONS } from '../types';
+import { auditService } from '@/shared/lib/audit';
+
+// Helper to convert quote to audit data (exclude large/sensitive fields)
+function quoteToAuditData(quote: Quote | QuoteWithItems): Record<string, unknown> {
+  return {
+    id: quote.id,
+    quoteNumber: quote.quoteNumber,
+    customerId: quote.customerId,
+    status: quote.status,
+    subtotal: quote.subtotal,
+    discountTotal: quote.discountTotal,
+    taxTotal: quote.taxTotal,
+    grandTotal: quote.grandTotal,
+    validUntil: quote.validUntil,
+    productSource: quote.productSource,
+  };
+}
 
 // ============================================
 // TYPES
@@ -202,6 +219,18 @@ export const quoteService = {
       // Create quote
       const quote = await quoteRepository.create(validation.data, userId);
 
+      // Log audit event (fire and forget)
+      auditService.logCreate(
+        'quotes',
+        'Quote',
+        quote.id,
+        quoteToAuditData(quote),
+        { userId },
+        `Created quote: ${quote.quoteNumber}`
+      ).catch((err) => {
+        console.error('Failed to log quote create audit:', err);
+      });
+
       // Send notification (async, non-blocking)
       this.sendQuoteCreatedNotification(quote, userId).catch((err) => {
         console.error('Failed to send quote created notification:', err);
@@ -275,8 +304,24 @@ export const quoteService = {
         };
       }
 
+      // Capture old data for audit before update
+      const oldAuditData = quoteToAuditData(existing);
+
       // Update quote
       const quote = await quoteRepository.update(id, validation.data, userId);
+
+      // Log audit event (fire and forget)
+      auditService.logUpdate(
+        'quotes',
+        'Quote',
+        quote.id,
+        oldAuditData,
+        quoteToAuditData(quote),
+        { userId },
+        `Updated quote: ${quote.quoteNumber}`
+      ).catch((err) => {
+        console.error('Failed to log quote update audit:', err);
+      });
 
       return {
         success: true,
@@ -368,6 +413,18 @@ export const quoteService = {
 
       const quote = await quoteRepository.softDelete(id, userId);
 
+      // Log audit event (fire and forget)
+      auditService.logDelete(
+        'quotes',
+        'Quote',
+        quote.id,
+        quoteToAuditData(existing),
+        { userId },
+        `Deleted quote: ${quote.quoteNumber}`
+      ).catch((err) => {
+        console.error('Failed to log quote delete audit:', err);
+      });
+
       return {
         success: true,
         data: quote,
@@ -432,6 +489,20 @@ export const quoteService = {
       // Update quote status
       const quote = await quoteRepository.updateStatus(id, 'pending_approval', userId);
 
+      // Log audit event (fire and forget)
+      auditService.log({
+        action: 'update', // status_change
+        module: 'quotes',
+        entityType: 'Quote',
+        entityId: quote.id,
+        oldData: { status: existing.status },
+        newData: { status: 'pending_approval' },
+        userId,
+        description: `Quote ${quote.quoteNumber} submitted for approval`,
+      }).catch((err) => {
+        console.error('Failed to log quote submit audit:', err);
+      });
+
       return {
         success: true,
         data: quote,
@@ -483,6 +554,20 @@ export const quoteService = {
       // Update quote status
       const quote = await quoteRepository.updateStatus(id, 'approved', userId);
 
+      // Log audit event (fire and forget)
+      auditService.log({
+        action: 'approve',
+        module: 'quotes',
+        entityType: 'Quote',
+        entityId: quote.id,
+        oldData: { status: existing.status },
+        newData: { status: 'approved', approvalNote },
+        userId,
+        description: `Quote ${quote.quoteNumber} approved`,
+      }).catch((err) => {
+        console.error('Failed to log quote approve audit:', err);
+      });
+
       return {
         success: true,
         data: quote,
@@ -533,6 +618,20 @@ export const quoteService = {
 
       // Update quote status
       const quote = await quoteRepository.updateStatus(id, 'rejected', userId);
+
+      // Log audit event (fire and forget)
+      auditService.log({
+        action: 'reject',
+        module: 'quotes',
+        entityType: 'Quote',
+        entityId: quote.id,
+        oldData: { status: existing.status },
+        newData: { status: 'rejected', rejectionNote },
+        userId,
+        description: `Quote ${quote.quoteNumber} rejected`,
+      }).catch((err) => {
+        console.error('Failed to log quote reject audit:', err);
+      });
 
       return {
         success: true,

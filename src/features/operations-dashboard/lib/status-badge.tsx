@@ -50,6 +50,16 @@ export const STATUS_CONFIG: Record<ShipmentStatus, StatusConfig> = {
     variant: 'outline',
     className: 'bg-blue-50 text-blue-700 border-blue-300',
   },
+  CONFIRMED: {
+    label: 'Confirmed',
+    variant: 'outline',
+    className: 'bg-indigo-50 text-indigo-700 border-indigo-300',
+  },
+  PROCESSING: {
+    label: 'Processing',
+    variant: 'outline',
+    className: 'bg-violet-50 text-violet-700 border-violet-300',
+  },
   CLOSED: {
     label: 'Closed',
     variant: 'outline',

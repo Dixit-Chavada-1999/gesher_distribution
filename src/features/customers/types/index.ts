@@ -156,6 +156,11 @@ export interface Customer {
   qboRealmId: string | null;
   qboSyncedAt: Date | null;
   qboSyncError: string | null;
+
+  // Pipedrive Sync
+  pipedrivePersonId: number | null;
+  pipedriveDealId: number | null;
+  pipedriveOrgId: number | null;
 }
 
 /**

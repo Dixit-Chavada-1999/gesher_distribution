@@ -94,6 +94,56 @@ export interface PipedriveOrganization {
 }
 
 /**
+ * Pipedrive Lead Label
+ */
+export interface PipedriveLeadLabel {
+  id: string; // UUID
+  name: string; // e.g., "HOT", "WARM", "COLD"
+  color: string; // Color hex code
+  add_time?: string;
+  update_time?: string;
+}
+
+/**
+ * Pipedrive Lead (from Leads Inbox - different from Person)
+ */
+export interface PipedriveLead {
+  id: string; // UUID, not integer
+  title: string;
+  owner_id?: number;
+  creator_id?: number;
+  label_ids?: string[];
+  person_id?: number;
+  organization_id?: number;
+  source_name?: string;
+  is_archived?: boolean;
+  was_seen?: boolean;
+  value?: {
+    amount: number;
+    currency: string;
+  };
+  expected_close_date?: string;
+  next_activity_id?: number;
+  add_time?: string;
+  update_time?: string;
+  visible_to?: string;
+  cc_email?: string;
+  // Embedded person object (when using ?include=person)
+  person?: {
+    id: number;
+    name: string;
+    email?: Array<{ value: string; primary: boolean }>;
+    phone?: Array<{ value: string; primary: boolean }>;
+  };
+  // Embedded organization object (when using ?include=organization)
+  organization?: {
+    id: number;
+    name: string;
+    address?: string;
+  };
+}
+
+/**
  * Pipedrive deal
  */
 export interface PipedriveDeal {

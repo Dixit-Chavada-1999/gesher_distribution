@@ -13,6 +13,7 @@ export type {
   PipedriveErrorResponse,
   PipedriveApiResponse,
   PipedrivePerson,
+  PipedriveLead,
   PipedriveOrganization,
   PipedriveDeal,
   PipedriveActivity,

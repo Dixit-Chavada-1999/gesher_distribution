@@ -36,6 +36,7 @@ import {
   ClipboardCheck, // Pick Tickets
   PackageCheck, // Packing Lists
   Ship, // Shipping Tracking
+  UserPlus, // Leads
 } from 'lucide-react';
 
 import { cn } from '@/shared/lib/utils';
@@ -81,6 +82,13 @@ const NAV_SECTIONS = [
   {
     title: 'CRM',
     items: [
+      {
+        id: 'leads',
+        label: 'Leads',
+        href: '/leads',
+        icon: UserPlus,
+        permission: 'customers.view_module', // Using customers permission for now
+      },
       {
         id: 'customers',
         label: 'Customers',

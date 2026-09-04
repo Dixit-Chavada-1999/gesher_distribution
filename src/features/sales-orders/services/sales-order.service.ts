@@ -23,6 +23,23 @@ import type {
   CreateSalesOrderItemDTO,
 } from '../types';
 import { ORDER_STATUS_TRANSITIONS as STATUS_TRANSITIONS } from '../types';
+import { auditService } from '@/shared/lib/audit';
+
+// Helper to convert sales order to audit data (exclude large/sensitive fields)
+function salesOrderToAuditData(order: SalesOrder | SalesOrderWithItems): Record<string, unknown> {
+  return {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    customerId: order.customerId,
+    status: order.status,
+    subtotal: order.subtotal,
+    discountTotal: order.discountTotal,
+    taxTotal: order.taxTotal,
+    grandTotal: order.grandTotal,
+    productSource: order.productSource,
+    requestedDeliveryDate: order.requestedDeliveryDate,
+  };
+}
 
 // ============================================
 // TYPES
@@ -201,6 +218,18 @@ export const salesOrderService = {
       // Create order
       const order = await salesOrderRepository.create(validation.data, userId);
 
+      // Log audit event (fire and forget)
+      auditService.logCreate(
+        'sales_orders',
+        'SalesOrder',
+        order.id,
+        salesOrderToAuditData(order),
+        { userId },
+        `Created sales order: ${order.orderNumber}`
+      ).catch((err) => {
+        console.error('Failed to log sales order create audit:', err);
+      });
+
       // Send notification (async, non-blocking)
       this.sendSalesOrderCreatedNotification(order, userId).catch((err) => {
         console.error('Failed to send sales order created notification:', err);
@@ -279,8 +308,24 @@ export const salesOrderService = {
         };
       }
 
+      // Capture old data for audit before update
+      const oldAuditData = salesOrderToAuditData(existing);
+
       // Update order
       const order = await salesOrderRepository.update(id, validation.data, userId);
+
+      // Log audit event (fire and forget)
+      auditService.logUpdate(
+        'sales_orders',
+        'SalesOrder',
+        order.id,
+        oldAuditData,
+        salesOrderToAuditData(order),
+        { userId },
+        `Updated sales order: ${order.orderNumber}`
+      ).catch((err) => {
+        console.error('Failed to log sales order update audit:', err);
+      });
 
       return {
         success: true,
@@ -408,6 +453,18 @@ export const salesOrderService = {
 
       const order = await salesOrderRepository.softDelete(id, userId);
 
+      // Log audit event (fire and forget)
+      auditService.logDelete(
+        'sales_orders',
+        'SalesOrder',
+        order.id,
+        salesOrderToAuditData(existing),
+        { userId },
+        `Deleted sales order: ${order.orderNumber}`
+      ).catch((err) => {
+        console.error('Failed to log sales order delete audit:', err);
+      });
+
       return {
         success: true,
         data: order,
@@ -531,6 +588,20 @@ export const salesOrderService = {
       }
 
       const order = await salesOrderRepository.updateStatus(id, newStatus, userId);
+
+      // Log audit event for status change (fire and forget)
+      auditService.log({
+        action: 'update', // status_change
+        module: 'sales_orders',
+        entityType: 'SalesOrder',
+        entityId: order.id,
+        oldData: { status: existing.status },
+        newData: { status: newStatus },
+        userId,
+        description: `Sales order ${order.orderNumber} status changed: ${existing.status} → ${newStatus}`,
+      }).catch((err) => {
+        console.error('Failed to log sales order status change audit:', err);
+      });
 
       return {
         success: true,

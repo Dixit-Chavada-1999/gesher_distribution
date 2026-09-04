@@ -14,7 +14,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, RefreshCw } from 'lucide-react';
+import { Plus, RefreshCw, Download } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { PageHeader } from '@/shared/components/layout/PageHeader';
@@ -35,6 +35,7 @@ import {
 } from '@/features/customers';
 import type { CustomerTableRow, CustomerStatus } from '@/features/customers/types';
 import { CUSTOMER_STATUS_LABELS } from '@/features/customers/types';
+import { SyncFromPipedriveDialog } from '@/features/pipedrive/components';
 
 // ============================================
 // COMPONENT
@@ -70,6 +71,7 @@ export function CustomersPageContent() {
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
   const [editCustomerId, setEditCustomerId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<CustomerStatus | 'all'>('all');
+  const [isSyncDialogOpen, setIsSyncDialogOpen] = useState(false);
 
   // ----------------------------------------
   // DATA HOOKS
@@ -130,6 +132,18 @@ export function CustomersPageContent() {
     setStatusFilter(value as CustomerStatus | 'all');
   };
 
+  const handleSyncClick = () => {
+    setIsSyncDialogOpen(true);
+  };
+
+  const handleSyncClose = () => {
+    setIsSyncDialogOpen(false);
+  };
+
+  const handleSyncSuccess = () => {
+    refetchCustomers();
+  };
+
   // ----------------------------------------
   // RENDER
   // ----------------------------------------
@@ -149,6 +163,13 @@ export function CustomersPageContent() {
               disabled={isCustomersLoading}
             >
               <RefreshCw className={`h-4 w-4 ${isCustomersLoading ? 'animate-spin' : ''}`} />
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleSyncClick}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Sync from Pipedrive
             </Button>
             {canCreate && (
               <Button onClick={handleCreateClick}>
@@ -197,6 +218,14 @@ export function CustomersPageContent() {
         open={!!editCustomerId}
         onClose={handleEditDrawerClose}
         onSuccess={handleEditSuccess}
+      />
+
+      {/* Sync from Pipedrive Dialog */}
+      <SyncFromPipedriveDialog
+        open={isSyncDialogOpen}
+        onClose={handleSyncClose}
+        onSuccess={handleSyncSuccess}
+        syncType="customers"
       />
     </div>
   );

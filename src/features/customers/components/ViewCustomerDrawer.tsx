@@ -7,8 +7,8 @@
  * Fetches full customer data when opened.
  */
 
-import { useEffect, useState } from 'react';
-import { Loader2, Mail, Phone, Globe, MapPin, CreditCard, Building2, FileText, Calendar, Shield } from 'lucide-react';
+import { useEffect, useState, useTransition } from 'react';
+import { Loader2, Mail, Phone, Globe, MapPin, CreditCard, Building2, FileText, Calendar, Shield, Link2, Unlink, RefreshCw } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import {
@@ -31,7 +31,9 @@ import {
 import { getCustomer } from '../actions';
 import { formatCreditLimit } from '../lib/schemas';
 import { CustomerContactsList } from './CustomerContactsList';
+import { pushCustomerLTVToPipedrive } from '@/features/pipedrive/actions';
 import type { Customer } from '../types';
+import { toast } from 'sonner';
 import {
   CUSTOMER_STATUS_LABELS,
   CUSTOMER_STATUS_COLORS,
@@ -124,6 +126,27 @@ function AddressCard({ label, address, icon }: {
 // ============================================
 
 function CustomerDetailsTab({ customer }: { customer: Customer }) {
+  const [isPushingLTV, startPushLTV] = useTransition();
+
+  const isPipedriveLinked = Boolean(
+    customer.pipedrivePersonId || customer.pipedriveDealId || customer.pipedriveOrgId
+  );
+
+  const handlePushLTV = () => {
+    startPushLTV(async () => {
+      const result = await pushCustomerLTVToPipedrive(customer.id);
+      if (result.success && result.data) {
+        toast.success('LTV synced to Pipedrive', {
+          description: `Revenue: $${result.data.ltv.totalRevenue.toLocaleString()} | Orders: ${result.data.ltv.orderCount}`,
+        });
+      } else {
+        toast.error('Failed to sync LTV', {
+          description: result.error || 'Unknown error',
+        });
+      }
+    });
+  };
+
   return (
     <div className="space-y-4">
       {/* Status Badges */}
@@ -293,6 +316,55 @@ function CustomerDetailsTab({ customer }: { customer: Customer }) {
           </div>
         </Section>
       )}
+
+      {/* Pipedrive Integration */}
+      <Section title="Pipedrive CRM">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            {isPipedriveLinked ? (
+              <>
+                <Link2 className="h-4 w-4 text-emerald-600" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-emerald-700">Connected to Pipedrive</p>
+                  <p className="text-xs text-muted-foreground">
+                    {customer.pipedrivePersonId && `Person ID: ${customer.pipedrivePersonId}`}
+                    {customer.pipedriveDealId && ` | Deal ID: ${customer.pipedriveDealId}`}
+                    {customer.pipedriveOrgId && ` | Org ID: ${customer.pipedriveOrgId}`}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <Unlink className="h-4 w-4 text-muted-foreground" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-muted-foreground">Not linked to Pipedrive</p>
+                  <p className="text-xs text-muted-foreground">
+                    Sync from Pipedrive to link this customer
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+
+          {isPipedriveLinked && (
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePushLTV}
+                disabled={isPushingLTV}
+              >
+                {isPushingLTV ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                )}
+                Sync LTV to Pipedrive
+              </Button>
+            </div>
+          )}
+        </div>
+      </Section>
     </div>
   );
 }

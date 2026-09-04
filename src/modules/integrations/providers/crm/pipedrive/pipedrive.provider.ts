@@ -51,6 +51,7 @@ import type {
   PipedrivePerson,
   PipedriveOrganization,
   PipedriveDeal,
+  PipedriveLead,
   PipedriveActivity,
   PipedriveNote,
   PipedrivePipeline,
@@ -1025,6 +1026,391 @@ export class PipedriveProvider implements ICrmProvider {
   async getPipeline(connectionId: string, externalId: string): Promise<CrmPipeline | null> {
     const pipelines = await this.getPipelines(connectionId);
     return pipelines.find((p) => p.id === externalId) || null;
+  }
+
+  // ============================================
+  // LEADS (Leads Inbox - different from Persons)
+  // ============================================
+
+  /**
+   * Get leads from Pipedrive Leads Inbox
+   * Note: Leads Inbox is separate from Persons/Contacts
+   */
+  async getLeads(
+    connectionId: string,
+    options?: { limit?: number; offset?: number; archivedStatus?: 'archived' | 'not_archived' | 'all' }
+  ): Promise<PipedriveLead[]> {
+    const tokenInfo = await this.getAccessToken(connectionId);
+    if (!tokenInfo) {
+      throw new Error(PIPEDRIVE_ERRORS.NOT_CONNECTED);
+    }
+
+    const params = new URLSearchParams({
+      limit: String(options?.limit || PIPEDRIVE_DEFAULT_PAGE_SIZE),
+      start: String(options?.offset || 0),
+      archived_status: options?.archivedStatus || 'not_archived',
+      // Include embedded person and organization data to get email, phone, address etc.
+      include: 'person,organization',
+    });
+
+    const response = await this.apiRequest<PipedriveLead[]>(
+      tokenInfo.environment,
+      tokenInfo.accessToken,
+      `leads?${params.toString()}`
+    );
+
+    return response.data || [];
+  }
+
+  /**
+   * Get a single lead by ID
+   */
+  async getLead(connectionId: string, leadId: string): Promise<PipedriveLead | null> {
+    const tokenInfo = await this.getAccessToken(connectionId);
+    if (!tokenInfo) {
+      throw new Error(PIPEDRIVE_ERRORS.NOT_CONNECTED);
+    }
+
+    try {
+      const response = await this.apiRequest<PipedriveLead>(
+        tokenInfo.environment,
+        tokenInfo.accessToken,
+        `leads/${leadId}`
+      );
+
+      return response.data || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Create a new lead in Pipedrive Leads Inbox
+   * If contact info is provided, creates a Person first and links it
+   */
+  async createLead(
+    connectionId: string,
+    leadData: {
+      title: string;
+      personName?: string;
+      email?: string;
+      phone?: string;
+      company?: string;
+      // Address fields
+      addressStreet?: string;
+      addressCity?: string;
+      addressState?: string;
+      addressPostalCode?: string;
+      addressCountry?: string;
+      // Deal info
+      value?: number;
+      currency?: string;
+      expectedCloseDate?: string;
+      notes?: string;
+      // Labels
+      labelIds?: string[];
+    }
+  ): Promise<{ leadId: string; personId?: number; orgId?: number }> {
+    const tokenInfo = await this.getAccessToken(connectionId);
+    if (!tokenInfo) {
+      throw new Error(PIPEDRIVE_ERRORS.NOT_CONNECTED);
+    }
+
+    let personId: number | undefined;
+    let orgId: number | undefined;
+
+    // Build full address string for Organization
+    const addressParts = [
+      leadData.addressStreet,
+      leadData.addressCity,
+      leadData.addressState,
+      leadData.addressPostalCode,
+      leadData.addressCountry,
+    ].filter(Boolean);
+    const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : undefined;
+
+    // Create organization if company name provided
+    if (leadData.company) {
+      try {
+        const orgData: Record<string, unknown> = {
+          name: leadData.company,
+        };
+        // Add address to organization
+        if (fullAddress) {
+          orgData.address = fullAddress;
+        }
+
+        const orgResponse = await this.apiRequest<PipedriveOrganization>(
+          tokenInfo.environment,
+          tokenInfo.accessToken,
+          'organizations',
+          'POST',
+          orgData
+        );
+        orgId = orgResponse.data?.id;
+      } catch (error) {
+        console.warn('Failed to create organization in Pipedrive:', error);
+      }
+    }
+
+    // Create person if contact info provided
+    if (leadData.personName || leadData.email || leadData.phone) {
+      try {
+        const personData: Record<string, unknown> = {
+          name: leadData.personName || leadData.title || 'Unknown',
+        };
+        if (leadData.email) {
+          personData.email = [{ value: leadData.email, primary: true }];
+        }
+        if (leadData.phone) {
+          personData.phone = [{ value: leadData.phone, primary: true }];
+        }
+        if (orgId) {
+          personData.org_id = orgId;
+        }
+
+        const personResponse = await this.apiRequest<PipedrivePerson>(
+          tokenInfo.environment,
+          tokenInfo.accessToken,
+          'persons',
+          'POST',
+          personData
+        );
+        personId = personResponse.data?.id;
+      } catch (error) {
+        console.warn('Failed to create person in Pipedrive:', error);
+      }
+    }
+
+    // Create the lead
+    const leadPayload: Record<string, unknown> = {
+      title: leadData.title,
+    };
+
+    if (personId) {
+      leadPayload.person_id = personId;
+    }
+    if (orgId) {
+      leadPayload.organization_id = orgId;
+    }
+    if (leadData.value) {
+      leadPayload.value = {
+        amount: leadData.value,
+        currency: leadData.currency || 'USD',
+      };
+    }
+    if (leadData.expectedCloseDate) {
+      leadPayload.expected_close_date = leadData.expectedCloseDate;
+    }
+    if (leadData.labelIds && leadData.labelIds.length > 0) {
+      leadPayload.label_ids = leadData.labelIds;
+    }
+
+    const response = await this.apiRequest<PipedriveLead>(
+      tokenInfo.environment,
+      tokenInfo.accessToken,
+      'leads',
+      'POST',
+      leadPayload
+    );
+
+    if (!response.data?.id) {
+      throw new Error('Failed to create lead in Pipedrive');
+    }
+
+    const leadId = response.data.id;
+
+    // Create a note with additional details if notes provided
+    if (leadData.notes && personId) {
+      try {
+        await this.apiRequest<PipedriveNote>(
+          tokenInfo.environment,
+          tokenInfo.accessToken,
+          'notes',
+          'POST',
+          {
+            content: leadData.notes,
+            person_id: personId,
+            org_id: orgId,
+          }
+        );
+      } catch (error) {
+        console.warn('Failed to create note in Pipedrive:', error);
+      }
+    }
+
+    return {
+      leadId,
+      personId,
+      orgId,
+    };
+  }
+
+  /**
+   * Update an existing lead in Pipedrive
+   * Also updates the linked person and organization if provided
+   */
+  async updateLead(
+    connectionId: string,
+    leadId: string,
+    leadData: {
+      title?: string;
+      personId?: number;
+      orgId?: number;
+      // Contact info (updates person)
+      personName?: string;
+      email?: string | null;
+      phone?: string | null;
+      // Company info (updates org)
+      company?: string | null;
+      // Address fields (updates org)
+      addressStreet?: string | null;
+      addressCity?: string | null;
+      addressState?: string | null;
+      addressPostalCode?: string | null;
+      addressCountry?: string | null;
+      // Deal info
+      value?: number | null;
+      currency?: string;
+      expectedCloseDate?: string | null;
+      // Labels
+      labelIds?: string[];
+    }
+  ): Promise<{ success: boolean; error?: string }> {
+    const tokenInfo = await this.getAccessToken(connectionId);
+    if (!tokenInfo) {
+      throw new Error(PIPEDRIVE_ERRORS.NOT_CONNECTED);
+    }
+
+    // Update person if contact info provided and personId exists
+    if (leadData.personId && (leadData.personName || leadData.email !== undefined || leadData.phone !== undefined)) {
+      try {
+        const personData: Record<string, unknown> = {};
+        if (leadData.personName) {
+          personData.name = leadData.personName;
+        }
+        if (leadData.email !== undefined) {
+          personData.email = leadData.email ? [{ value: leadData.email, primary: true }] : [];
+        }
+        if (leadData.phone !== undefined) {
+          personData.phone = leadData.phone ? [{ value: leadData.phone, primary: true }] : [];
+        }
+
+        if (Object.keys(personData).length > 0) {
+          await this.apiRequest<PipedrivePerson>(
+            tokenInfo.environment,
+            tokenInfo.accessToken,
+            `persons/${leadData.personId}`,
+            'PUT',
+            personData
+          );
+        }
+      } catch (error) {
+        console.warn('Failed to update person in Pipedrive:', error);
+      }
+    }
+
+    // Update organization if company/address info provided and orgId exists
+    if (leadData.orgId && (leadData.company !== undefined || leadData.addressStreet !== undefined)) {
+      try {
+        const orgData: Record<string, unknown> = {};
+        if (leadData.company !== undefined) {
+          orgData.name = leadData.company;
+        }
+
+        // Build address
+        const addressParts = [
+          leadData.addressStreet,
+          leadData.addressCity,
+          leadData.addressState,
+          leadData.addressPostalCode,
+          leadData.addressCountry,
+        ].filter(Boolean);
+        if (addressParts.length > 0) {
+          orgData.address = addressParts.join(', ');
+        }
+
+        if (Object.keys(orgData).length > 0) {
+          await this.apiRequest<PipedriveOrganization>(
+            tokenInfo.environment,
+            tokenInfo.accessToken,
+            `organizations/${leadData.orgId}`,
+            'PUT',
+            orgData
+          );
+        }
+      } catch (error) {
+        console.warn('Failed to update organization in Pipedrive:', error);
+      }
+    }
+
+    // Update the lead itself
+    try {
+      const leadPayload: Record<string, unknown> = {};
+
+      if (leadData.title) {
+        leadPayload.title = leadData.title;
+      }
+      if (leadData.value !== undefined) {
+        leadPayload.value = leadData.value !== null ? {
+          amount: leadData.value,
+          currency: leadData.currency || 'USD',
+        } : null;
+      }
+      if (leadData.expectedCloseDate !== undefined) {
+        leadPayload.expected_close_date = leadData.expectedCloseDate;
+      }
+      if (leadData.labelIds !== undefined) {
+        leadPayload.label_ids = leadData.labelIds;
+      }
+
+      if (Object.keys(leadPayload).length > 0) {
+        await this.apiRequest<PipedriveLead>(
+          tokenInfo.environment,
+          tokenInfo.accessToken,
+          `leads/${leadId}`,
+          'PATCH',
+          leadPayload
+        );
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Failed to update lead in Pipedrive:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to update lead',
+      };
+    }
+  }
+
+  /**
+   * Get all lead labels from Pipedrive
+   * Returns a map of label ID to label name
+   */
+  async getLeadLabels(connectionId: string): Promise<Map<string, string>> {
+    const tokenInfo = await this.getAccessToken(connectionId);
+    if (!tokenInfo) {
+      throw new Error(PIPEDRIVE_ERRORS.NOT_CONNECTED);
+    }
+
+    try {
+      const response = await this.apiRequest<Array<{ id: string; name: string; color: string }>>(
+        tokenInfo.environment,
+        tokenInfo.accessToken,
+        'leadLabels'
+      );
+
+      const labelMap = new Map<string, string>();
+      (response.data || []).forEach(label => {
+        labelMap.set(label.id, label.name);
+      });
+
+      return labelMap;
+    } catch (error) {
+      console.error('Error fetching lead labels:', error);
+      return new Map();
+    }
   }
 
   // ============================================

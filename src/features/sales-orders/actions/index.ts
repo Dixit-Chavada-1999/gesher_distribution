@@ -1247,3 +1247,91 @@ export async function getSalesOrdersOnHold(): Promise<ActionResult<SalesOrderLis
     return { success: false, error: 'Failed to fetch orders on hold' };
   }
 }
+
+// ============================================
+// PIPEDRIVE SYNC
+// ============================================
+
+/**
+ * Sync order activity to Pipedrive
+ * Called when order is delivered or manually triggered
+ * Only syncs if customer is linked to Pipedrive
+ */
+export async function syncOrderToPipedrive(
+  orderId: string
+): Promise<ActionResult<{ synced: boolean; message: string }>> {
+  const auth = await authorize('orders.view_module');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  try {
+    // Get order with customer info
+    const { data: order, error: orderError } = await db
+      .from('sales_orders')
+      .select(`
+        id,
+        order_number,
+        total,
+        status,
+        customer_id,
+        customers (
+          id,
+          name,
+          pipedrive_person_id,
+          pipedrive_deal_id
+        )
+      `)
+      .eq('id', orderId)
+      .single();
+
+    if (orderError || !order) {
+      return { success: false, error: 'Order not found' };
+    }
+
+    type CustomerType = {
+      id: string;
+      name: string;
+      pipedrive_person_id: number | null;
+      pipedrive_deal_id: number | null;
+    };
+    const customersData = order.customers as CustomerType | CustomerType[] | null;
+    const customer = Array.isArray(customersData) ? customersData[0] : customersData;
+
+    // Check if customer is linked to Pipedrive
+    if (!customer?.pipedrive_person_id && !customer?.pipedrive_deal_id) {
+      return {
+        success: true,
+        data: {
+          synced: false,
+          message: 'Customer not linked to Pipedrive',
+        },
+      };
+    }
+
+    // Import and use the push service
+    const { pushOrderToPipedrive } = await import('@/features/pipedrive/actions');
+    const syncResult = await pushOrderToPipedrive(orderId);
+
+    if (syncResult.success) {
+      return {
+        success: true,
+        data: {
+          synced: true,
+          message: 'Order activity synced to Pipedrive',
+        },
+      };
+    } else {
+      return {
+        success: false,
+        error: syncResult.error || 'Failed to sync to Pipedrive',
+      };
+    }
+  } catch (error) {
+    console.error('syncOrderToPipedrive error:', error);
+    return {
+      success: false,
+      error: 'Failed to sync order to Pipedrive',
+    };
+  }
+}

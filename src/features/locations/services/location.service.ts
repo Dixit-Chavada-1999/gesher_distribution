@@ -7,7 +7,25 @@
 
 import { locationRepository } from '../repositories/location.repository';
 import { createLocationSchema, updateLocationSchema, formatAddress, type CreateLocationInput, type UpdateLocationInput } from '../lib/schemas';
+import { auditService } from '@/shared/lib/audit';
 import type { Location, LocationListParams, LocationWithFormattedAddress, LocationTableRow } from '../types';
+
+// Helper to convert location to audit data
+function locationToAuditData(location: Location): Record<string, unknown> {
+  return {
+    id: location.id,
+    locationCode: location.locationCode,
+    name: location.name,
+    locationType: location.locationType,
+    address1: location.address1,
+    city: location.city,
+    state: location.state,
+    zip: location.zip,
+    country: location.country,
+    isActive: location.isActive,
+    isDefault: location.isDefault,
+  };
+}
 
 // ============================================
 // TYPES
@@ -226,6 +244,18 @@ export const locationService = {
       // Create location
       const location = await locationRepository.create(data, userId);
 
+      // Log audit event (fire and forget)
+      auditService.logCreate(
+        'locations',
+        'Location',
+        location.id,
+        locationToAuditData(location),
+        { userId },
+        `Created location: ${location.name} (${location.locationCode})`
+      ).catch((err) => {
+        console.error('Failed to log location create audit:', err);
+      });
+
       return {
         success: true,
         data: location,
@@ -277,8 +307,24 @@ export const locationService = {
         }
       }
 
+      // Capture old data for audit before update
+      const oldAuditData = locationToAuditData(existing);
+
       // Update location
       const location = await locationRepository.update(id, data, userId);
+
+      // Log audit event (fire and forget)
+      auditService.logUpdate(
+        'locations',
+        'Location',
+        location.id,
+        oldAuditData,
+        locationToAuditData(location),
+        { userId },
+        `Updated location: ${location.name} (${location.locationCode})`
+      ).catch((err) => {
+        console.error('Failed to log location update audit:', err);
+      });
 
       return {
         success: true,
@@ -319,6 +365,18 @@ export const locationService = {
 
       const location = await locationRepository.softDelete(id, userId);
 
+      // Log audit event (fire and forget)
+      auditService.logDelete(
+        'locations',
+        'Location',
+        location.id,
+        locationToAuditData(existing),
+        { userId },
+        `Deleted location: ${existing.name} (${existing.locationCode})`
+      ).catch((err) => {
+        console.error('Failed to log location delete audit:', err);
+      });
+
       return {
         success: true,
         data: location,
@@ -338,6 +396,17 @@ export const locationService = {
   async restore(id: string, userId?: string): Promise<ServiceResult<Location>> {
     try {
       const location = await locationRepository.restore(id, userId);
+
+      // Log audit event (fire and forget)
+      auditService.logRestore(
+        'locations',
+        'Location',
+        location.id,
+        { userId },
+        `Restored location: ${location.name} (${location.locationCode})`
+      ).catch((err) => {
+        console.error('Failed to log location restore audit:', err);
+      });
 
       return {
         success: true,

@@ -331,11 +331,14 @@ export async function updateShipmentFromCmaCgm(
 ): Promise<boolean> {
   try {
     // Update shipment tracking info
+    // Pass location as final_destination (current location from CMA-CGM tracking)
+    // Pass vessel_name which gets mapped to carrier in the repository
     const trackingUpdated = await updateShipmentTracking(
       shipmentId,
       {
         tracking_status: mappedStatus.trackingStatus,
         vessel_name: mappedStatus.vesselName,
+        final_destination: mappedStatus.location, // Current location from CMA-CGM
       },
       mappedStatus.eventDateTime
     );
@@ -526,18 +529,9 @@ export async function syncAllContainers(): Promise<CmaCgmSyncResult> {
   // Process containers with rate limiting (1 request per second)
   for (const container of containers) {
     try {
-      // Skip non-CMA CGM containers (they have different prefixes)
-      // CMA CGM containers typically start with: CMAU, CGMU, TEMU, TRLU, APZU
-      const cmaCgmPrefixes = ['CMAU', 'CGMU', 'TEMU', 'TRLU', 'APZU', 'CCLU', 'CXRU'];
-      const prefix = container.containerNumber.substring(0, 4).toUpperCase();
-
-      if (!cmaCgmPrefixes.includes(prefix)) {
-        console.log(
-          `[CMA-CGM] Skipping non-CMA CGM container: ${container.containerNumber}`
-        );
-        skippedCount++;
-        continue;
-      }
+      // Note: CMA-CGM API can track ANY container that ships on CMA-CGM vessels,
+      // not just CMA-CGM owned containers (CMAU, CGMU, etc.)
+      // So we try to track all containers and let the API tell us if it can't find them
 
       // Fetch events from API
       const result = await fetchContainerEvents(container.containerNumber);

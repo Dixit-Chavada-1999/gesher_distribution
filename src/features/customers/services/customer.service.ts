@@ -25,6 +25,22 @@ import type {
   CustomerAddresses,
   CustomerDropdownItem,
 } from '../types';
+import { auditService } from '@/shared/lib/audit';
+
+// Helper to convert customer to audit data (exclude large/sensitive fields)
+function customerToAuditData(customer: Customer): Record<string, unknown> {
+  return {
+    id: customer.id,
+    customerCode: customer.customerCode,
+    name: customer.name,
+    email: customer.email,
+    phone: customer.phone,
+    channel: customer.channel,
+    status: customer.status,
+    creditStatus: customer.creditStatus,
+    creditLimit: customer.creditLimit,
+  };
+}
 
 // QBO Sync Service (lazy import to avoid circular dependencies)
 let qboSyncModule: typeof import('@/modules/integrations/quickbooks') | null = null;
@@ -243,6 +259,18 @@ export const customerService = {
       // Create customer
       const customer = await customerRepository.create(validation.data, userId);
 
+      // Log audit event (fire and forget)
+      auditService.logCreate(
+        'customers',
+        'Customer',
+        customer.id,
+        customerToAuditData(customer),
+        { userId },
+        `Created customer: ${customer.customerCode} - ${customer.name}`
+      ).catch((err) => {
+        console.error('Failed to log customer create audit:', err);
+      });
+
       // Sync to QuickBooks (fire and forget - don't block customer creation)
       this.syncCustomerToQbo(customer, userId).catch((err) => {
         console.error('Background QBO sync failed:', err);
@@ -303,6 +331,18 @@ export const customerService = {
 
       // Create customer
       const customer = await customerRepository.create(validation.data, userId);
+
+      // Log audit event (fire and forget)
+      auditService.logCreate(
+        'customers',
+        'Customer',
+        customer.id,
+        customerToAuditData(customer),
+        { userId },
+        `Created customer: ${customer.customerCode} - ${customer.name}`
+      ).catch((err) => {
+        console.error('Failed to log customer create audit:', err);
+      });
 
       // Sync to QuickBooks (fire and forget - don't block customer creation)
       this.syncCustomerToQbo(customer, userId).catch((err) => {
@@ -374,8 +414,24 @@ export const customerService = {
         }
       }
 
+      // Capture old data for audit before update
+      const oldAuditData = customerToAuditData(existing);
+
       // Update customer
       const customer = await customerRepository.update(id, validation.data, userId);
+
+      // Log audit event (fire and forget)
+      auditService.logUpdate(
+        'customers',
+        'Customer',
+        customer.id,
+        oldAuditData,
+        customerToAuditData(customer),
+        { userId },
+        `Updated customer: ${customer.customerCode} - ${customer.name}`
+      ).catch((err) => {
+        console.error('Failed to log customer update audit:', err);
+      });
 
       // Sync to QuickBooks (fire and forget - don't block customer update)
       this.syncCustomerToQbo(customer, userId).catch((err) => {
@@ -415,6 +471,18 @@ export const customerService = {
 
       const customer = await customerRepository.softDelete(id, userId);
 
+      // Log audit event (fire and forget)
+      auditService.logDelete(
+        'customers',
+        'Customer',
+        customer.id,
+        customerToAuditData(existing),
+        { userId },
+        `Deleted customer: ${customer.customerCode} - ${customer.name}`
+      ).catch((err) => {
+        console.error('Failed to log customer delete audit:', err);
+      });
+
       return {
         success: true,
         data: customer,
@@ -434,6 +502,17 @@ export const customerService = {
   async restore(id: string, userId?: string): Promise<ServiceResult<Customer>> {
     try {
       const customer = await customerRepository.restore(id, userId);
+
+      // Log audit event (fire and forget)
+      auditService.logRestore(
+        'customers',
+        'Customer',
+        customer.id,
+        { userId },
+        `Restored customer: ${customer.customerCode} - ${customer.name}`
+      ).catch((err) => {
+        console.error('Failed to log customer restore audit:', err);
+      });
 
       return {
         success: true,

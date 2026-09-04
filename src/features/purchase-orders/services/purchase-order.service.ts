@@ -7,6 +7,7 @@
 import { purchaseOrderRepository } from '../repositories/purchase-order.repository';
 import { db } from '@/shared/lib/supabase/database';
 import { createClient } from '@/shared/lib/supabase/server';
+import { auditService } from '@/shared/lib/audit';
 import {
   createPurchaseOrderSchema,
   updatePurchaseOrderSchema,
@@ -21,6 +22,21 @@ import type {
   POStatus,
 } from '../types';
 import { PO_STATUS_TRANSITIONS } from '../types';
+
+// Helper to convert purchase order to audit data (exclude large/sensitive fields)
+function purchaseOrderToAuditData(po: PurchaseOrder | PurchaseOrderWithItems): Record<string, unknown> {
+  return {
+    id: po.id,
+    poNumber: po.poNumber,
+    salesOrderId: po.salesOrderId,
+    status: po.status,
+    subtotal: po.subtotal,
+    taxTotal: po.taxTotal,
+    grandTotal: po.grandTotal,
+    orderSeries: po.orderSeries,
+    expectedDeliveryDate: po.expectedDeliveryDate,
+  };
+}
 
 // ============================================
 // TYPES
@@ -129,6 +145,18 @@ export const purchaseOrderService = {
 
       const po = await purchaseOrderRepository.create(validation.data, userId);
 
+      // Log audit event (fire and forget)
+      auditService.logCreate(
+        'purchase_orders',
+        'PurchaseOrder',
+        po.id,
+        purchaseOrderToAuditData(po),
+        { userId },
+        `Created purchase order: ${po.poNumber}`
+      ).catch((err) => {
+        console.error('Failed to log purchase order create audit:', err);
+      });
+
       // Send notification (async, non-blocking)
       this.sendPurchaseOrderCreatedNotification(po, userId).catch((err) => {
         console.error('Failed to send purchase order created notification:', err);
@@ -223,7 +251,23 @@ export const purchaseOrderService = {
         };
       }
 
+      // Capture old data for audit before update
+      const oldAuditData = purchaseOrderToAuditData(existing);
+
       const po = await purchaseOrderRepository.update(id, validation.data, userId);
+
+      // Log audit event (fire and forget)
+      auditService.logUpdate(
+        'purchase_orders',
+        'PurchaseOrder',
+        po.id,
+        oldAuditData,
+        purchaseOrderToAuditData(po),
+        { userId },
+        `Updated purchase order: ${po.poNumber}`
+      ).catch((err) => {
+        console.error('Failed to log purchase order update audit:', err);
+      });
 
       return {
         success: true,
@@ -259,6 +303,18 @@ export const purchaseOrderService = {
       }
 
       const po = await purchaseOrderRepository.softDelete(id, userId);
+
+      // Log audit event (fire and forget)
+      auditService.logDelete(
+        'purchase_orders',
+        'PurchaseOrder',
+        po.id,
+        purchaseOrderToAuditData(existing),
+        { userId },
+        `Deleted purchase order: ${po.poNumber}`
+      ).catch((err) => {
+        console.error('Failed to log purchase order delete audit:', err);
+      });
 
       return {
         success: true,
@@ -536,6 +592,20 @@ export const purchaseOrderService = {
       }
 
       const po = await purchaseOrderRepository.updateStatus(id, newStatus, userId);
+
+      // Log audit event for status change (fire and forget)
+      auditService.log({
+        action: 'update', // status_change
+        module: 'purchase_orders',
+        entityType: 'PurchaseOrder',
+        entityId: po.id,
+        oldData: { status: existing.status },
+        newData: { status: newStatus },
+        userId,
+        description: `Purchase order ${po.poNumber} status changed: ${existing.status} → ${newStatus}`,
+      }).catch((err) => {
+        console.error('Failed to log purchase order status change audit:', err);
+      });
 
       return {
         success: true,

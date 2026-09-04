@@ -5,6 +5,7 @@
  */
 
 import { invoiceRepository } from '../repositories/invoice.repository';
+import { auditService } from '@/shared/lib/audit';
 import {
   createInvoiceSchema,
   updateInvoiceSchema,
@@ -26,6 +27,25 @@ import type {
 import { INVOICE_STATUS_TRANSITIONS } from '../types';
 import { creditCheckService } from '@/features/customers/services/credit-check.service';
 import { salesOrderService } from '@/features/sales-orders/services/sales-order.service';
+
+// Helper to convert invoice to audit data (exclude large/sensitive fields)
+function invoiceToAuditData(invoice: Invoice | InvoiceWithItems): Record<string, unknown> {
+  return {
+    id: invoice.id,
+    invoiceNumber: invoice.invoiceNumber,
+    customerId: invoice.customerId,
+    salesOrderId: invoice.salesOrderId,
+    status: invoice.status,
+    invoiceDate: invoice.invoiceDate,
+    dueDate: invoice.dueDate,
+    subtotal: invoice.subtotal,
+    discountTotal: invoice.discountTotal,
+    taxTotal: invoice.taxTotal,
+    grandTotal: invoice.grandTotal,
+    amountPaid: invoice.amountPaid,
+    balanceDue: invoice.balanceDue,
+  };
+}
 
 // ============================================
 // TYPES
@@ -154,6 +174,18 @@ export const invoiceService = {
       // Create the invoice
       const invoice = await invoiceRepository.create(invoiceDTO, userId);
 
+      // Log audit event (fire and forget)
+      auditService.logCreate(
+        'invoices',
+        'Invoice',
+        invoice.id,
+        invoiceToAuditData(invoice),
+        { userId },
+        `Created invoice: ${invoice.invoiceNumber} from SO: ${salesOrder.orderNumber}`
+      ).catch((err) => {
+        console.error('Failed to log invoice create audit:', err);
+      });
+
       return {
         success: true,
         data: invoice,
@@ -233,6 +265,18 @@ export const invoiceService = {
 
       const invoice = await invoiceRepository.create(validation.data, userId);
 
+      // Log audit event (fire and forget)
+      auditService.logCreate(
+        'invoices',
+        'Invoice',
+        invoice.id,
+        invoiceToAuditData(invoice),
+        { userId },
+        `Created invoice: ${invoice.invoiceNumber}`
+      ).catch((err) => {
+        console.error('Failed to log invoice create audit:', err);
+      });
+
       return {
         success: true,
         data: invoice,
@@ -279,7 +323,23 @@ export const invoiceService = {
         };
       }
 
+      // Capture old data for audit before update
+      const oldAuditData = invoiceToAuditData(existing);
+
       const invoice = await invoiceRepository.update(id, validation.data, userId);
+
+      // Log audit event (fire and forget)
+      auditService.logUpdate(
+        'invoices',
+        'Invoice',
+        invoice.id,
+        oldAuditData,
+        invoiceToAuditData(invoice),
+        { userId },
+        `Updated invoice: ${invoice.invoiceNumber}`
+      ).catch((err) => {
+        console.error('Failed to log invoice update audit:', err);
+      });
 
       return {
         success: true,
@@ -315,6 +375,18 @@ export const invoiceService = {
       }
 
       const invoice = await invoiceRepository.softDelete(id, userId);
+
+      // Log audit event (fire and forget)
+      auditService.logDelete(
+        'invoices',
+        'Invoice',
+        invoice.id,
+        invoiceToAuditData(existing),
+        { userId },
+        `Deleted invoice: ${invoice.invoiceNumber}`
+      ).catch((err) => {
+        console.error('Failed to log invoice delete audit:', err);
+      });
 
       return {
         success: true,
@@ -379,6 +451,20 @@ export const invoiceService = {
         validation.data.amount,
         userId
       );
+
+      // Log audit event for payment (fire and forget)
+      auditService.log({
+        action: 'update', // payment_recorded
+        module: 'invoices',
+        entityType: 'Invoice',
+        entityId: id,
+        oldData: { amountPaid: existing.amountPaid, balanceDue: existing.balanceDue },
+        newData: { paymentAmount: validation.data.amount, paymentMethod: validation.data.paymentMethod },
+        userId,
+        description: `Payment of ${validation.data.amount / 100} recorded for invoice ${existing.invoiceNumber}`,
+      }).catch((err) => {
+        console.error('Failed to log invoice payment audit:', err);
+      });
 
       return {
         success: true,
@@ -515,6 +601,20 @@ export const invoiceService = {
       }
 
       const invoice = await invoiceRepository.updateStatus(id, newStatus, userId);
+
+      // Log audit event for status change (fire and forget)
+      auditService.log({
+        action: 'update', // status_change
+        module: 'invoices',
+        entityType: 'Invoice',
+        entityId: invoice.id,
+        oldData: { status: existing.status },
+        newData: { status: newStatus },
+        userId,
+        description: `Invoice ${invoice.invoiceNumber} status changed: ${existing.status} → ${newStatus}`,
+      }).catch((err) => {
+        console.error('Failed to log invoice status change audit:', err);
+      });
 
       return {
         success: true,

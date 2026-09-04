@@ -5,6 +5,7 @@
  */
 
 import { shipmentRepository } from '../repositories/shipment.repository';
+import { auditService } from '@/shared/lib/audit';
 import {
   createShipmentSchema,
   updateShipmentSchema,
@@ -19,6 +20,24 @@ import type {
   ShipmentStatus,
 } from '../types';
 import { SHIPMENT_STATUS_TRANSITIONS } from '../types';
+
+// Helper to convert shipment to audit data (exclude large/sensitive fields)
+function shipmentToAuditData(shipment: Shipment | ShipmentWithItems): Record<string, unknown> {
+  return {
+    id: shipment.id,
+    shipmentNumber: shipment.shipmentNumber,
+    salesOrderId: shipment.salesOrderId,
+    purchaseOrderId: shipment.purchaseOrderId,
+    status: shipment.status,
+    shipmentDate: shipment.shipmentDate,
+    estimatedArrival: shipment.estimatedArrival,
+    actualArrival: shipment.actualArrival,
+    carrier: shipment.carrier,
+    trackingNumber: shipment.trackingNumber,
+    totalQty: shipment.totalQty,
+    source: shipment.source,
+  };
+}
 
 // ============================================
 // TYPES
@@ -127,6 +146,18 @@ export const shipmentService = {
 
       const shipment = await shipmentRepository.create(validation.data, userId);
 
+      // Log audit event (fire and forget)
+      auditService.logCreate(
+        'shipments',
+        'Shipment',
+        shipment.id,
+        shipmentToAuditData(shipment),
+        { userId },
+        `Created shipment: ${shipment.shipmentNumber}`
+      ).catch((err) => {
+        console.error('Failed to log shipment create audit:', err);
+      });
+
       return {
         success: true,
         data: shipment,
@@ -173,7 +204,23 @@ export const shipmentService = {
         };
       }
 
+      // Capture old data for audit before update
+      const oldAuditData = shipmentToAuditData(existing);
+
       const shipment = await shipmentRepository.update(id, validation.data, userId);
+
+      // Log audit event (fire and forget)
+      auditService.logUpdate(
+        'shipments',
+        'Shipment',
+        shipment.id,
+        oldAuditData,
+        shipmentToAuditData(shipment),
+        { userId },
+        `Updated shipment: ${shipment.shipmentNumber}`
+      ).catch((err) => {
+        console.error('Failed to log shipment update audit:', err);
+      });
 
       return {
         success: true,
@@ -209,6 +256,18 @@ export const shipmentService = {
       }
 
       const shipment = await shipmentRepository.softDelete(id, userId);
+
+      // Log audit event (fire and forget)
+      auditService.logDelete(
+        'shipments',
+        'Shipment',
+        shipment.id,
+        shipmentToAuditData(existing),
+        { userId },
+        `Deleted shipment: ${shipment.shipmentNumber}`
+      ).catch((err) => {
+        console.error('Failed to log shipment delete audit:', err);
+      });
 
       return {
         success: true,
@@ -273,6 +332,20 @@ export const shipmentService = {
       }
 
       const shipment = await shipmentRepository.updateStatus(id, newStatus, userId);
+
+      // Log audit event for status change (fire and forget)
+      auditService.log({
+        action: 'update', // status_change
+        module: 'shipments',
+        entityType: 'Shipment',
+        entityId: shipment.id,
+        oldData: { status: existing.status },
+        newData: { status: newStatus },
+        userId,
+        description: `Shipment ${shipment.shipmentNumber} status changed: ${existing.status} → ${newStatus}`,
+      }).catch((err) => {
+        console.error('Failed to log shipment status change audit:', err);
+      });
 
       return {
         success: true,

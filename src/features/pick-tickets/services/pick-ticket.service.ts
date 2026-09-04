@@ -5,6 +5,7 @@
  */
 
 import { PickTicketRepository } from '../repositories';
+import { auditService } from '@/shared/lib/audit';
 import type {
   PickTicket,
   PickTicketWithItems,
@@ -17,6 +18,20 @@ import type {
   PickItemDTO,
 } from '../types';
 import { PICK_TICKET_STATUS_TRANSITIONS } from '../types';
+
+// Helper to convert pick ticket to audit data (exclude large/sensitive fields)
+function pickTicketToAuditData(pt: PickTicket | PickTicketWithItems): Record<string, unknown> {
+  return {
+    id: pt.id,
+    pickTicketNumber: pt.pickTicketNumber,
+    salesOrderId: pt.salesOrderId,
+    warehouseId: pt.warehouseId,
+    status: pt.status,
+    assignedTo: pt.assignedTo,
+    priority: pt.priority,
+    totalItems: 'items' in pt ? pt.items?.length : undefined,
+  };
+}
 
 // ============================================
 // SERVICE RESULT TYPE
@@ -109,6 +124,19 @@ class PickTicketServiceImpl {
       }
 
       const pickTicket = await PickTicketRepository.create(dto, userId);
+
+      // Log audit event (fire and forget)
+      auditService.logCreate(
+        'pick_tickets',
+        'PickTicket',
+        pickTicket.id,
+        pickTicketToAuditData(pickTicket),
+        { userId },
+        `Created pick ticket: ${pickTicket.pickTicketNumber}`
+      ).catch((err) => {
+        console.error('Failed to log pick ticket create audit:', err);
+      });
+
       return { success: true, data: pickTicket };
     } catch (error) {
       console.error('[PickTicketService.createPickTicket] Error:', error);
@@ -142,6 +170,9 @@ class PickTicketServiceImpl {
         };
       }
 
+      // Capture old data for audit before update
+      const oldAuditData = pickTicketToAuditData(existing);
+
       // Update items if provided
       if (dto.items && dto.items.length > 0) {
         console.log('[PickTicketService.updatePickTicket] Updating items:', dto.items);
@@ -151,6 +182,20 @@ class PickTicketServiceImpl {
       }
 
       const pickTicket = await PickTicketRepository.update(id, dto, userId);
+
+      // Log audit event (fire and forget)
+      auditService.logUpdate(
+        'pick_tickets',
+        'PickTicket',
+        pickTicket.id,
+        oldAuditData,
+        pickTicketToAuditData(pickTicket),
+        { userId },
+        `Updated pick ticket: ${pickTicket.pickTicketNumber}`
+      ).catch((err) => {
+        console.error('Failed to log pick ticket update audit:', err);
+      });
+
       return { success: true, data: pickTicket };
     } catch (error) {
       console.error('[PickTicketService.updatePickTicket] Error:', error);
@@ -185,6 +230,21 @@ class PickTicketServiceImpl {
       }
 
       const pickTicket = await PickTicketRepository.assign(id, assignedTo, userId);
+
+      // Log audit event (fire and forget)
+      auditService.log({
+        action: 'update', // assign
+        module: 'pick_tickets',
+        entityType: 'PickTicket',
+        entityId: pickTicket.id,
+        oldData: { assignedTo: existing.assignedTo, status: existing.status },
+        newData: { assignedTo, status: pickTicket.status },
+        userId,
+        description: `Pick ticket ${pickTicket.pickTicketNumber} assigned`,
+      }).catch((err) => {
+        console.error('Failed to log pick ticket assign audit:', err);
+      });
+
       return { success: true, data: pickTicket };
     } catch (error) {
       console.error('[PickTicketService.assignPickTicket] Error:', error);
@@ -377,6 +437,21 @@ class PickTicketServiceImpl {
       }
 
       const pickTicket = await PickTicketRepository.updateStatus(id, newStatus, userId);
+
+      // Log audit event for status change (fire and forget)
+      auditService.log({
+        action: 'update', // status_change
+        module: 'pick_tickets',
+        entityType: 'PickTicket',
+        entityId: pickTicket.id,
+        oldData: { status: existing.status },
+        newData: { status: newStatus },
+        userId,
+        description: `Pick ticket ${pickTicket.pickTicketNumber} status changed: ${existing.status} → ${newStatus}`,
+      }).catch((err) => {
+        console.error('Failed to log pick ticket status change audit:', err);
+      });
+
       return { success: true, data: pickTicket };
     } catch (error) {
       console.error('[PickTicketService.transitionStatus] Error:', error);
@@ -407,6 +482,21 @@ class PickTicketServiceImpl {
       }
 
       const pickTicket = await PickTicketRepository.updateStatus(id, 'cancelled', userId);
+
+      // Log audit event (fire and forget)
+      auditService.log({
+        action: 'update', // cancel
+        module: 'pick_tickets',
+        entityType: 'PickTicket',
+        entityId: pickTicket.id,
+        oldData: { status: existing.status },
+        newData: { status: 'cancelled' },
+        userId,
+        description: `Pick ticket ${pickTicket.pickTicketNumber} cancelled`,
+      }).catch((err) => {
+        console.error('Failed to log pick ticket cancel audit:', err);
+      });
+
       return { success: true, data: pickTicket };
     } catch (error) {
       console.error('[PickTicketService.cancelPickTicket] Error:', error);
@@ -437,6 +527,19 @@ class PickTicketServiceImpl {
       }
 
       await PickTicketRepository.delete(id, userId);
+
+      // Log audit event (fire and forget)
+      auditService.logDelete(
+        'pick_tickets',
+        'PickTicket',
+        id,
+        pickTicketToAuditData(existing),
+        { userId },
+        `Deleted pick ticket: ${existing.pickTicketNumber}`
+      ).catch((err) => {
+        console.error('Failed to log pick ticket delete audit:', err);
+      });
+
       return { success: true };
     } catch (error) {
       console.error('[PickTicketService.deletePickTicket] Error:', error);

@@ -679,6 +679,8 @@ export async function getImmediateAttention(filters?: OperationsFilters): Promis
       'DISPUTED': 'disputed',
       'PO_NEEDED': 'po_needed',
       'DELIVERED': 'delivered',
+      'CONFIRMED': 'confirmed',
+      'PROCESSING': 'processing',
     };
     shipQuery = shipQuery.eq('load_status', statusMap[filters.status]);
   }
@@ -848,12 +850,14 @@ export async function getImmediateAttention(filters?: OperationsFilters): Promis
       const totalQty = items.reduce((sum: number, item: { quantity: number }) => sum + (item.quantity || 0), 0);
 
       // Map SO status to display status
-      // Business Flow: confirmed (SOLD) → processing (IN_TRANSIT, supplier shipped) → shipped → delivered
+      // Business Flow: confirmed → processing → shipped → delivered
       let displayStatus: ShipmentStatus = 'OPEN';
       if (so.status === 'confirmed') {
-        displayStatus = 'SOLD'; // Waiting for supplier to ship
-      } else if (so.status === 'processing' || so.status === 'shipped') {
-        displayStatus = 'IN_TRANSIT'; // Supplier has shipped, goods in transit
+        displayStatus = 'CONFIRMED'; // Order confirmed, waiting for supplier
+      } else if (so.status === 'processing') {
+        displayStatus = 'PROCESSING'; // Order being processed
+      } else if (so.status === 'shipped') {
+        displayStatus = 'IN_TRANSIT'; // Goods in transit
       } else if (so.status === 'delivered') {
         displayStatus = 'DELIVERED';
       }
@@ -1644,6 +1648,8 @@ export async function getRimInstallationRequired(filters?: OperationsFilters): P
       'DISPUTED': 'disputed',
       'PO_NEEDED': 'po_needed',
       'DELIVERED': 'delivered',
+      'CONFIRMED': 'confirmed',
+      'PROCESSING': 'processing',
     };
     shipQuery = shipQuery.eq('load_status', statusMap[filters.status]);
   }
@@ -1798,8 +1804,10 @@ export async function getRimInstallationRequired(filters?: OperationsFilters): P
 
     // Map SO status to display status
     let displayStatus: ShipmentStatus = 'OPEN';
-    if (so.status === 'confirmed' || so.status === 'processing') {
-      displayStatus = 'SOLD';
+    if (so.status === 'confirmed') {
+      displayStatus = 'CONFIRMED';
+    } else if (so.status === 'processing') {
+      displayStatus = 'PROCESSING';
     } else if (so.status === 'shipped') {
       displayStatus = 'IN_TRANSIT';
     } else if (so.status === 'delivered') {

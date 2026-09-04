@@ -59,6 +59,8 @@ export type ShipmentStatus =
   | 'HOLD'
   | 'IN_TRANSIT'
   | 'SOLD'
+  | 'CONFIRMED'
+  | 'PROCESSING'
   | 'CLOSED'
   // Invoice/Payment statuses
   | 'INVOICED'

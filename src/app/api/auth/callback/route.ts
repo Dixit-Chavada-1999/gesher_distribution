@@ -7,6 +7,7 @@
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@/shared/lib/supabase/server';
+import { auditService } from '@/shared/lib/audit';
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -52,8 +53,22 @@ export async function GET(request: Request) {
 
       if (isRecovery) {
         redirectTo = '/reset-password';
-      } else if (next) {
-        redirectTo = next;
+        // Log password reset audit
+        if (data.session?.user) {
+          await auditService.logPasswordChange(data.session.user.id, {
+            userEmail: data.session.user.email,
+          });
+        }
+      } else {
+        // Log login audit
+        if (data.session?.user) {
+          await auditService.logLogin(data.session.user.id, {
+            userEmail: data.session.user.email,
+          });
+        }
+        if (next) {
+          redirectTo = next;
+        }
       }
 
       console.log('Redirecting to:', redirectTo);

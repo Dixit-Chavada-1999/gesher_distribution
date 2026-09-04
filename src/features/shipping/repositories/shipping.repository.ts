@@ -428,6 +428,8 @@ export async function updateShipmentTracking(
     transload_container?: string;
     original_container_number?: string;
     is_transloaded?: boolean;
+    port_of_discharge?: string;
+    final_destination?: string;
   },
   eventTimestamp?: string
 ): Promise<boolean> {

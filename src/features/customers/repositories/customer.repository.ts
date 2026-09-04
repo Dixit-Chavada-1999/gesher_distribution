@@ -82,6 +82,11 @@ interface DbCustomer {
   qbo_realm_id: string | null;
   qbo_synced_at: string | null;
   qbo_sync_error: string | null;
+
+  // Pipedrive Sync
+  pipedrive_person_id: number | null;
+  pipedrive_deal_id: number | null;
+  pipedrive_org_id: number | null;
 }
 
 // ============================================
@@ -726,6 +731,11 @@ class CustomerRepositoryImpl {
       qboRealmId: data.qbo_realm_id ?? null,
       qboSyncedAt: data.qbo_synced_at ? new Date(data.qbo_synced_at) : null,
       qboSyncError: data.qbo_sync_error ?? null,
+
+      // Pipedrive Sync
+      pipedrivePersonId: data.pipedrive_person_id ?? null,
+      pipedriveDealId: data.pipedrive_deal_id ?? null,
+      pipedriveOrgId: data.pipedrive_org_id ?? null,
     };
   }
 

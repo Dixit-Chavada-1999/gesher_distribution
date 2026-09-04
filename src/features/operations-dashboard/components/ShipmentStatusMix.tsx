@@ -49,6 +49,8 @@ function getStatusColor(status: ShipmentStatus): string {
     // Other statuses
     PO_NEEDED: 'bg-pink-500',
     DELIVERED: 'bg-green-600',
+    CONFIRMED: 'bg-indigo-500',
+    PROCESSING: 'bg-violet-500',
   };
   return colors[status] || 'bg-gray-500';
 }

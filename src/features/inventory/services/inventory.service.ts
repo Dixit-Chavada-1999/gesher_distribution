@@ -5,6 +5,7 @@
  */
 
 import { inventoryRepository } from '../repositories/inventory.repository';
+import { auditService } from '@/shared/lib/audit';
 import type {
   Inventory,
   InventoryWithDetails,
@@ -13,6 +14,19 @@ import type {
   CreateInventoryDTO,
   UpdateInventoryDTO,
 } from '../types';
+
+// Helper to convert inventory to audit data
+function inventoryToAuditData(inventory: Inventory | InventoryWithDetails): Record<string, unknown> {
+  return {
+    id: inventory.id,
+    productId: inventory.productId,
+    locationId: inventory.locationId,
+    onHand: inventory.onHand,
+    allocated: inventory.allocated,
+    reorderPoint: inventory.reorderPoint,
+    reorderQty: inventory.reorderQty,
+  };
+}
 
 // ============================================
 // TYPES
@@ -178,6 +192,18 @@ export const inventoryService = {
 
       const inventory = await inventoryRepository.create(data, userId);
 
+      // Log audit event (fire and forget)
+      auditService.logCreate(
+        'inventory',
+        'Inventory',
+        inventory.id,
+        inventoryToAuditData(inventory),
+        { userId },
+        `Created inventory record for product ${data.productId} at location ${data.locationId}`
+      ).catch((err) => {
+        console.error('Failed to log inventory create audit:', err);
+      });
+
       return {
         success: true,
         data: inventory,
@@ -220,7 +246,23 @@ export const inventoryService = {
         };
       }
 
+      // Capture old data for audit before update
+      const oldAuditData = inventoryToAuditData(existing);
+
       const inventory = await inventoryRepository.update(id, data, userId);
+
+      // Log audit event (fire and forget)
+      auditService.logUpdate(
+        'inventory',
+        'Inventory',
+        inventory.id,
+        oldAuditData,
+        inventoryToAuditData(inventory),
+        { userId },
+        `Updated inventory record`
+      ).catch((err) => {
+        console.error('Failed to log inventory update audit:', err);
+      });
 
       return {
         success: true,
@@ -244,7 +286,25 @@ export const inventoryService = {
     userId?: string
   ): Promise<ServiceResult<Inventory>> {
     try {
+      // Get existing data for audit
+      const existing = await inventoryRepository.findById(id);
+      const oldOnHand = existing?.onHand ?? 0;
+
       const inventory = await inventoryRepository.adjustOnHand(id, adjustment, userId);
+
+      // Log audit event (fire and forget)
+      auditService.log({
+        action: 'update',
+        module: 'inventory',
+        entityType: 'Inventory',
+        entityId: inventory.id,
+        oldData: { onHand: oldOnHand },
+        newData: { onHand: inventory.onHand, adjustment },
+        userId,
+        description: `Inventory adjusted by ${adjustment > 0 ? '+' : ''}${adjustment} units`,
+      }).catch((err) => {
+        console.error('Failed to log inventory adjust audit:', err);
+      });
 
       return {
         success: true,
@@ -276,7 +336,25 @@ export const inventoryService = {
         };
       }
 
+      // Get existing data for audit
+      const existing = await inventoryRepository.findById(id);
+      const oldAllocated = existing?.allocated ?? 0;
+
       const inventory = await inventoryRepository.allocate(id, quantity, userId, reference);
+
+      // Log audit event (fire and forget)
+      auditService.log({
+        action: 'update', // allocate
+        module: 'inventory',
+        entityType: 'Inventory',
+        entityId: inventory.id,
+        oldData: { allocated: oldAllocated },
+        newData: { allocated: inventory.allocated, quantity, reference },
+        userId,
+        description: `Allocated ${quantity} units${reference ? ` for ${reference.type} ${reference.number}` : ''}`,
+      }).catch((err) => {
+        console.error('Failed to log inventory allocate audit:', err);
+      });
 
       return {
         success: true,
@@ -337,7 +415,25 @@ export const inventoryService = {
         };
       }
 
+      // Get existing data for audit
+      const existing = await inventoryRepository.findById(id);
+      const oldAllocated = existing?.allocated ?? 0;
+
       const inventory = await inventoryRepository.deallocate(id, quantity, userId, reference);
+
+      // Log audit event (fire and forget)
+      auditService.log({
+        action: 'update', // deallocate
+        module: 'inventory',
+        entityType: 'Inventory',
+        entityId: inventory.id,
+        oldData: { allocated: oldAllocated },
+        newData: { allocated: inventory.allocated, quantity, reference },
+        userId,
+        description: `Deallocated ${quantity} units${reference ? ` for ${reference.type} ${reference.number}` : ''}`,
+      }).catch((err) => {
+        console.error('Failed to log inventory deallocate audit:', err);
+      });
 
       return {
         success: true,
@@ -398,7 +494,25 @@ export const inventoryService = {
         };
       }
 
+      // Get existing data for audit
+      const existing = await inventoryRepository.findById(id);
+      const oldData = existing ? { onHand: existing.onHand, allocated: existing.allocated } : {};
+
       const inventory = await inventoryRepository.ship(id, quantity, userId, reference);
+
+      // Log audit event (fire and forget)
+      auditService.log({
+        action: 'update', // ship
+        module: 'inventory',
+        entityType: 'Inventory',
+        entityId: inventory.id,
+        oldData,
+        newData: { onHand: inventory.onHand, allocated: inventory.allocated, quantity, reference },
+        userId,
+        description: `Shipped ${quantity} units${reference ? ` for ${reference.type} ${reference.number}` : ''}`,
+      }).catch((err) => {
+        console.error('Failed to log inventory ship audit:', err);
+      });
 
       return {
         success: true,
@@ -459,7 +573,25 @@ export const inventoryService = {
         };
       }
 
+      // Get existing data for audit
+      const existing = await inventoryRepository.findById(id);
+      const oldOnHand = existing?.onHand ?? 0;
+
       const inventory = await inventoryRepository.receive(id, quantity, userId, reference);
+
+      // Log audit event (fire and forget)
+      auditService.log({
+        action: 'update', // receive
+        module: 'inventory',
+        entityType: 'Inventory',
+        entityId: inventory.id,
+        oldData: { onHand: oldOnHand },
+        newData: { onHand: inventory.onHand, quantity, reference },
+        userId,
+        description: `Received ${quantity} units${reference ? ` for ${reference.type} ${reference.number}` : ''}`,
+      }).catch((err) => {
+        console.error('Failed to log inventory receive audit:', err);
+      });
 
       return {
         success: true,
@@ -531,6 +663,18 @@ export const inventoryService = {
       }
 
       await inventoryRepository.delete(id);
+
+      // Log audit event (fire and forget)
+      auditService.logDelete(
+        'inventory',
+        'Inventory',
+        id,
+        inventoryToAuditData(existing),
+        {},
+        `Deleted inventory record`
+      ).catch((err) => {
+        console.error('Failed to log inventory delete audit:', err);
+      });
 
       return {
         success: true,
