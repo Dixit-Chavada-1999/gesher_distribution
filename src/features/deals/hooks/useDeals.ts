@@ -101,7 +101,7 @@ export function useDeals(
     try {
       const result = await getDeals(params);
 
-      if (result.success && result.data) {
+      if (result.success) {
         setData(result.data.data);
         setMeta(result.data.meta);
       } else {
@@ -181,7 +181,7 @@ export function useDealStats() {
     try {
       const result = await getDealStats();
 
-      if (result.success && result.data) {
+      if (result.success) {
         const { countByStatus, valueByStatus, valueByPipeline } = result.data;
 
         // Calculate totals
@@ -265,7 +265,7 @@ export function useDealStatusCounts() {
     try {
       const result = await getDealStats();
 
-      if (result.success && result.data) {
+      if (result.success) {
         const counts: Record<DealStatus, number> = {
           open: result.data.countByStatus['open'] || 0,
           won: result.data.countByStatus['won'] || 0,

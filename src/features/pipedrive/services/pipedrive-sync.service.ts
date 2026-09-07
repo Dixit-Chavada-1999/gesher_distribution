@@ -785,15 +785,15 @@ class PipedriveSyncService {
         try {
           // Get contact and organization info
           const contact = deal.contactExternalId
-            ? contactsById.get(deal.contactExternalId)
+            ? contactsById.get(deal.contactExternalId) ?? null
             : null;
           const organization = deal.organizationExternalId
-            ? orgsById.get(deal.organizationExternalId)
+            ? orgsById.get(deal.organizationExternalId) ?? null
             : null;
 
           // Get pipeline and stage info
-          const pipeline = deal.pipelineId ? pipelineMap.get(deal.pipelineId) : null;
-          const stage = deal.stageId ? stageMap.get(deal.stageId) : null;
+          const pipeline = deal.pipelineId ? pipelineMap.get(deal.pipelineId) ?? null : null;
+          const stage = deal.stageId ? stageMap.get(deal.stageId) ?? null : null;
 
           // Check if already exists
           const existing = await dealsRepository.getByPipedriveDealId(pipedriveDealId);
@@ -832,7 +832,7 @@ class PipedriveSyncService {
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           result.errors.push({
-            pipedriveId: pipedriveDealId,
+            pipedriveDealId: pipedriveDealId,
             error: errorMessage,
           });
 
@@ -1006,9 +1006,9 @@ class PipedriveSyncService {
       status: deal.status as CreateDealDTO['status'] || 'open',
       probability: deal.probability ?? stage?.probability ?? null,
       expectedCloseDate: deal.expectedCloseDate ? new Date(deal.expectedCloseDate) : null,
-      wonTime: deal.metadata?.wonTime ? new Date(deal.metadata.wonTime) : null,
-      lostTime: deal.metadata?.lostTime ? new Date(deal.metadata.lostTime) : null,
-      lostReason: deal.metadata?.lostReason || null,
+      wonTime: deal.metadata?.wonTime && typeof deal.metadata.wonTime === 'string' ? new Date(deal.metadata.wonTime) : null,
+      lostTime: deal.metadata?.lostTime && typeof deal.metadata.lostTime === 'string' ? new Date(deal.metadata.lostTime) : null,
+      lostReason: deal.metadata?.lostReason && typeof deal.metadata.lostReason === 'string' ? deal.metadata.lostReason : null,
       contactName,
       contactEmail: contact?.email || null,
       contactPhone: contact?.phone || null,

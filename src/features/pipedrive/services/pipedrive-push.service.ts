@@ -217,7 +217,7 @@ class PipedrivePushService {
         )
       );
 
-      await this.logSync('push', 'note', pipedriveNoteId, 'success', undefined, { action: 'update' });
+      await this.logSync('push', 'note', pipedriveNoteId, 'success', 'Note updated');
       return { success: true };
     } catch (error) {
       console.error('[PipedrivePush] Error updating note:', error);
@@ -250,7 +250,7 @@ class PipedrivePushService {
         )
       );
 
-      await this.logSync('push', 'note', pipedriveNoteId, 'success', undefined, { action: 'delete' });
+      await this.logSync('push', 'note', pipedriveNoteId, 'success', 'Note deleted');
       return { success: true };
     } catch (error) {
       console.error('[PipedrivePush] Error deleting note:', error);

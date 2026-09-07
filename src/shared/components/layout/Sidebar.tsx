@@ -361,7 +361,7 @@ export function Sidebar() {
                   {filteredItems.map((item) => {
                     const Icon = item.icon;
                     const hasChildren = 'children' in item && item.children && item.children.length > 0;
-                    const active = !hasChildren && isActive(item.href);
+                    const active = !hasChildren && item.href ? isActive(item.href) : false;
                     const isExpanded = isSubmenuExpanded(item.id);
                     const hasActiveChild = hasChildren && item.children?.some((child: { href?: string }) => child.href && isActive(child.href));
 
@@ -434,7 +434,7 @@ export function Sidebar() {
                     return (
                       <Link
                         key={item.id}
-                        href={item.href}
+                        href={item.href || '#'}
                         className={cn(
                           'group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
                           active
