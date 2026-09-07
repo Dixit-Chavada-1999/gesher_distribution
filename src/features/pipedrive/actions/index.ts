@@ -540,3 +540,163 @@ export async function pushLeadNoteToPipedrive(
     };
   }
 }
+
+// ============================================
+// DEALS SYNC ACTIONS
+// ============================================
+
+interface DealSyncPreviewItem {
+  id: number;
+  title: string;
+  value?: number;
+  currency?: string;
+  status: 'new' | 'update' | 'skip';
+  existingId?: string;
+  pipelineName?: string;
+  stageName?: string;
+}
+
+interface DealSyncResult {
+  created: number;
+  updated: number;
+  skipped: number;
+  deleted: number;
+  errors: string[];
+  items?: DealSyncPreviewItem[];
+}
+
+/**
+ * Preview deals sync from Pipedrive
+ */
+export async function previewDealsFromPipedrive(): Promise<ActionResult<DealSyncResult>> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  try {
+    const isConnected = await pipedriveSyncService.isConnected();
+    if (!isConnected) {
+      return {
+        success: false,
+        error: 'Pipedrive is not connected. Please connect in Settings first.',
+      };
+    }
+
+    const preview = await pipedriveSyncService.previewDealsSync();
+
+    return {
+      success: true,
+      data: {
+        created: preview.newCount,
+        updated: preview.updateCount,
+        skipped: preview.skipCount,
+        deleted: 0,
+        errors: [],
+        items: preview.items.map(item => ({
+          id: item.id,
+          title: item.title,
+          value: item.value,
+          currency: item.currency,
+          status: item.status,
+          existingId: item.existingId,
+          pipelineName: item.pipelineName,
+          stageName: item.stageName,
+        })),
+      },
+    };
+  } catch (error) {
+    console.error('[previewDealsFromPipedrive] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Preview failed',
+    };
+  }
+}
+
+/**
+ * Sync deals from Pipedrive to local deals table
+ */
+export async function syncDealsFromPipedrive(): Promise<ActionResult<DealSyncResult>> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  try {
+    const isConnected = await pipedriveSyncService.isConnected();
+    if (!isConnected) {
+      return {
+        success: false,
+        error: 'Pipedrive is not connected. Please connect in Settings first.',
+      };
+    }
+
+    const result = await pipedriveSyncService.syncDealsToLocal({
+      skipExisting: false,
+      cleanupDeleted: true,
+    });
+
+    // Revalidate deals page
+    revalidatePath('/deals');
+
+    return {
+      success: true,
+      data: {
+        created: result.created,
+        updated: result.updated,
+        skipped: result.skipped,
+        deleted: result.deleted,
+        errors: result.errors.map(e => e.error),
+      },
+    };
+  } catch (error) {
+    console.error('[syncDealsFromPipedrive] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Sync failed',
+    };
+  }
+}
+
+/**
+ * Sync a single deal from Pipedrive (for webhook or manual sync)
+ */
+export async function syncSingleDealFromPipedrive(
+  pipedriveDealId: number
+): Promise<ActionResult<{ dealId: string; isNew: boolean }>> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  try {
+    const result = await pipedriveSyncService.syncSingleDeal(pipedriveDealId);
+
+    if (result && result.deal) {
+      revalidatePath('/deals');
+      const dealId = (result.deal as { id: string }).id;
+      return { success: true, data: { dealId, isNew: result.isNew } };
+    } else {
+      return { success: false, error: 'Failed to sync deal' };
+    }
+  } catch (error) {
+    console.error('[syncSingleDealFromPipedrive] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Sync failed',
+    };
+  }
+}

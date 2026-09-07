@@ -131,6 +131,7 @@ export interface CrmNote {
   contactId?: string;
   dealId?: string;
   organizationId?: string;
+  leadId?: string; // Pipedrive Leads Inbox lead UUID
   pinnedToTop?: boolean;
   createdAt?: string;
   updatedAt?: string;

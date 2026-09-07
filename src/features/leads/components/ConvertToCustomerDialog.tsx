@@ -8,7 +8,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Loader2, UserPlus } from 'lucide-react';
+import { Loader2, UserPlus, Handshake, DollarSign } from 'lucide-react';
 
 import {
   Dialog,
@@ -28,9 +28,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
+import { Badge } from '@/shared/components/ui/badge';
 
 import { convertLeadToCustomer } from '../actions';
 import type { Lead, LeadListItem } from '../types';
+
+// ============================================
+// HELPERS
+// ============================================
+
+function formatCurrency(value: number, currency?: string): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency || 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
+}
 
 // ============================================
 // TYPES
@@ -92,7 +106,8 @@ export function ConvertToCustomerDialog({
       });
 
       if (result.success && result.data) {
-        toast.success('Lead converted to customer successfully');
+        const dealMessage = result.data.dealId ? ' and deal created' : '';
+        toast.success(`Lead converted to customer${dealMessage} successfully`);
         onSuccess?.(result.data.customerId);
         handleOpenChange(false);
       } else {
@@ -124,7 +139,8 @@ export function ConvertToCustomerDialog({
           </DialogTitle>
           <DialogDescription>
             Create a new customer from this lead. The lead will be marked as
-            converted and linked to the new customer.
+            converted and linked to the new customer. If the lead has deal
+            information, a won deal will also be created.
           </DialogDescription>
         </DialogHeader>
 
@@ -139,6 +155,26 @@ export function ConvertToCustomerDialog({
               <p className="text-sm text-muted-foreground">{lead.email}</p>
             )}
           </div>
+
+          {/* Deal Info - shown if lead has deal value */}
+          {'dealValue' in lead && (lead.dealValue || lead.dealTitle) && (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Handshake className="h-4 w-4 text-emerald-600" />
+                <span className="font-medium text-emerald-800">Deal will be created</span>
+                <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">Won</Badge>
+              </div>
+              {'dealTitle' in lead && lead.dealTitle && (
+                <p className="text-sm text-emerald-700">{lead.dealTitle}</p>
+              )}
+              {'dealValue' in lead && lead.dealValue && (
+                <p className="text-lg font-bold text-emerald-700 flex items-center gap-1">
+                  <DollarSign className="h-4 w-4" />
+                  {formatCurrency(lead.dealValue, 'dealCurrency' in lead ? lead.dealCurrency || 'USD' : 'USD')}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Customer Name */}
           <div className="space-y-2">

@@ -78,7 +78,7 @@ class PipedrivePushService {
 
   /**
    * Push a note to Pipedrive
-   * Can be attached to a person, deal, or organization
+   * Can be attached to a person, deal, organization, or lead (Leads Inbox)
    */
   async pushNote(
     content: string,
@@ -86,6 +86,7 @@ class PipedrivePushService {
       personId?: number;
       dealId?: number;
       orgId?: number;
+      leadId?: string; // Pipedrive Leads Inbox lead UUID
     }
   ): Promise<PushNoteResult> {
     const connectionId = await this.getConnectionId();
@@ -103,6 +104,7 @@ class PipedrivePushService {
               contactId: options.personId?.toString(),
               dealId: options.dealId?.toString(),
               organizationId: options.orgId?.toString(),
+              leadId: options.leadId, // For Leads Inbox leads
             });
             return note;
           },
@@ -155,13 +157,14 @@ class PipedrivePushService {
   }
 
   /**
-   * Push a lead note to their linked Pipedrive person
+   * Push a lead note to their linked Pipedrive lead/person
+   * For Leads Inbox leads, uses lead_id. For converted leads, uses person_id.
    */
   async pushLeadNote(leadId: string, noteContent: string): Promise<PushNoteResult> {
-    // Get lead with Pipedrive IDs
+    // Get lead with Pipedrive IDs (including pipedrive_lead_id for Leads Inbox)
     const { data: lead } = await db
       .from('leads')
-      .select('id, name, pipedrive_person_id, pipedrive_deal_id, pipedrive_org_id')
+      .select('id, name, pipedrive_lead_id, pipedrive_person_id, pipedrive_deal_id, pipedrive_org_id')
       .eq('id', leadId)
       .single();
 
@@ -169,11 +172,14 @@ class PipedrivePushService {
       return { success: false, error: 'Lead not found' };
     }
 
-    if (!lead.pipedrive_person_id && !lead.pipedrive_deal_id) {
+    // Check for any Pipedrive link - lead_id (Leads Inbox) OR person_id/deal_id (converted)
+    if (!lead.pipedrive_lead_id && !lead.pipedrive_person_id && !lead.pipedrive_deal_id) {
       return { success: false, error: 'Lead not linked to Pipedrive' };
     }
 
+    // Push note - prefer lead_id for Leads Inbox, fall back to person_id
     const result = await this.pushNote(noteContent, {
+      leadId: lead.pipedrive_lead_id || undefined, // For Leads Inbox leads
       personId: lead.pipedrive_person_id || undefined,
       dealId: lead.pipedrive_deal_id || undefined,
       orgId: lead.pipedrive_org_id || undefined,
@@ -185,6 +191,75 @@ class PipedrivePushService {
     }
 
     return result;
+  }
+
+  /**
+   * Update a note in Pipedrive
+   */
+  async updateNoteInPipedrive(
+    pipedriveNoteId: number,
+    content: string
+  ): Promise<{ success: boolean; error?: string }> {
+    const connectionId = await this.getConnectionId();
+    if (!connectionId) {
+      return { success: false, error: 'Pipedrive not connected' };
+    }
+
+    try {
+      await pipedriveRateLimiter.execute(() =>
+        retryWithBackoff(
+          async () => {
+            await pipedriveProvider.updateNote(connectionId, pipedriveNoteId.toString(), {
+              content,
+            });
+          },
+          { shouldRetry: isRetryableError }
+        )
+      );
+
+      await this.logSync('push', 'note', pipedriveNoteId, 'success', undefined, { action: 'update' });
+      return { success: true };
+    } catch (error) {
+      console.error('[PipedrivePush] Error updating note:', error);
+      await this.logSync('push', 'note', pipedriveNoteId, 'failed', error instanceof Error ? error.message : 'Unknown error');
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to update note',
+      };
+    }
+  }
+
+  /**
+   * Delete a note from Pipedrive
+   */
+  async deleteNoteFromPipedrive(
+    pipedriveNoteId: number
+  ): Promise<{ success: boolean; error?: string }> {
+    const connectionId = await this.getConnectionId();
+    if (!connectionId) {
+      return { success: false, error: 'Pipedrive not connected' };
+    }
+
+    try {
+      await pipedriveRateLimiter.execute(() =>
+        retryWithBackoff(
+          async () => {
+            await pipedriveProvider.deleteNote(connectionId, pipedriveNoteId.toString());
+          },
+          { shouldRetry: isRetryableError }
+        )
+      );
+
+      await this.logSync('push', 'note', pipedriveNoteId, 'success', undefined, { action: 'delete' });
+      return { success: true };
+    } catch (error) {
+      console.error('[PipedrivePush] Error deleting note:', error);
+      await this.logSync('push', 'note', pipedriveNoteId, 'failed', error instanceof Error ? error.message : 'Unknown error');
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to delete note',
+      };
+    }
   }
 
   // ============================================

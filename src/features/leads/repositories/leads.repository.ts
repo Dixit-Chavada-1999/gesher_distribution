@@ -75,7 +75,7 @@ interface LeadNoteRow {
   created_at: string;
   updated_at: string;
   created_by: string | null;
-  created_by_user?: { name: string } | null;
+  created_by_user?: { first_name: string; last_name: string } | null;
 }
 
 // ============================================
@@ -169,7 +169,9 @@ function mapRowToLeadNote(row: LeadNoteRow): LeadNote {
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
     createdBy: row.created_by,
-    createdByName: row.created_by_user?.name || null,
+    createdByName: row.created_by_user
+      ? `${row.created_by_user.first_name} ${row.created_by_user.last_name}`.trim()
+      : null,
   };
 }
 
@@ -813,7 +815,7 @@ class LeadsRepository {
   async getNotes(leadId: string): Promise<LeadNote[]> {
     const { data, error } = await db
       .from('lead_notes')
-      .select('*, created_by_user:users!lead_notes_created_by_fkey(name)')
+      .select('*, created_by_user:users!lead_notes_created_by_fkey(first_name, last_name)')
       .eq('lead_id', leadId)
       .order('created_at', { ascending: false });
 
@@ -894,6 +896,45 @@ class LeadsRepository {
     if (error) {
       console.error('Error marking note as synced:', error);
     }
+  }
+
+  /**
+   * Get a note by ID
+   */
+  async getNoteById(noteId: string): Promise<LeadNote | null> {
+    const { data, error } = await db
+      .from('lead_notes')
+      .select('*, created_by_user:users!lead_notes_created_by_fkey(first_name, last_name)')
+      .eq('id', noteId)
+      .single();
+
+    if (error || !data) {
+      return null;
+    }
+
+    return mapRowToLeadNote(data as LeadNoteRow);
+  }
+
+  /**
+   * Update a note
+   */
+  async updateNote(noteId: string, content: string): Promise<LeadNote> {
+    const { data, error } = await db
+      .from('lead_notes')
+      .update({
+        content,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', noteId)
+      .select('*, created_by_user:users!lead_notes_created_by_fkey(first_name, last_name)')
+      .single();
+
+    if (error || !data) {
+      console.error('Error updating lead note:', error);
+      throw new Error('Failed to update lead note');
+    }
+
+    return mapRowToLeadNote(data as LeadNoteRow);
   }
 
   /**

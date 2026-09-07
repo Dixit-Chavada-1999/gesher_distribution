@@ -19,6 +19,7 @@ import {
   X,
   LogOut,
   ChevronRight,
+  ChevronDown,
   Inbox,
   // Only used by the hidden Permissions entry — uncomment with it.
   // Key,
@@ -37,6 +38,8 @@ import {
   PackageCheck, // Packing Lists
   Ship, // Shipping Tracking
   UserPlus, // Leads
+  Link2, // Pipedrive
+  Handshake, // Deals
 } from 'lucide-react';
 
 import { cn } from '@/shared/lib/utils';
@@ -83,11 +86,26 @@ const NAV_SECTIONS = [
     title: 'CRM',
     items: [
       {
-        id: 'leads',
-        label: 'Leads',
-        href: '/leads',
-        icon: UserPlus,
-        permission: 'customers.view_module', // Using customers permission for now
+        id: 'pipedrive',
+        label: 'Pipedrive',
+        icon: Link2,
+        permission: 'customers.view_module',
+        children: [
+          {
+            id: 'leads',
+            label: 'Leads',
+            href: '/leads',
+            icon: UserPlus,
+            permission: 'customers.view_module',
+          },
+          {
+            id: 'deals',
+            label: 'Deals',
+            href: '/deals',
+            icon: Handshake,
+            permission: 'customers.view_module',
+          },
+        ],
       },
       {
         id: 'customers',
@@ -254,6 +272,7 @@ const NAV_SECTIONS = [
 
 export function Sidebar() {
   const [hasMounted, setHasMounted] = useState(false);
+  const [expandedMenus, setExpandedMenus] = useState<string[]>(['pipedrive']); // Start with Pipedrive expanded
   const pathname = usePathname();
   const { hasPermission, logout } = useAuthStore();
   const { isCollapsed, isMobileOpen, closeMobile } = useSidebarStore();
@@ -262,6 +281,16 @@ export function Sidebar() {
   useEffect(() => {
     setHasMounted(true);
   }, []);
+
+  const toggleSubmenu = (id: string) => {
+    setExpandedMenus(prev =>
+      prev.includes(id)
+        ? prev.filter(item => item !== id)
+        : [...prev, id]
+    );
+  };
+
+  const isSubmenuExpanded = (id: string) => expandedMenus.includes(id);
 
   // Use default state on server to prevent hydration mismatch
   const collapsed = hasMounted ? isCollapsed : false;
@@ -331,8 +360,77 @@ export function Sidebar() {
                 <div className="space-y-1">
                   {filteredItems.map((item) => {
                     const Icon = item.icon;
-                    const active = isActive(item.href);
+                    const hasChildren = 'children' in item && item.children && item.children.length > 0;
+                    const active = !hasChildren && isActive(item.href);
+                    const isExpanded = isSubmenuExpanded(item.id);
+                    const hasActiveChild = hasChildren && item.children?.some((child: { href?: string }) => child.href && isActive(child.href));
 
+                    // Render item with children (expandable submenu)
+                    if (hasChildren) {
+                      return (
+                        <div key={item.id}>
+                          <button
+                            onClick={() => toggleSubmenu(item.id)}
+                            className={cn(
+                              'group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
+                              hasActiveChild
+                                ? 'bg-[hsl(var(--sidebar-accent))] text-white'
+                                : 'text-[hsl(var(--sidebar-foreground))] hover:bg-[hsl(var(--sidebar-accent))] hover:text-white',
+                              collapsed && 'justify-center px-2'
+                            )}
+                            title={collapsed ? item.label : undefined}
+                          >
+                            <Icon className={cn(
+                              "h-5 w-5 shrink-0 transition-transform duration-200",
+                              "group-hover:scale-110"
+                            )} />
+                            {!collapsed && <span>{item.label}</span>}
+                            {!collapsed && (
+                              isExpanded
+                                ? <ChevronDown className="ml-auto h-4 w-4 transition-transform" />
+                                : <ChevronRight className="ml-auto h-4 w-4 transition-transform" />
+                            )}
+                          </button>
+                          {/* Child items */}
+                          {!collapsed && isExpanded && (
+                            <div className="ml-4 mt-1 space-y-1 border-l border-[hsl(var(--sidebar-border))] pl-3">
+                              {item.children?.map((child: { id: string; label: string; href: string; icon: React.ComponentType<{ className?: string }>; permission?: string }) => {
+                                // Skip if no permission
+                                if (child.permission && !hasPermission(child.permission)) {
+                                  return null;
+                                }
+                                const ChildIcon = child.icon;
+                                const childActive = isActive(child.href);
+
+                                return (
+                                  <Link
+                                    key={child.id}
+                                    href={child.href}
+                                    className={cn(
+                                      'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
+                                      childActive
+                                        ? 'bg-[hsl(var(--sidebar-primary))] text-white shadow-sm'
+                                        : 'text-[hsl(var(--sidebar-foreground))] hover:bg-[hsl(var(--sidebar-accent))] hover:text-white hover:translate-x-1'
+                                    )}
+                                  >
+                                    <ChildIcon className={cn(
+                                      "h-4 w-4 shrink-0 transition-transform duration-200",
+                                      !childActive && "group-hover:scale-110"
+                                    )} />
+                                    <span>{child.label}</span>
+                                    {childActive && (
+                                      <ChevronRight className="ml-auto h-4 w-4" />
+                                    )}
+                                  </Link>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    // Render regular item (no children)
                     return (
                       <Link
                         key={item.id}

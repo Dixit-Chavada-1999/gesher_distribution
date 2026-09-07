@@ -367,7 +367,7 @@ export async function deleteLead(id: string): Promise<ActionResult<void>> {
 export async function convertLeadToCustomer(
   id: string,
   data: ConvertLeadDTO
-): Promise<ActionResult<{ leadId: string; customerId: string }>> {
+): Promise<ActionResult<{ leadId: string; customerId: string; dealId?: string }>> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -418,15 +418,59 @@ export async function convertLeadToCustomer(
       throw new Error(`Failed to create customer: ${customerError.message}`);
     }
 
+    // Create deal from lead (if lead has deal info)
+    let dealId: string | undefined;
+    const hasDealInfo = lead.dealTitle || lead.dealValue;
+
+    if (hasDealInfo) {
+      const { data: deal, error: dealError } = await supabase
+        .from('deals')
+        .insert({
+          title: lead.dealTitle || `Deal for ${lead.company || lead.name}`,
+          value: lead.dealValue,
+          currency: lead.dealCurrency || 'USD',
+          status: 'won', // Converting to customer = deal won
+          pipeline_id: lead.dealPipelineId,
+          pipeline_name: lead.dealPipeline,
+          stage_id: lead.dealStageId,
+          stage_name: lead.dealStage,
+          probability: lead.dealProbability,
+          expected_close_date: lead.expectedCloseDate,
+          won_time: new Date().toISOString(),
+          contact_name: lead.name,
+          contact_email: lead.email,
+          contact_phone: lead.phone,
+          organization_name: lead.company,
+          customer_id: customer.id,
+          lead_id: id,
+          pipedrive_deal_id: lead.pipedriveDealId,
+          pipedrive_person_id: lead.pipedrivePersonId,
+          pipedrive_org_id: lead.pipedriveOrgId,
+          owner_id: appUser.id,
+          created_by: appUser.id,
+          updated_by: appUser.id,
+        })
+        .select('id')
+        .single();
+
+      if (dealError) {
+        console.warn('[convertLeadToCustomer] Failed to create deal:', dealError);
+        // Don't fail the whole conversion if deal creation fails
+      } else {
+        dealId = deal?.id;
+      }
+    }
+
     // Mark lead as converted
     await leadsRepository.markAsConverted(id, customer.id, appUser.id);
 
     revalidatePath('/leads');
     revalidatePath('/customers');
+    revalidatePath('/deals');
 
     return {
       success: true,
-      data: { leadId: id, customerId: customer.id },
+      data: { leadId: id, customerId: customer.id, dealId },
     };
   } catch (error) {
     console.error('[convertLeadToCustomer] Error:', error);
@@ -468,6 +512,7 @@ export async function getLeadNotes(
 
 /**
  * Add a note to a lead
+ * Saves locally and auto-pushes to Pipedrive if connected
  */
 export async function addLeadNote(
   leadId: string,
@@ -486,7 +531,30 @@ export async function addLeadNote(
       return { success: false, error: 'User not found' };
     }
 
+    // 1. Save note locally first
     const note = await leadsRepository.addNote(leadId, content, appUser.id);
+
+    // 2. Try to push to Pipedrive (non-blocking - don't fail if Pipedrive push fails)
+    try {
+      const isConnected = await pipedriveSyncService.isConnected();
+      if (isConnected) {
+        const pushResult = await pipedrivePushService.pushLeadNote(leadId, content);
+        if (pushResult.success && pushResult.pipedriveNoteId) {
+          // Mark note as synced to Pipedrive
+          await leadsRepository.markNoteSynced(note.id, pushResult.pipedriveNoteId);
+          // Update local note object
+          note.pipedriveNoteId = pushResult.pipedriveNoteId;
+          note.syncedToPipedrive = true;
+          console.log(`[addLeadNote] Note synced to Pipedrive: ${pushResult.pipedriveNoteId}`);
+        } else {
+          console.log(`[addLeadNote] Pipedrive push skipped: ${pushResult.error || 'No Pipedrive link'}`);
+        }
+      }
+    } catch (pipedriveError) {
+      // Log but don't fail - note is saved locally
+      console.warn('[addLeadNote] Pipedrive push failed (non-blocking):', pipedriveError);
+    }
+
     revalidatePath(`/leads/${leadId}`);
     return { success: true, data: note };
   } catch (error) {
@@ -494,6 +562,101 @@ export async function addLeadNote(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to add note',
+    };
+  }
+}
+
+/**
+ * Delete a note from a lead
+ * Also deletes from Pipedrive if synced
+ */
+export async function deleteLeadNote(
+  noteId: string,
+  leadId: string
+): Promise<ActionResult<void>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  try {
+    // Get note to check if it has Pipedrive ID
+    const note = await leadsRepository.getNoteById(noteId);
+
+    // Delete from Pipedrive if synced (non-blocking)
+    if (note?.pipedriveNoteId) {
+      try {
+        const isConnected = await pipedriveSyncService.isConnected();
+        if (isConnected) {
+          await pipedrivePushService.deleteNoteFromPipedrive(note.pipedriveNoteId);
+          console.log(`[deleteLeadNote] Note deleted from Pipedrive: ${note.pipedriveNoteId}`);
+        }
+      } catch (pipedriveError) {
+        console.warn('[deleteLeadNote] Pipedrive delete failed (non-blocking):', pipedriveError);
+      }
+    }
+
+    // Delete locally
+    await leadsRepository.deleteNote(noteId);
+    revalidatePath(`/leads/${leadId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('[deleteLeadNote] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to delete note',
+    };
+  }
+}
+
+/**
+ * Update a note
+ * Also updates in Pipedrive if synced
+ */
+export async function updateLeadNote(
+  noteId: string,
+  leadId: string,
+  content: string
+): Promise<ActionResult<LeadNote>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  try {
+    // Get existing note to check Pipedrive ID
+    const existingNote = await leadsRepository.getNoteById(noteId);
+    if (!existingNote) {
+      return { success: false, error: 'Note not found' };
+    }
+
+    // Update locally first
+    const updatedNote = await leadsRepository.updateNote(noteId, content);
+
+    // Update in Pipedrive if synced (non-blocking)
+    if (existingNote.pipedriveNoteId) {
+      try {
+        const isConnected = await pipedriveSyncService.isConnected();
+        if (isConnected) {
+          await pipedrivePushService.updateNoteInPipedrive(existingNote.pipedriveNoteId, content);
+          console.log(`[updateLeadNote] Note updated in Pipedrive: ${existingNote.pipedriveNoteId}`);
+        }
+      } catch (pipedriveError) {
+        console.warn('[updateLeadNote] Pipedrive update failed (non-blocking):', pipedriveError);
+      }
+    }
+
+    revalidatePath(`/leads/${leadId}`);
+    return { success: true, data: updatedNote };
+  } catch (error) {
+    console.error('[updateLeadNote] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to update note',
     };
   }
 }

@@ -290,32 +290,32 @@ export function LeadsTable({
 
           return (
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                 <Button variant="ghost" size="icon" className="h-8 w-8">
                   <MoreHorizontal className="h-4 w-4" />
                   <span className="sr-only">Open menu</span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleView(lead)}>
+              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleView(lead); }}>
                   <Eye className="mr-2 h-4 w-4" />
                   View Details
                 </DropdownMenuItem>
                 {!isConverted && onConvert && (
-                  <DropdownMenuItem onClick={() => handleConvert(lead)}>
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleConvert(lead); }}>
                     <UserPlus className="mr-2 h-4 w-4" />
                     Convert to Customer
                   </DropdownMenuItem>
                 )}
                 {hasPipedrive && pipedriveCompanyDomain && (
-                  <DropdownMenuItem onClick={() => handleViewInPipedrive(lead)}>
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleViewInPipedrive(lead); }}>
                     <ExternalLink className="mr-2 h-4 w-4" />
                     View in Pipedrive
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={() => handleDeleteClick(lead)}
+                  onClick={(e) => { e.stopPropagation(); handleDeleteClick(lead); }}
                   className="text-destructive focus:text-destructive"
                 >
                   <Trash2 className="mr-2 h-4 w-4" />

@@ -889,7 +889,7 @@ export class PipedriveProvider implements ICrmProvider {
 
   async getNotes(
     connectionId: string,
-    options?: { contactId?: string; dealId?: string; organizationId?: string; limit?: number }
+    options?: { contactId?: string; dealId?: string; organizationId?: string; leadId?: string; limit?: number }
   ): Promise<CrmNote[]> {
     const tokenInfo = await this.getAccessToken(connectionId);
     if (!tokenInfo) {
@@ -908,6 +908,9 @@ export class PipedriveProvider implements ICrmProvider {
     }
     if (options?.organizationId) {
       params.set('org_id', options.organizationId);
+    }
+    if (options?.leadId) {
+      params.set('lead_id', options.leadId);
     }
 
     const response = await this.apiRequest<PipedriveNote[]>(
@@ -930,6 +933,7 @@ export class PipedriveProvider implements ICrmProvider {
       deal_id: note.dealId ? parseInt(note.dealId) : undefined,
       person_id: note.contactId ? parseInt(note.contactId) : undefined,
       org_id: note.organizationId ? parseInt(note.organizationId) : undefined,
+      lead_id: note.leadId || undefined, // Pipedrive Leads Inbox lead UUID
       pinned_to_deal_flag: note.pinnedToTop,
     };
 

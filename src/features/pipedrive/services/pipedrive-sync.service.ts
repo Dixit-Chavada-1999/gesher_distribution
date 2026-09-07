@@ -9,13 +9,18 @@ import { pipedriveProvider } from '@/modules/integrations/providers/crm/pipedriv
 import type { PipedriveLead } from '@/modules/integrations/providers/crm/pipedrive';
 import { getConnectionByIntegrationId, getIntegrationByProvider } from '@/modules/integrations/core/repositories';
 import { leadsRepository } from '@/features/leads/repositories/leads.repository';
+import { dealsRepository } from '@/features/deals/repositories/deals.repository';
 import { db } from '@/shared/lib/supabase/database';
 import { pipedriveRateLimiter, retryWithBackoff, isRetryableError } from '../lib/rate-limiter';
 import type {
   PipedriveSyncResult,
   CreateLeadDTO,
 } from '@/features/leads/types';
-import type { CrmContact, CrmDeal, CrmOrganization } from '@/modules/integrations/core';
+import type {
+  DealSyncResult,
+  CreateDealDTO,
+} from '@/features/deals/types';
+import type { CrmContact, CrmDeal, CrmOrganization, CrmPipeline } from '@/modules/integrations/core';
 import type { SyncLogEntry } from '../types';
 
 // ============================================
@@ -481,12 +486,22 @@ class PipedriveSyncService {
           }
 
           // Upsert using the Leads Inbox method
-          const { isNew } = await leadsRepository.upsertFromPipedriveLeadsInbox(leadDto);
+          const { lead, isNew } = await leadsRepository.upsertFromPipedriveLeadsInbox(leadDto);
 
           if (isNew) {
             result.created++;
           } else {
             result.updated++;
+          }
+
+          // Sync notes from Pipedrive for this lead (using lead_id for Leads Inbox)
+          if (lead && pipedriveLead.id) {
+            try {
+              await this.syncNotesForLead(connectionId, lead.id, pipedriveLead.id);
+            } catch (noteError) {
+              console.warn(`Failed to sync notes for lead ${lead.id}:`, noteError);
+              // Don't fail the entire sync if notes fail
+            }
           }
 
           // Log sync
@@ -556,6 +571,513 @@ class PipedriveSyncService {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new Error(`Sync failed: ${errorMessage}`);
+    }
+  }
+
+  // ============================================
+  // DEALS SYNC
+  // ============================================
+
+  /**
+   * Preview deals sync from Pipedrive
+   * Returns items with their sync status for preview display
+   */
+  async previewDealsSync(): Promise<{
+    items: Array<{
+      id: number;
+      title: string;
+      value?: number;
+      currency?: string;
+      status: 'new' | 'update' | 'skip';
+      existingId?: string;
+      pipelineName?: string;
+      stageName?: string;
+      contactName?: string;
+      organizationName?: string;
+    }>;
+    newCount: number;
+    updateCount: number;
+    skipCount: number;
+  }> {
+    const connectionId = await this.getConnectionId();
+    if (!connectionId) {
+      throw new Error('Pipedrive is not connected');
+    }
+
+    try {
+      // Fetch all deals from Pipedrive
+      const pipedriveDeals = await pipedriveRateLimiter.execute(() =>
+        retryWithBackoff(
+          () => pipedriveProvider.getDeals(connectionId, {
+            limit: 500,
+          }),
+          { shouldRetry: isRetryableError }
+        )
+      );
+
+      // Fetch pipelines for names
+      const pipelines = await pipedriveRateLimiter.execute(() =>
+        pipedriveProvider.getPipelines(connectionId)
+      );
+
+      // Create lookup maps
+      const pipelineMap = new Map<string, CrmPipeline>();
+      const stageMap = new Map<string, { name: string; pipelineId: string }>();
+
+      pipelines.forEach(p => {
+        pipelineMap.set(p.id, p);
+        p.stages?.forEach(s => {
+          stageMap.set(s.id, { name: s.name, pipelineId: p.id });
+        });
+      });
+
+      const items: Array<{
+        id: number;
+        title: string;
+        value?: number;
+        currency?: string;
+        status: 'new' | 'update' | 'skip';
+        existingId?: string;
+        pipelineName?: string;
+        stageName?: string;
+        contactName?: string;
+        organizationName?: string;
+      }> = [];
+
+      let newCount = 0;
+      let updateCount = 0;
+      const skipCount = 0;
+
+      // Check each deal against local database
+      for (const deal of pipedriveDeals) {
+        if (!deal.externalId) continue;
+
+        const pipedriveDealId = parseInt(deal.externalId);
+        const pipeline = deal.pipelineId ? pipelineMap.get(deal.pipelineId) : null;
+        const stage = deal.stageId ? stageMap.get(deal.stageId) : null;
+
+        // Check if deal already exists
+        const existing = await dealsRepository.getByPipedriveDealId(pipedriveDealId);
+
+        if (existing) {
+          items.push({
+            id: pipedriveDealId,
+            title: deal.title,
+            value: deal.value ?? undefined,
+            currency: deal.currency ?? undefined,
+            status: 'update',
+            existingId: existing.id,
+            pipelineName: pipeline?.name,
+            stageName: stage?.name,
+          });
+          updateCount++;
+        } else {
+          items.push({
+            id: pipedriveDealId,
+            title: deal.title,
+            value: deal.value ?? undefined,
+            currency: deal.currency ?? undefined,
+            status: 'new',
+            pipelineName: pipeline?.name,
+            stageName: stage?.name,
+          });
+          newCount++;
+        }
+      }
+
+      return { items, newCount, updateCount, skipCount };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Preview failed: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Sync deals from Pipedrive to local deals table
+   */
+  async syncDealsToLocal(options: SyncOptions = {}): Promise<DealSyncResult> {
+    const result: DealSyncResult = {
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      deleted: 0,
+      errors: [],
+    };
+
+    const connectionId = await this.getConnectionId();
+    if (!connectionId) {
+      throw new Error('Pipedrive is not connected');
+    }
+
+    try {
+      // Fetch all deals from Pipedrive with rate limiting
+      const pipedriveDeals = await pipedriveRateLimiter.execute(() =>
+        retryWithBackoff(
+          () => pipedriveProvider.getDeals(connectionId, {
+            sinceDate: options.sinceDate,
+            limit: 500,
+          }),
+          { shouldRetry: isRetryableError }
+        )
+      );
+
+      // Fetch contacts (persons) for enrichment
+      const contacts = await pipedriveRateLimiter.execute(() =>
+        retryWithBackoff(
+          () => pipedriveProvider.getContacts(connectionId, {
+            limit: 500,
+          }),
+          { shouldRetry: isRetryableError }
+        )
+      );
+
+      // Fetch organizations for enrichment
+      const organizations = await pipedriveRateLimiter.execute(() =>
+        retryWithBackoff(
+          () => pipedriveProvider.getOrganizations(connectionId, {
+            limit: 500,
+          }),
+          { shouldRetry: isRetryableError }
+        )
+      );
+
+      // Fetch pipelines and stages for names
+      const pipelines = await pipedriveRateLimiter.execute(() =>
+        pipedriveProvider.getPipelines(connectionId)
+      );
+
+      // Create lookup maps
+      const contactsById = new Map<string, CrmContact>();
+      contacts.forEach(c => {
+        if (c.externalId) contactsById.set(c.externalId, c);
+      });
+
+      const orgsById = new Map<string, CrmOrganization>();
+      organizations.forEach(o => {
+        if (o.externalId) orgsById.set(o.externalId, o);
+      });
+
+      const pipelineMap = new Map<string, CrmPipeline>();
+      const stageMap = new Map<string, { name: string; pipelineId: string; order: number; probability?: number }>();
+
+      pipelines.forEach(p => {
+        pipelineMap.set(p.id, p);
+        p.stages?.forEach(s => {
+          stageMap.set(s.id, {
+            name: s.name,
+            pipelineId: p.id,
+            order: s.order || 0,
+            probability: s.probability,
+          });
+        });
+      });
+
+      // Collect all Pipedrive Deal IDs from the sync
+      const pipedriveDealIds = new Set<number>();
+
+      // Process each deal
+      for (const deal of pipedriveDeals) {
+        if (!deal.externalId) continue;
+
+        const pipedriveDealId = parseInt(deal.externalId);
+        pipedriveDealIds.add(pipedriveDealId);
+
+        try {
+          // Get contact and organization info
+          const contact = deal.contactExternalId
+            ? contactsById.get(deal.contactExternalId)
+            : null;
+          const organization = deal.organizationExternalId
+            ? orgsById.get(deal.organizationExternalId)
+            : null;
+
+          // Get pipeline and stage info
+          const pipeline = deal.pipelineId ? pipelineMap.get(deal.pipelineId) : null;
+          const stage = deal.stageId ? stageMap.get(deal.stageId) : null;
+
+          // Check if already exists
+          const existing = await dealsRepository.getByPipedriveDealId(pipedriveDealId);
+
+          if (existing && options.skipExisting) {
+            result.skipped++;
+            continue;
+          }
+
+          // Map to deal DTO
+          const dealDto = this.mapPipedriveDealToDTO(
+            deal,
+            contact,
+            organization,
+            pipeline,
+            stage
+          );
+
+          // Upsert deal
+          const { isNew } = await dealsRepository.upsertFromPipedrive(dealDto);
+
+          if (isNew) {
+            result.created++;
+          } else {
+            result.updated++;
+          }
+
+          // Log sync
+          await this.logSync({
+            eventType: 'sync',
+            direction: 'inbound',
+            entityType: 'deal',
+            pipedriveId: pipedriveDealId,
+            status: 'success',
+          });
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          result.errors.push({
+            pipedriveId: pipedriveDealId,
+            error: errorMessage,
+          });
+
+          await this.logSync({
+            eventType: 'sync',
+            direction: 'inbound',
+            entityType: 'deal',
+            pipedriveId: pipedriveDealId,
+            status: 'failed',
+            errorMessage,
+          });
+        }
+      }
+
+      // Clean up deleted deals (deals in our DB but not in Pipedrive anymore)
+      if (options.cleanupDeleted !== false) {
+        try {
+          // Get all local deals with pipedrive_deal_id
+          const localPipedriveDealIds = await dealsRepository.getAllPipedriveDealIds();
+
+          // Find IDs that exist locally but not in Pipedrive (deleted from Pipedrive)
+          const deletedIds = localPipedriveDealIds.filter(
+            id => !pipedriveDealIds.has(id)
+          );
+
+          if (deletedIds.length > 0) {
+            const deletedCount = await dealsRepository.softDeleteByPipedriveDealIds(deletedIds);
+            result.deleted = deletedCount;
+
+            // Log deletions
+            for (const deletedId of deletedIds) {
+              await this.logSync({
+                eventType: 'sync',
+                direction: 'inbound',
+                entityType: 'deal',
+                pipedriveId: deletedId,
+                status: 'success',
+                payload: { action: 'deleted' },
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Error cleaning up deleted deals:', error);
+        }
+      }
+
+      return result;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Deals sync failed: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Sync a single deal from Pipedrive (for webhook handling)
+   */
+  async syncSingleDeal(pipedriveDealId: number): Promise<{ deal: unknown; isNew: boolean } | null> {
+    const connectionId = await this.getConnectionId();
+    if (!connectionId) {
+      throw new Error('Pipedrive is not connected');
+    }
+
+    try {
+      // Fetch the deal
+      const deal = await pipedriveRateLimiter.execute(() =>
+        pipedriveProvider.getDeal(connectionId, pipedriveDealId.toString())
+      );
+
+      if (!deal) {
+        return null;
+      }
+
+      // Fetch contact if linked
+      let contact: CrmContact | null = null;
+      if (deal.contactExternalId) {
+        contact = await pipedriveRateLimiter.execute(() =>
+          pipedriveProvider.getContact(connectionId, deal.contactExternalId!)
+        );
+      }
+
+      // Fetch organization if linked
+      let organization: CrmOrganization | null = null;
+      if (deal.organizationExternalId) {
+        organization = await pipedriveRateLimiter.execute(() =>
+          pipedriveProvider.getOrganization(connectionId, deal.organizationExternalId!)
+        );
+      }
+
+      // Fetch pipelines for stage info
+      const pipelines = await pipedriveRateLimiter.execute(() =>
+        pipedriveProvider.getPipelines(connectionId)
+      );
+
+      // Find pipeline and stage
+      let pipeline: CrmPipeline | null = null;
+      let stage: { name: string; pipelineId: string; order: number; probability?: number } | null = null;
+
+      if (deal.pipelineId) {
+        pipeline = pipelines.find(p => p.id === deal.pipelineId) || null;
+        if (pipeline && deal.stageId) {
+          const s = pipeline.stages?.find(s => s.id === deal.stageId);
+          if (s) {
+            stage = {
+              name: s.name,
+              pipelineId: pipeline.id,
+              order: s.order || 0,
+              probability: s.probability,
+            };
+          }
+        }
+      }
+
+      // Map to deal DTO
+      const dealDto = this.mapPipedriveDealToDTO(deal, contact, organization, pipeline, stage);
+
+      // Upsert deal
+      const { deal: savedDeal, isNew } = await dealsRepository.upsertFromPipedrive(dealDto);
+
+      await this.logSync({
+        eventType: 'webhook',
+        direction: 'inbound',
+        entityType: 'deal',
+        entityId: savedDeal.id,
+        pipedriveId: pipedriveDealId,
+        status: 'success',
+      });
+
+      return { deal: savedDeal, isNew };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+      await this.logSync({
+        eventType: 'webhook',
+        direction: 'inbound',
+        entityType: 'deal',
+        pipedriveId: pipedriveDealId,
+        status: 'failed',
+        errorMessage,
+      });
+
+      throw error;
+    }
+  }
+
+  /**
+   * Map Pipedrive deal to local Deal DTO
+   */
+  private mapPipedriveDealToDTO(
+    deal: CrmDeal,
+    contact: CrmContact | null,
+    organization: CrmOrganization | null,
+    pipeline: CrmPipeline | null,
+    stage: { name: string; pipelineId: string; order: number; probability?: number } | null
+  ): CreateDealDTO {
+    const contactName = contact
+      ? `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || contact.email || null
+      : null;
+
+    return {
+      title: deal.title,
+      pipedriveDealId: deal.externalId ? parseInt(deal.externalId) : null,
+      pipedrivePersonId: deal.contactExternalId ? parseInt(deal.contactExternalId) : null,
+      pipedriveOrgId: deal.organizationExternalId ? parseInt(deal.organizationExternalId) : null,
+      value: deal.value ?? null,
+      currency: deal.currency || 'USD',
+      pipelineId: deal.pipelineId ? parseInt(deal.pipelineId) : null,
+      pipelineName: pipeline?.name || null,
+      stageId: deal.stageId ? parseInt(deal.stageId) : null,
+      stageName: stage?.name || null,
+      stageOrder: stage?.order ?? null,
+      status: deal.status as CreateDealDTO['status'] || 'open',
+      probability: deal.probability ?? stage?.probability ?? null,
+      expectedCloseDate: deal.expectedCloseDate ? new Date(deal.expectedCloseDate) : null,
+      wonTime: deal.metadata?.wonTime ? new Date(deal.metadata.wonTime) : null,
+      lostTime: deal.metadata?.lostTime ? new Date(deal.metadata.lostTime) : null,
+      lostReason: deal.metadata?.lostReason || null,
+      contactName,
+      contactEmail: contact?.email || null,
+      contactPhone: contact?.phone || null,
+      organizationName: organization?.name || null,
+    };
+  }
+
+  /**
+   * Sync notes from Pipedrive for a specific lead
+   * Fetches notes by lead_id (for Leads Inbox) and saves to lead_notes table
+   */
+  private async syncNotesForLead(
+    connectionId: string,
+    leadId: string,
+    pipedriveLeadId: string // Pipedrive Leads Inbox UUID
+  ): Promise<number> {
+    let syncedCount = 0;
+
+    try {
+      // Fetch notes from Pipedrive for this lead (using lead_id for Leads Inbox)
+      const notes = await pipedriveRateLimiter.execute(() =>
+        pipedriveProvider.getNotes(connectionId, {
+          leadId: pipedriveLeadId, // Use lead_id instead of person_id
+          limit: 100,
+        })
+      );
+
+      if (!notes || notes.length === 0) {
+        return 0;
+      }
+
+      // Get existing note IDs for this lead to avoid duplicates
+      const existingNotes = await leadsRepository.getNotes(leadId);
+      const existingPipedriveNoteIds = new Set(
+        existingNotes
+          .filter(n => n.pipedriveNoteId)
+          .map(n => n.pipedriveNoteId)
+      );
+
+      // Save each note that doesn't already exist
+      for (const note of notes) {
+        if (!note.externalId || !note.content) continue;
+
+        const pipedriveNoteId = parseInt(note.externalId);
+
+        // Skip if already synced
+        if (existingPipedriveNoteIds.has(pipedriveNoteId)) {
+          continue;
+        }
+
+        // Add the note with Pipedrive ID
+        await leadsRepository.addNote(
+          leadId,
+          note.content,
+          undefined, // No userId - system sync
+          pipedriveNoteId
+        );
+
+        syncedCount++;
+      }
+
+      if (syncedCount > 0) {
+        console.log(`[PipedriveSyncNotes] Synced ${syncedCount} notes for lead ${leadId}`);
+      }
+
+      return syncedCount;
+    } catch (error) {
+      console.error(`[PipedriveSyncNotes] Error syncing notes for lead ${leadId}:`, error);
+      throw error;
     }
   }
 

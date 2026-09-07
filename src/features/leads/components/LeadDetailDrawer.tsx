@@ -21,6 +21,8 @@ import {
   Loader2,
   Send,
   Pencil,
+  MoreHorizontal,
+  Trash2,
 } from 'lucide-react';
 
 import {
@@ -34,8 +36,14 @@ import { Badge } from '@/shared/components/ui/badge';
 import { Textarea } from '@/shared/components/ui/textarea';
 import { Separator } from '@/shared/components/ui/separator';
 import { ScrollArea } from '@/shared/components/ui/scroll-area';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/shared/components/ui/dropdown-menu';
 
-import { getLead, getLeadNotes, addLeadNote } from '../actions';
+import { getLead, getLeadNotes, addLeadNote, deleteLeadNote, updateLeadNote } from '../actions';
 import { getPipedriveCompanyDomain } from '@/features/pipedrive/actions';
 import { EditLeadDialog } from './EditLeadDialog';
 import type { Lead, LeadNote, LeadStatus } from '../types';
@@ -118,6 +126,9 @@ export function LeadDetailDrawer({
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [pipedriveCompanyDomain, setPipedriveCompanyDomain] = useState<string | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // ----------------------------------------
   // EFFECTS
@@ -203,6 +214,57 @@ export function LeadDetailDrawer({
       toast.error('Failed to add note');
     } finally {
       setIsAddingNote(false);
+    }
+  };
+
+  const handleDeleteNote = async (noteId: string) => {
+    if (!leadId) return;
+
+    try {
+      const result = await deleteLeadNote(noteId, leadId);
+      if (result.success) {
+        setNotes((prev) => prev.filter((n) => n.id !== noteId));
+        toast.success('Note deleted');
+      } else {
+        toast.error(result.error || 'Failed to delete note');
+      }
+    } catch (error) {
+      console.error('Delete note error:', error);
+      toast.error('Failed to delete note');
+    }
+  };
+
+  const handleStartEdit = (note: LeadNote) => {
+    setEditingNoteId(note.id);
+    setEditingContent(note.content);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingNoteId(null);
+    setEditingContent('');
+  };
+
+  const handleSaveEdit = async () => {
+    if (!leadId || !editingNoteId || !editingContent.trim()) return;
+
+    setIsSavingEdit(true);
+    try {
+      const result = await updateLeadNote(editingNoteId, leadId, editingContent.trim());
+      if (result.success && result.data) {
+        setNotes((prev) =>
+          prev.map((n) => (n.id === editingNoteId ? result.data! : n))
+        );
+        setEditingNoteId(null);
+        setEditingContent('');
+        toast.success('Note updated');
+      } else {
+        toast.error(result.error || 'Failed to update note');
+      }
+    } catch (error) {
+      console.error('Update note error:', error);
+      toast.error('Failed to update note');
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -484,28 +546,97 @@ export function LeadDetailDrawer({
                   </Button>
                 </div>
 
-                {/* Notes List */}
+                {/* Notes List with Scrollbar */}
                 {notes.length > 0 ? (
-                  <div className="space-y-3">
-                    {notes.map((note) => (
-                      <div
-                        key={note.id}
-                        className="rounded-lg border bg-muted/50 p-3"
-                      >
-                        <p className="text-sm">{note.content}</p>
-                        <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-                          <span>{note.createdByName || 'System'}</span>
-                          <span>•</span>
-                          <span>{formatDateTime(note.createdAt)}</span>
-                          {note.pipedriveNoteId && (
+                  <div className="h-[280px] w-full overflow-y-auto rounded-md border p-2">
+                    <div className="space-y-3">
+                      {notes.map((note) => (
+                        <div
+                          key={note.id}
+                          className="group relative rounded-lg border bg-muted/50 p-3"
+                        >
+                          {editingNoteId === note.id ? (
+                            // Edit Mode
+                            <div className="space-y-2">
+                              <Textarea
+                                value={editingContent}
+                                onChange={(e) => setEditingContent(e.target.value)}
+                                rows={3}
+                                className="w-full"
+                                autoFocus
+                              />
+                              <div className="flex gap-2 justify-end">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={handleCancelEdit}
+                                  disabled={isSavingEdit}
+                                >
+                                  Cancel
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  onClick={handleSaveEdit}
+                                  disabled={!editingContent.trim() || isSavingEdit}
+                                >
+                                  {isSavingEdit ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    'Save'
+                                  )}
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            // View Mode
                             <>
-                              <span>•</span>
-                              <span>From Pipedrive</span>
+                              {/* Dropdown Menu */}
+                              <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6"
+                                    >
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                      onClick={() => handleStartEdit(note)}
+                                    >
+                                      <Pencil className="mr-2 h-4 w-4" />
+                                      Edit
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => handleDeleteNote(note.id)}
+                                      className="text-destructive focus:text-destructive"
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+
+                              <p className="text-sm pr-8">{note.content}</p>
+                              <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                                <span>{note.createdByName || 'System'}</span>
+                                <span>•</span>
+                                <span>{formatDateTime(note.createdAt)}</span>
+                                {note.pipedriveNoteId && (
+                                  <>
+                                    <span>•</span>
+                                    <span>From Pipedrive</span>
+                                  </>
+                                )}
+                              </div>
                             </>
                           )}
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">
