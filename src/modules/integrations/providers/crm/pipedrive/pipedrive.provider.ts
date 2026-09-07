@@ -705,6 +705,7 @@ export class PipedriveProvider implements ICrmProvider {
       title: deal.title,
       value: deal.value,
       currency: deal.currency || 'USD',
+      status: deal.status || 'open', // open, won, lost
       person_id: deal.contactExternalId ? parseInt(deal.contactExternalId) : undefined,
       org_id: deal.organizationExternalId ? parseInt(deal.organizationExternalId) : undefined,
       pipeline_id: deal.pipelineId ? parseInt(deal.pipelineId) : undefined,
@@ -1384,6 +1385,34 @@ export class PipedriveProvider implements ICrmProvider {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to update lead',
+      };
+    }
+  }
+
+  /**
+   * Delete (archive) a lead from Pipedrive Leads Inbox
+   * Called after converting a lead to deal
+   */
+  async deleteLead(connectionId: string, leadId: string): Promise<{ success: boolean; error?: string }> {
+    const tokenInfo = await this.getAccessToken(connectionId);
+    if (!tokenInfo) {
+      throw new Error(PIPEDRIVE_ERRORS.NOT_CONNECTED);
+    }
+
+    try {
+      await this.apiRequest(
+        tokenInfo.environment,
+        tokenInfo.accessToken,
+        `leads/${leadId}`,
+        'DELETE'
+      );
+
+      return { success: true };
+    } catch (error) {
+      console.error('Failed to delete lead from Pipedrive:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to delete lead',
       };
     }
   }

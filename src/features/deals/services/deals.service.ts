@@ -5,6 +5,9 @@
  */
 
 import { dealsRepository } from '../repositories/deals.repository';
+import { pipedrivePushService } from '@/features/pipedrive/services/pipedrive-push.service';
+import { customerRepository } from '@/features/customers/repositories/customer.repository';
+import { leadsRepository } from '@/features/leads/repositories/leads.repository';
 import type {
   Deal,
   DealNote,
@@ -90,9 +93,24 @@ class DealsService {
 
   /**
    * Mark deal as won
+   * Updates local DB, creates customer from lead (if exists), and syncs to Pipedrive
+   *
+   * Workflow:
+   * 1. Mark deal as won
+   * 2. If deal has a linked lead, create customer from lead info
+   * 3. Link deal to customer
+   * 4. Mark lead as fully converted (to customer)
+   * 5. Sync to Pipedrive
    */
   async markAsWon(id: string, userId?: string): Promise<Deal> {
-    return dealsRepository.update(
+    // Get the deal first to check if it has a lead
+    const existingDeal = await dealsRepository.getById(id);
+    if (!existingDeal) {
+      throw new Error('Deal not found');
+    }
+
+    // Update deal status to won
+    let deal = await dealsRepository.update(
       id,
       {
         status: 'won',
@@ -101,13 +119,82 @@ class DealsService {
       },
       userId
     );
+
+    // If deal has a linked lead and no customer yet, create customer from lead
+    if (existingDeal.leadId && !existingDeal.customerId) {
+      try {
+        const lead = await leadsRepository.getById(existingDeal.leadId);
+        if (lead) {
+          // Generate customer code
+          const customerCode = await customerRepository.getNextCustomerCode();
+
+          // Create customer from lead info
+          const customer = await customerRepository.create(
+            {
+              customerCode,
+              name: lead.company || lead.name,
+              email: lead.email || undefined,
+              phone: lead.phone || undefined,
+              channel: 'oem', // Default channel - can be customized
+              address1: lead.addressStreet || undefined,
+              city: lead.addressCity || undefined,
+              state: lead.addressState || undefined,
+              zip: lead.addressPostalCode || undefined,
+              country: lead.addressCountry || 'US',
+              status: 'active',
+            },
+            userId
+          );
+
+          console.log(`[DealsService] Created customer ${customer.id} from lead ${lead.id}`);
+
+          // Link deal to customer
+          deal = await dealsRepository.update(
+            id,
+            { customerId: customer.id },
+            userId
+          );
+
+          // Mark lead as fully converted (to customer)
+          await leadsRepository.markAsConverted(lead.id, customer.id, userId);
+          console.log(`[DealsService] Lead ${lead.id} marked as converted to customer ${customer.id}`);
+
+          // Sync customer creation to Pipedrive (async, non-blocking)
+          pipedrivePushService.convertLeadInPipedrive(lead.id, {
+            name: lead.name,
+            company: lead.company,
+            email: lead.email,
+            phone: lead.phone,
+            dealTitle: lead.dealTitle,
+            dealValue: lead.dealValue,
+            pipedriveLeadId: lead.pipedriveLeadId,
+            pipedriveDealId: lead.pipedriveDealId || deal.pipedriveDealId,
+            pipedrivePersonId: lead.pipedrivePersonId,
+            pipedriveOrgId: lead.pipedriveOrgId,
+          }).catch((error) => {
+            console.error('[DealsService] Failed to sync lead conversion to Pipedrive:', error);
+          });
+        }
+      } catch (customerError) {
+        // Log but don't fail the deal won - customer creation is secondary
+        console.error('[DealsService] Failed to create customer from lead:', customerError);
+      }
+    }
+
+    // Push status change to Pipedrive (async, don't block)
+    pipedrivePushService.pushDealStatus(id, 'won').catch((error) => {
+      console.error('[DealsService] Failed to push deal won status to Pipedrive:', error);
+    });
+
+    return deal;
   }
 
   /**
    * Mark deal as lost
+   * Updates local DB and syncs to Pipedrive
    */
   async markAsLost(id: string, lostReason?: string, userId?: string): Promise<Deal> {
-    return dealsRepository.update(
+    const deal = await dealsRepository.update(
       id,
       {
         status: 'lost',
@@ -117,13 +204,21 @@ class DealsService {
       },
       userId
     );
+
+    // Push status change to Pipedrive (async, don't block)
+    pipedrivePushService.pushDealStatus(id, 'lost', lostReason).catch((error) => {
+      console.error('[DealsService] Failed to push deal lost status to Pipedrive:', error);
+    });
+
+    return deal;
   }
 
   /**
    * Reopen a deal
+   * Updates local DB and syncs to Pipedrive
    */
   async reopenDeal(id: string, userId?: string): Promise<Deal> {
-    return dealsRepository.update(
+    const deal = await dealsRepository.update(
       id,
       {
         status: 'open',
@@ -134,6 +229,13 @@ class DealsService {
       },
       userId
     );
+
+    // Push status change to Pipedrive (async, don't block)
+    pipedrivePushService.pushDealStatus(id, 'open').catch((error) => {
+      console.error('[DealsService] Failed to push deal reopen status to Pipedrive:', error);
+    });
+
+    return deal;
   }
 
   /**

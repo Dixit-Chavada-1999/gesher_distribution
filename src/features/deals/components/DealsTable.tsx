@@ -323,19 +323,19 @@ export function DealsTable({
 
           return (
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                 <Button variant="ghost" size="icon" className="h-8 w-8">
                   <MoreHorizontal className="h-4 w-4" />
                   <span className="sr-only">Open menu</span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleView(deal)}>
+              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleView(deal); }}>
                   <Eye className="mr-2 h-4 w-4" />
                   View Details
                 </DropdownMenuItem>
                 {hasPipedrive && pipedriveCompanyDomain && (
-                  <DropdownMenuItem onClick={() => handleViewInPipedrive(deal)}>
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleViewInPipedrive(deal); }}>
                     <ExternalLink className="mr-2 h-4 w-4" />
                     View in Pipedrive
                   </DropdownMenuItem>
@@ -344,14 +344,14 @@ export function DealsTable({
                 {isOpen && (
                   <>
                     <DropdownMenuItem
-                      onClick={() => handleMarkAsWon(deal)}
+                      onClick={(e) => { e.stopPropagation(); handleMarkAsWon(deal); }}
                       disabled={isUpdating}
                     >
                       <CheckCircle className="mr-2 h-4 w-4 text-emerald-600" />
                       Mark as Won
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                      onClick={() => handleMarkAsLost(deal)}
+                      onClick={(e) => { e.stopPropagation(); handleMarkAsLost(deal); }}
                       disabled={isUpdating}
                     >
                       <XCircle className="mr-2 h-4 w-4 text-red-600" />
@@ -361,7 +361,7 @@ export function DealsTable({
                 )}
                 {isClosed && (
                   <DropdownMenuItem
-                    onClick={() => handleReopen(deal)}
+                    onClick={(e) => { e.stopPropagation(); handleReopen(deal); }}
                     disabled={isUpdating}
                   >
                     <RotateCcw className="mr-2 h-4 w-4" />
@@ -370,7 +370,7 @@ export function DealsTable({
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={() => handleDeleteClick(deal)}
+                  onClick={(e) => { e.stopPropagation(); handleDeleteClick(deal); }}
                   className="text-destructive focus:text-destructive"
                 >
                   <Trash2 className="mr-2 h-4 w-4" />

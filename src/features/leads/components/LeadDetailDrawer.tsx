@@ -17,7 +17,7 @@ import {
   Calendar,
   Tag,
   ExternalLink,
-  UserPlus,
+  Handshake,
   Loader2,
   Send,
   Pencil,
@@ -69,7 +69,8 @@ const statusConfig: Record<LeadStatus, { label: string; color: string }> = {
   qualified: { label: 'Qualified', color: 'bg-green-500' },
   proposal: { label: 'Proposal', color: 'bg-purple-500' },
   negotiation: { label: 'Negotiation', color: 'bg-orange-500' },
-  converted: { label: 'Converted', color: 'bg-emerald-500' },
+  deal: { label: 'Deal', color: 'bg-cyan-500' },
+  converted: { label: 'Customer', color: 'bg-emerald-500' },
   lost: { label: 'Lost', color: 'bg-red-500' },
 };
 
@@ -306,7 +307,7 @@ export function LeadDetailDrawer({
   // ----------------------------------------
 
   const statusInfo = lead ? statusConfig[lead.status] : null;
-  const isConverted = lead?.status === 'converted';
+  const isConvertedOrDeal = lead?.status === 'converted' || lead?.status === 'deal';
   const hasPipedrive = !!(lead?.pipedriveLeadId || lead?.pipedrivePersonId || lead?.pipedriveDealId);
 
   return (
@@ -649,7 +650,7 @@ export function LeadDetailDrawer({
 
               {/* Actions */}
               <div className="flex flex-col gap-2">
-                {!isConverted && (
+                {!isConvertedOrDeal && (
                   <Button
                     variant="outline"
                     onClick={() => setIsEditDialogOpen(true)}
@@ -659,10 +660,10 @@ export function LeadDetailDrawer({
                     Edit Lead
                   </Button>
                 )}
-                {!isConverted && onConvert && (
+                {!isConvertedOrDeal && onConvert && (
                   <Button onClick={handleConvert} className="w-full">
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    Convert to Customer
+                    <Handshake className="mr-2 h-4 w-4" />
+                    Convert to Deal
                   </Button>
                 )}
                 {hasPipedrive && (

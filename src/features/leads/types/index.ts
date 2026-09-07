@@ -8,7 +8,7 @@
 // ENUMS & CONSTANTS
 // ============================================
 
-export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'proposal' | 'negotiation' | 'converted' | 'lost';
+export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'proposal' | 'negotiation' | 'deal' | 'converted' | 'lost';
 
 export const LEAD_STATUSES: LeadStatus[] = [
   'new',
@@ -16,7 +16,8 @@ export const LEAD_STATUSES: LeadStatus[] = [
   'qualified',
   'proposal',
   'negotiation',
-  'converted',
+  'deal',      // Converted to deal (not customer yet)
+  'converted', // Converted to customer (deal won)
   'lost',
 ];
 
@@ -26,7 +27,8 @@ export const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
   qualified: 'Qualified',
   proposal: 'Proposal',
   negotiation: 'Negotiation',
-  converted: 'Converted',
+  deal: 'Deal',        // Converted to deal, pending won/lost
+  converted: 'Customer', // Converted to customer (deal won)
   lost: 'Lost',
 };
 
@@ -36,6 +38,7 @@ export const LEAD_STATUS_COLORS: Record<LeadStatus, string> = {
   qualified: 'bg-indigo-100 text-indigo-800 border border-indigo-200',
   proposal: 'bg-purple-100 text-purple-800 border border-purple-200',
   negotiation: 'bg-amber-100 text-amber-800 border border-amber-200',
+  deal: 'bg-cyan-100 text-cyan-800 border border-cyan-200',
   converted: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
   lost: 'bg-red-100 text-red-800 border border-red-200',
 };
@@ -133,7 +136,8 @@ export interface Lead {
   notes: string | null;
 
   // Conversion
-  convertedCustomerId: string | null;
+  convertedDealId: string | null;     // ID of deal when converted to deal (before customer)
+  convertedCustomerId: string | null; // ID of customer when deal is won
   convertedAt: Date | null;
 
   // Audit

@@ -744,6 +744,65 @@ class DealsRepository {
       throw new Error('Failed to delete deal note');
     }
   }
+
+  /**
+   * Get a note by Pipedrive Note ID
+   */
+  async getNoteByPipedriveId(pipedriveNoteId: number): Promise<DealNote | null> {
+    const { data, error } = await db
+      .from('deal_notes')
+      .select('*, created_by_user:users!deal_notes_created_by_fkey(first_name, last_name)')
+      .eq('pipedrive_note_id', pipedriveNoteId)
+      .single();
+
+    if (error || !data) {
+      return null;
+    }
+
+    return mapRowToDealNote(data as DealNoteRow);
+  }
+
+  /**
+   * Update note content by Pipedrive Note ID
+   */
+  async updateNoteByPipedriveId(pipedriveNoteId: number, content: string): Promise<DealNote | null> {
+    const { data, error } = await db
+      .from('deal_notes')
+      .update({
+        content,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('pipedrive_note_id', pipedriveNoteId)
+      .select()
+      .single();
+
+    if (error || !data) {
+      console.error('Error updating deal note by pipedrive ID:', error);
+      return null;
+    }
+
+    return mapRowToDealNote(data as DealNoteRow);
+  }
+
+  /**
+   * Delete notes by Pipedrive Note IDs
+   */
+  async deleteNotesByPipedriveIds(pipedriveNoteIds: number[]): Promise<number> {
+    if (pipedriveNoteIds.length === 0) return 0;
+
+    const { data, error } = await db
+      .from('deal_notes')
+      .delete()
+      .in('pipedrive_note_id', pipedriveNoteIds)
+      .select('id');
+
+    if (error) {
+      console.error('Error deleting deal notes by pipedrive IDs:', error);
+      return 0;
+    }
+
+    return data?.length || 0;
+  }
 }
 
 // Export singleton instance

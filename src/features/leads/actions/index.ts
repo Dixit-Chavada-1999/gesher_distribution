@@ -362,12 +362,20 @@ export async function deleteLead(id: string): Promise<ActionResult<void>> {
 // ============================================
 
 /**
- * Convert a lead to a customer
+ * Convert a lead to a deal (NOT customer)
+ * Customer is created only when deal is marked as "won"
+ *
+ * New workflow:
+ * Lead → Convert to Deal (status: open) → Mark as Won → Customer created
+ *
+ * Handles duplicates:
+ * - If lead already has pipedriveDealId, check if a deal exists with that ID
+ * - If yes, link to existing deal instead of creating duplicate
  */
-export async function convertLeadToCustomer(
+export async function convertLeadToDeal(
   id: string,
-  data: ConvertLeadDTO
-): Promise<ActionResult<{ leadId: string; customerId: string; dealId?: string }>> {
+  _data: ConvertLeadDTO
+): Promise<ActionResult<{ leadId: string; dealId: string }>> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -387,63 +395,95 @@ export async function convertLeadToCustomer(
       return { success: false, error: 'Lead not found' };
     }
 
-    if (lead.convertedCustomerId) {
-      return { success: false, error: 'Lead has already been converted' };
+    if (lead.convertedDealId) {
+      return { success: false, error: 'Lead has already been converted to a deal' };
     }
 
-    // Create customer from lead
-    const { data: customer, error: customerError } = await supabase
-      .from('customers')
-      .insert({
-        name: data.customerData?.name || lead.company || lead.name,
-        email: lead.email,
-        phone: lead.phone,
-        status: 'active',
-        channel: data.customerData?.channel || 'dealer',
-        billing_street: lead.addressStreet,
-        billing_city: lead.addressCity,
-        billing_state: lead.addressState,
-        billing_postal_code: lead.addressPostalCode,
-        billing_country: lead.addressCountry,
-        pipedrive_person_id: lead.pipedrivePersonId,
-        pipedrive_org_id: lead.pipedriveOrgId,
-        pipedrive_deal_id: lead.pipedriveDealId,
-        created_by: appUser.id,
-        updated_by: appUser.id,
-      })
-      .select('id')
-      .single();
+    let dealId: string;
 
-    if (customerError) {
-      throw new Error(`Failed to create customer: ${customerError.message}`);
-    }
+    // Check if a deal already exists with this Pipedrive Deal ID (prevents duplicates)
+    if (lead.pipedriveDealId) {
+      const { data: existingDeal } = await supabase
+        .from('deals')
+        .select('id')
+        .eq('pipedrive_deal_id', lead.pipedriveDealId)
+        .is('deleted_at', null)
+        .single();
 
-    // Create deal from lead (if lead has deal info)
-    let dealId: string | undefined;
-    const hasDealInfo = lead.dealTitle || lead.dealValue;
+      if (existingDeal) {
+        // Use existing deal - just link the lead to it
+        dealId = existingDeal.id;
+        console.log('[convertLeadToDeal] Found existing deal with Pipedrive ID:', lead.pipedriveDealId);
 
-    if (hasDealInfo) {
-      const { data: deal, error: dealError } = await supabase
+        // Update the existing deal with lead info
+        await supabase
+          .from('deals')
+          .update({
+            lead_id: id,
+            contact_name: lead.name,
+            contact_email: lead.email,
+            contact_phone: lead.phone,
+            organization_name: lead.company,
+            updated_by: appUser.id,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', dealId);
+      } else {
+        // No existing deal, create new one
+        const { data: newDeal, error: dealError } = await supabase
+          .from('deals')
+          .insert({
+            title: lead.dealTitle || `Deal for ${lead.company || lead.name}`,
+            value: lead.dealValue,
+            currency: lead.dealCurrency || 'USD',
+            status: 'open',
+            pipeline_id: lead.dealPipelineId,
+            pipeline_name: lead.dealPipeline,
+            stage_id: lead.dealStageId,
+            stage_name: lead.dealStage,
+            probability: lead.dealProbability,
+            expected_close_date: lead.expectedCloseDate,
+            contact_name: lead.name,
+            contact_email: lead.email,
+            contact_phone: lead.phone,
+            organization_name: lead.company,
+            lead_id: id,
+            pipedrive_deal_id: lead.pipedriveDealId,
+            pipedrive_person_id: lead.pipedrivePersonId,
+            pipedrive_org_id: lead.pipedriveOrgId,
+            owner_id: appUser.id,
+            created_by: appUser.id,
+            updated_by: appUser.id,
+          })
+          .select('id')
+          .single();
+
+        if (dealError) {
+          throw new Error(`Failed to create deal: ${dealError.message}`);
+        }
+
+        dealId = newDeal.id;
+      }
+    } else {
+      // No Pipedrive Deal ID - create new deal
+      const { data: newDeal, error: dealError } = await supabase
         .from('deals')
         .insert({
           title: lead.dealTitle || `Deal for ${lead.company || lead.name}`,
           value: lead.dealValue,
           currency: lead.dealCurrency || 'USD',
-          status: 'won', // Converting to customer = deal won
+          status: 'open',
           pipeline_id: lead.dealPipelineId,
           pipeline_name: lead.dealPipeline,
           stage_id: lead.dealStageId,
           stage_name: lead.dealStage,
           probability: lead.dealProbability,
           expected_close_date: lead.expectedCloseDate,
-          won_time: new Date().toISOString(),
           contact_name: lead.name,
           contact_email: lead.email,
           contact_phone: lead.phone,
           organization_name: lead.company,
-          customer_id: customer.id,
           lead_id: id,
-          pipedrive_deal_id: lead.pipedriveDealId,
           pipedrive_person_id: lead.pipedrivePersonId,
           pipedrive_org_id: lead.pipedriveOrgId,
           owner_id: appUser.id,
@@ -454,31 +494,77 @@ export async function convertLeadToCustomer(
         .single();
 
       if (dealError) {
-        console.warn('[convertLeadToCustomer] Failed to create deal:', dealError);
-        // Don't fail the whole conversion if deal creation fails
-      } else {
-        dealId = deal?.id;
+        throw new Error(`Failed to create deal: ${dealError.message}`);
       }
+
+      dealId = newDeal.id;
     }
 
-    // Mark lead as converted
-    await leadsRepository.markAsConverted(id, customer.id, appUser.id);
+    // Mark lead as converted to deal (not customer yet)
+    await leadsRepository.markAsConvertedToDeal(id, dealId, appUser.id);
+
+    // Sync to Pipedrive - create deal (status: open) and delete lead from inbox
+    if (lead.pipedriveLeadId || lead.pipedrivePersonId) {
+      pipedrivePushService.convertLeadToDealInPipedrive(id, {
+        name: lead.name,
+        company: lead.company,
+        email: lead.email,
+        phone: lead.phone,
+        dealTitle: lead.dealTitle,
+        dealValue: lead.dealValue,
+        pipedriveLeadId: lead.pipedriveLeadId,
+        pipedriveDealId: lead.pipedriveDealId,
+        pipedrivePersonId: lead.pipedrivePersonId,
+        pipedriveOrgId: lead.pipedriveOrgId,
+      }).then(async (result) => {
+        if (result.success && result.pipedriveDealId) {
+          console.log('[convertLeadToDeal] Synced to Pipedrive, deal ID:', result.pipedriveDealId);
+          // Update local deal with Pipedrive deal ID if not already set
+          await supabase.from('deals')
+            .update({ pipedrive_deal_id: result.pipedriveDealId })
+            .eq('id', dealId)
+            .is('pipedrive_deal_id', null); // Only update if not already set
+        } else {
+          console.warn('[convertLeadToDeal] Pipedrive sync warning:', result.error);
+        }
+      }).catch((error) => {
+        console.error('[convertLeadToDeal] Pipedrive sync error:', error);
+      });
+    }
 
     revalidatePath('/leads');
-    revalidatePath('/customers');
     revalidatePath('/deals');
 
     return {
       success: true,
-      data: { leadId: id, customerId: customer.id, dealId },
+      data: { leadId: id, dealId },
     };
   } catch (error) {
-    console.error('[convertLeadToCustomer] Error:', error);
+    console.error('[convertLeadToDeal] Error:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to convert lead',
+      error: error instanceof Error ? error.message : 'Failed to convert lead to deal',
     };
   }
+}
+
+/**
+ * @deprecated Use convertLeadToDeal instead
+ * This function is kept for backward compatibility
+ */
+export async function convertLeadToCustomer(
+  id: string,
+  data: ConvertLeadDTO
+): Promise<ActionResult<{ leadId: string; customerId?: string; dealId?: string }>> {
+  // Redirect to new function
+  const result = await convertLeadToDeal(id, data);
+  if (result.success && result.data) {
+    return {
+      success: true,
+      data: { leadId: result.data.leadId, dealId: result.data.dealId },
+    };
+  }
+  return result as ActionResult<{ leadId: string; customerId?: string; dealId?: string }>;
 }
 
 // ============================================

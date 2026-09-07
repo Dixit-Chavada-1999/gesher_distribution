@@ -13,7 +13,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import {
   MoreHorizontal,
   Eye,
-  UserPlus,
+  Handshake,
   Trash2,
   ExternalLink,
 } from 'lucide-react';
@@ -66,7 +66,8 @@ const statusConfig: Record<LeadStatus, { label: string; variant: 'default' | 'se
   qualified: { label: 'Qualified', variant: 'default' },
   proposal: { label: 'Proposal', variant: 'default' },
   negotiation: { label: 'Negotiation', variant: 'secondary' },
-  converted: { label: 'Converted', variant: 'default' },
+  deal: { label: 'Deal', variant: 'default' },
+  converted: { label: 'Customer', variant: 'default' },
   lost: { label: 'Lost', variant: 'destructive' },
 };
 
@@ -285,7 +286,7 @@ export function LeadsTable({
         header: '',
         cell: ({ row }) => {
           const lead = row.original;
-          const isConverted = lead.status === 'converted';
+          const isConvertedOrDeal = lead.status === 'converted' || lead.status === 'deal';
           const hasPipedrive = !!(lead.pipedriveLeadId || lead.pipedrivePersonId || lead.pipedriveDealId);
 
           return (
@@ -301,10 +302,10 @@ export function LeadsTable({
                   <Eye className="mr-2 h-4 w-4" />
                   View Details
                 </DropdownMenuItem>
-                {!isConverted && onConvert && (
+                {!isConvertedOrDeal && onConvert && (
                   <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleConvert(lead); }}>
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    Convert to Customer
+                    <Handshake className="mr-2 h-4 w-4" />
+                    Convert to Deal
                   </DropdownMenuItem>
                 )}
                 {hasPipedrive && pipedriveCompanyDomain && (

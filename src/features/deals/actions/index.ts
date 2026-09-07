@@ -9,6 +9,8 @@
 import { revalidatePath } from 'next/cache';
 import { getCurrentUser } from '@/shared/lib/auth/check-permission';
 import { dealsService } from '../services/deals.service';
+import { pipedrivePushService } from '@/features/pipedrive/services/pipedrive-push.service';
+import { dealsRepository } from '../repositories/deals.repository';
 import type {
   Deal,
   DealNote,
@@ -268,6 +270,7 @@ export async function getDealNotes(dealId: string): Promise<ActionResult<DealNot
 
 /**
  * Add a note to a deal
+ * Saves locally and pushes to Pipedrive if connected
  */
 export async function addDealNote(
   dealId: string,
@@ -275,10 +278,33 @@ export async function addDealNote(
 ): Promise<ActionResult<DealNote>> {
   try {
     const user = await getCurrentUser();
+
+    // 1. Save note locally first
     const note = await dealsService.addNote(
       { dealId, content },
       user?.id
     );
+
+    // 2. Push to Pipedrive if deal is linked (non-blocking)
+    try {
+      const deal = await dealsRepository.getById(dealId);
+      if (deal?.pipedriveDealId) {
+        const pushResult = await pipedrivePushService.pushNote(content, {
+          dealId: deal.pipedriveDealId,
+          personId: deal.pipedrivePersonId || undefined,
+          orgId: deal.pipedriveOrgId || undefined,
+        });
+
+        if (pushResult.success) {
+          console.log(`[addDealNote] Note synced to Pipedrive: ${pushResult.pipedriveNoteId}`);
+        } else {
+          console.warn(`[addDealNote] Pipedrive push warning: ${pushResult.error}`);
+        }
+      }
+    } catch (pipedriveError) {
+      // Log but don't fail - note is saved locally
+      console.warn('[addDealNote] Pipedrive push failed (non-blocking):', pipedriveError);
+    }
 
     revalidatePath(`/deals/${dealId}`);
     return { success: true, data: note };

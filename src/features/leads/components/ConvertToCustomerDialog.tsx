@@ -3,12 +3,16 @@
 /**
  * ConvertToCustomerDialog Component
  *
- * Dialog for converting a lead to a customer.
+ * Dialog for converting a lead to a deal.
+ * Customer is only created when the deal is marked as "won".
+ *
+ * Workflow:
+ * Lead → Convert to Deal (status: open) → Mark as Won → Customer created
  */
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Loader2, UserPlus, Handshake, DollarSign } from 'lucide-react';
+import { Loader2, Handshake, DollarSign } from 'lucide-react';
 
 import {
   Dialog,
@@ -19,18 +23,9 @@ import {
   DialogTitle,
 } from '@/shared/components/ui/dialog';
 import { Button } from '@/shared/components/ui/button';
-import { Input } from '@/shared/components/ui/input';
-import { Label } from '@/shared/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/shared/components/ui/select';
 import { Badge } from '@/shared/components/ui/badge';
 
-import { convertLeadToCustomer } from '../actions';
+import { convertLeadToDeal } from '../actions';
 import type { Lead, LeadListItem } from '../types';
 
 // ============================================
@@ -54,7 +49,7 @@ interface ConvertToCustomerDialogProps {
   lead: Lead | LeadListItem | null;
   open: boolean;
   onClose: () => void;
-  onSuccess?: (customerId: string) => void;
+  onSuccess?: (dealId: string) => void;
 }
 
 // ============================================
@@ -71,8 +66,6 @@ export function ConvertToCustomerDialog({
   // STATE
   // ----------------------------------------
 
-  const [customerName, setCustomerName] = useState('');
-  const [channel, setChannel] = useState<'oem' | 'dealer'>('dealer');
   const [isConverting, setIsConverting] = useState(false);
 
   // ----------------------------------------
@@ -83,8 +76,6 @@ export function ConvertToCustomerDialog({
   const handleOpenChange = (isOpen: boolean) => {
     if (!isOpen) {
       onClose();
-      setCustomerName('');
-      setChannel('dealer');
     }
   };
 
@@ -97,18 +88,11 @@ export function ConvertToCustomerDialog({
 
     setIsConverting(true);
     try {
-      const result = await convertLeadToCustomer(lead.id, {
-        createCustomer: true,
-        customerData: {
-          name: customerName.trim() || lead.company || lead.name,
-          channel,
-        },
-      });
+      const result = await convertLeadToDeal(lead.id, {});
 
       if (result.success && result.data) {
-        const dealMessage = result.data.dealId ? ' and deal created' : '';
-        toast.success(`Lead converted to customer${dealMessage} successfully`);
-        onSuccess?.(result.data.customerId);
+        toast.success('Lead converted to deal successfully');
+        onSuccess?.(result.data.dealId);
         handleOpenChange(false);
       } else {
         toast.error(result.error || 'Failed to convert lead');
@@ -127,20 +111,18 @@ export function ConvertToCustomerDialog({
 
   if (!lead) return null;
 
-  const defaultName = lead.company || lead.name;
-
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <UserPlus className="h-5 w-5" />
-            Convert Lead to Customer
+            <Handshake className="h-5 w-5" />
+            Convert Lead to Deal
           </DialogTitle>
           <DialogDescription>
-            Create a new customer from this lead. The lead will be marked as
-            converted and linked to the new customer. If the lead has deal
-            information, a won deal will also be created.
+            Convert this lead to a deal. The lead will be moved from the Leads
+            Inbox to the Deals pipeline. Customer will only be created when the
+            deal is marked as &quot;Won&quot;.
           </DialogDescription>
         </DialogHeader>
 
@@ -158,17 +140,17 @@ export function ConvertToCustomerDialog({
 
           {/* Deal Info - shown if lead has deal value */}
           {'dealValue' in lead && (lead.dealValue || lead.dealTitle) && (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
               <div className="flex items-center gap-2 mb-2">
-                <Handshake className="h-4 w-4 text-emerald-600" />
-                <span className="font-medium text-emerald-800">Deal will be created</span>
-                <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">Won</Badge>
+                <Handshake className="h-4 w-4 text-blue-600" />
+                <span className="font-medium text-blue-800">Deal will be created</span>
+                <Badge className="bg-blue-100 text-blue-800 border-blue-200">Open</Badge>
               </div>
               {'dealTitle' in lead && lead.dealTitle && (
-                <p className="text-sm text-emerald-700">{lead.dealTitle}</p>
+                <p className="text-sm text-blue-700">{lead.dealTitle}</p>
               )}
               {'dealValue' in lead && lead.dealValue && (
-                <p className="text-lg font-bold text-emerald-700 flex items-center gap-1">
+                <p className="text-lg font-bold text-blue-700 flex items-center gap-1">
                   <DollarSign className="h-4 w-4" />
                   {formatCurrency(lead.dealValue, 'dealCurrency' in lead ? lead.dealCurrency || 'USD' : 'USD')}
                 </p>
@@ -176,32 +158,11 @@ export function ConvertToCustomerDialog({
             </div>
           )}
 
-          {/* Customer Name */}
-          <div className="space-y-2">
-            <Label htmlFor="customerName">Customer Name</Label>
-            <Input
-              id="customerName"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              placeholder={defaultName}
-            />
-            <p className="text-xs text-muted-foreground">
-              Leave blank to use &quot;{defaultName}&quot;
+          {/* Workflow Info */}
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+            <p className="text-sm text-amber-800">
+              <strong>Workflow:</strong> Lead → Deal (Open) → Mark as Won → Customer created
             </p>
-          </div>
-
-          {/* Channel */}
-          <div className="space-y-2">
-            <Label htmlFor="channel">Customer Channel</Label>
-            <Select value={channel} onValueChange={(v) => setChannel(v as 'oem' | 'dealer')}>
-              <SelectTrigger id="channel">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="dealer">Dealer</SelectItem>
-                <SelectItem value="oem">OEM</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </div>
 
@@ -217,8 +178,8 @@ export function ConvertToCustomerDialog({
               </>
             ) : (
               <>
-                <UserPlus className="mr-2 h-4 w-4" />
-                Convert to Customer
+                <Handshake className="mr-2 h-4 w-4" />
+                Convert to Deal
               </>
             )}
           </Button>

@@ -443,6 +443,306 @@ class PipedrivePushService {
   }
 
   // ============================================
+  // LEAD CONVERSION (PUSH TO PIPEDRIVE)
+  // ============================================
+
+  /**
+   * Convert a lead to customer/deal in Pipedrive
+   * Called when lead is converted in Gesher
+   *
+   * If lead has pipedriveDealId → Update deal status to 'won'
+   * If lead only has pipedriveLeadId → Create deal with status 'won'
+   */
+  async convertLeadInPipedrive(
+    leadId: string,
+    leadData: {
+      name: string;
+      company?: string | null;
+      email?: string | null;
+      phone?: string | null;
+      dealTitle?: string | null;
+      dealValue?: number | null;
+      pipedriveLeadId?: string | null;
+      pipedriveDealId?: number | null;
+      pipedrivePersonId?: number | null;
+      pipedriveOrgId?: number | null;
+    }
+  ): Promise<{
+    success: boolean;
+    pipedriveDealId?: number;
+    error?: string;
+  }> {
+    const connectionId = await this.getConnectionId();
+    if (!connectionId) {
+      return { success: false, error: 'Pipedrive not connected' };
+    }
+
+    try {
+      let pipedriveDealId = leadData.pipedriveDealId;
+
+      // Case 1: Lead already has a deal in Pipedrive - just update status to won
+      if (pipedriveDealId) {
+        await pipedriveRateLimiter.execute(() =>
+          retryWithBackoff(
+            async () => {
+              await pipedriveProvider.updateDeal(connectionId, pipedriveDealId!.toString(), {
+                status: 'won',
+              });
+            },
+            { shouldRetry: isRetryableError }
+          )
+        );
+
+        // Add conversion note
+        const conversionNote = `🎉 Lead converted to customer in Gesher\nCustomer: ${leadData.company || leadData.name}`;
+        await this.pushNote(conversionNote, { dealId: pipedriveDealId });
+
+        await this.logSync('push', 'lead_convert', pipedriveDealId, 'success', 'Deal marked as won');
+
+        return { success: true, pipedriveDealId };
+      }
+
+      // Case 2: Lead is from Leads Inbox (no deal yet) - create a won deal and delete lead
+      if (leadData.pipedriveLeadId || leadData.pipedrivePersonId) {
+        const dealResult = await pipedriveRateLimiter.execute(() =>
+          retryWithBackoff(
+            async () => {
+              return pipedriveProvider.createDeal(connectionId, {
+                title: leadData.dealTitle || `Deal with ${leadData.company || leadData.name}`,
+                value: leadData.dealValue || 0,
+                currency: 'USD',
+                status: 'won',
+                contactExternalId: leadData.pipedrivePersonId?.toString(),
+                organizationExternalId: leadData.pipedriveOrgId?.toString(),
+              });
+            },
+            { shouldRetry: isRetryableError }
+          )
+        );
+
+        pipedriveDealId = dealResult.externalId ? parseInt(dealResult.externalId) : undefined;
+
+        // Delete the lead from Leads Inbox after creating the deal
+        if (leadData.pipedriveLeadId) {
+          try {
+            await pipedriveRateLimiter.execute(() =>
+              retryWithBackoff(
+                async () => {
+                  await pipedriveProvider.deleteLead(connectionId, leadData.pipedriveLeadId!);
+                },
+                { shouldRetry: isRetryableError }
+              )
+            );
+            console.log(`[PipedrivePush] Deleted lead ${leadData.pipedriveLeadId} from Leads Inbox`);
+          } catch (deleteError) {
+            // Log but don't fail - deal was created successfully
+            console.warn('[PipedrivePush] Could not delete lead from Inbox:', deleteError);
+          }
+        }
+
+        if (pipedriveDealId) {
+          // Add conversion note
+          const conversionNote = `🎉 Lead converted to customer in Gesher\nCustomer: ${leadData.company || leadData.name}`;
+          await this.pushNote(conversionNote, { dealId: pipedriveDealId });
+        }
+
+        await this.logSync('push', 'lead_convert', leadId, 'success', `Created won deal ${pipedriveDealId}`);
+
+        return { success: true, pipedriveDealId };
+      }
+
+      return { success: false, error: 'Lead not linked to Pipedrive' };
+    } catch (error) {
+      console.error('[PipedrivePush] Error converting lead:', error);
+      await this.logSync('push', 'lead_convert', leadId, 'failed', error instanceof Error ? error.message : 'Unknown error');
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to convert lead in Pipedrive',
+      };
+    }
+  }
+
+  /**
+   * Convert a lead to a deal (NOT customer) in Pipedrive
+   * Creates deal with status 'open' and deletes the lead from Leads Inbox
+   *
+   * New workflow:
+   * Lead → Convert to Deal (status: open) → Mark as Won → Customer created
+   */
+  async convertLeadToDealInPipedrive(
+    leadId: string,
+    leadData: {
+      name: string;
+      company?: string | null;
+      email?: string | null;
+      phone?: string | null;
+      dealTitle?: string | null;
+      dealValue?: number | null;
+      pipedriveLeadId?: string | null;
+      pipedriveDealId?: number | null;
+      pipedrivePersonId?: number | null;
+      pipedriveOrgId?: number | null;
+    }
+  ): Promise<{
+    success: boolean;
+    pipedriveDealId?: number;
+    error?: string;
+  }> {
+    const connectionId = await this.getConnectionId();
+    if (!connectionId) {
+      return { success: false, error: 'Pipedrive not connected' };
+    }
+
+    try {
+      let pipedriveDealId = leadData.pipedriveDealId;
+
+      // Case 1: Lead already has a deal in Pipedrive - just ensure it's open
+      if (pipedriveDealId) {
+        await pipedriveRateLimiter.execute(() =>
+          retryWithBackoff(
+            async () => {
+              await pipedriveProvider.updateDeal(connectionId, pipedriveDealId!.toString(), {
+                status: 'open', // Keep deal OPEN, not won
+              });
+            },
+            { shouldRetry: isRetryableError }
+          )
+        );
+
+        // Add conversion note
+        const conversionNote = `📋 Lead converted to Deal in Gesher\nDeal: ${leadData.dealTitle || leadData.company || leadData.name}`;
+        await this.pushNote(conversionNote, { dealId: pipedriveDealId });
+
+        await this.logSync('push', 'lead_to_deal', pipedriveDealId, 'success', 'Deal status confirmed as open');
+
+        return { success: true, pipedriveDealId };
+      }
+
+      // Case 2: Lead is from Leads Inbox (no deal yet) - create an OPEN deal and delete lead
+      if (leadData.pipedriveLeadId || leadData.pipedrivePersonId) {
+        const dealResult = await pipedriveRateLimiter.execute(() =>
+          retryWithBackoff(
+            async () => {
+              return pipedriveProvider.createDeal(connectionId, {
+                title: leadData.dealTitle || `Deal with ${leadData.company || leadData.name}`,
+                value: leadData.dealValue || 0,
+                currency: 'USD',
+                status: 'open', // Create as OPEN, not won
+                contactExternalId: leadData.pipedrivePersonId?.toString(),
+                organizationExternalId: leadData.pipedriveOrgId?.toString(),
+              });
+            },
+            { shouldRetry: isRetryableError }
+          )
+        );
+
+        pipedriveDealId = dealResult.externalId ? parseInt(dealResult.externalId) : undefined;
+
+        // Delete the lead from Leads Inbox after creating the deal
+        if (leadData.pipedriveLeadId) {
+          try {
+            await pipedriveRateLimiter.execute(() =>
+              retryWithBackoff(
+                async () => {
+                  await pipedriveProvider.deleteLead(connectionId, leadData.pipedriveLeadId!);
+                },
+                { shouldRetry: isRetryableError }
+              )
+            );
+            console.log(`[PipedrivePush] Deleted lead ${leadData.pipedriveLeadId} from Leads Inbox`);
+          } catch (deleteError) {
+            // Log but don't fail - deal was created successfully
+            console.warn('[PipedrivePush] Could not delete lead from Inbox:', deleteError);
+          }
+        }
+
+        if (pipedriveDealId) {
+          // Add conversion note
+          const conversionNote = `📋 Lead converted to Deal in Gesher\nDeal: ${leadData.dealTitle || leadData.company || leadData.name}`;
+          await this.pushNote(conversionNote, { dealId: pipedriveDealId });
+        }
+
+        await this.logSync('push', 'lead_to_deal', leadId, 'success', `Created open deal ${pipedriveDealId}`);
+
+        return { success: true, pipedriveDealId };
+      }
+
+      return { success: false, error: 'Lead not linked to Pipedrive' };
+    } catch (error) {
+      console.error('[PipedrivePush] Error converting lead to deal:', error);
+      await this.logSync('push', 'lead_to_deal', leadId, 'failed', error instanceof Error ? error.message : 'Unknown error');
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to convert lead to deal in Pipedrive',
+      };
+    }
+  }
+
+  // ============================================
+  // DEAL STATUS SYNC
+  // ============================================
+
+  /**
+   * Push deal status change to Pipedrive
+   * Called when deal is marked as won/lost in Gesher
+   */
+  async pushDealStatus(
+    dealId: string,
+    status: 'won' | 'lost' | 'open',
+    lostReason?: string
+  ): Promise<PushDealUpdateResult> {
+    const connectionId = await this.getConnectionId();
+    if (!connectionId) {
+      return { success: false, error: 'Pipedrive not connected' };
+    }
+
+    // Get deal with Pipedrive ID
+    const { data: deal } = await db
+      .from('deals')
+      .select('id, title, pipedrive_deal_id')
+      .eq('id', dealId)
+      .single();
+
+    if (!deal) {
+      return { success: false, error: 'Deal not found' };
+    }
+
+    if (!deal.pipedrive_deal_id) {
+      return { success: false, error: 'Deal not linked to Pipedrive' };
+    }
+
+    try {
+      await pipedriveRateLimiter.execute(() =>
+        retryWithBackoff(
+          async () => {
+            await pipedriveProvider.updateDeal(connectionId, deal.pipedrive_deal_id.toString(), {
+              status,
+            });
+          },
+          { shouldRetry: isRetryableError }
+        )
+      );
+
+      // Add activity note about status change
+      const statusEmoji = status === 'won' ? '🎉' : status === 'lost' ? '❌' : '🔄';
+      const statusNote = `${statusEmoji} Deal marked as ${status.toUpperCase()} in Gesher${lostReason ? `\nReason: ${lostReason}` : ''}`;
+      await this.pushNote(statusNote, { dealId: deal.pipedrive_deal_id });
+
+      // Log sync
+      await this.logSync('push', 'deal_status', deal.pipedrive_deal_id, 'success', `Status changed to ${status}`);
+
+      return { success: true };
+    } catch (error) {
+      console.error('[PipedrivePush] Error pushing deal status:', error);
+      await this.logSync('push', 'deal_status', deal.pipedrive_deal_id, 'failed', error instanceof Error ? error.message : 'Unknown error');
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to update deal status in Pipedrive',
+      };
+    }
+  }
+
+  // ============================================
   // DEAL VALUE SYNC (FROM QUOTES)
   // ============================================
 

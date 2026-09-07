@@ -35,6 +35,43 @@ interface SyncOptions {
 }
 
 // ============================================
+// HELPERS
+// ============================================
+
+/**
+ * Strip HTML tags and decode HTML entities from content
+ * Pipedrive often sends HTML content with &nbsp; entities
+ */
+function stripHtmlAndDecode(html: string): string {
+  if (!html) return '';
+
+  // First, replace common HTML entities
+  let text = html
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<\/div>/gi, '\n');
+
+  // Remove all remaining HTML tags
+  text = text.replace(/<[^>]*>/g, '');
+
+  // Decode any remaining HTML entities (numeric codes)
+  text = text.replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(parseInt(dec)));
+  text = text.replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+
+  // Normalize whitespace
+  text = text.replace(/\s+/g, ' ').trim();
+
+  return text;
+}
+
+// ============================================
 // SYNC SERVICE
 // ============================================
 
@@ -813,12 +850,22 @@ class PipedriveSyncService {
           );
 
           // Upsert deal
-          const { isNew } = await dealsRepository.upsertFromPipedrive(dealDto);
+          const { deal: savedDeal, isNew } = await dealsRepository.upsertFromPipedrive(dealDto);
 
           if (isNew) {
             result.created++;
           } else {
             result.updated++;
+          }
+
+          // Sync notes from Pipedrive for this deal
+          if (savedDeal && pipedriveDealId) {
+            try {
+              await this.syncNotesForDeal(connectionId, savedDeal.id, pipedriveDealId);
+            } catch (noteError) {
+              console.warn(`Failed to sync notes for deal ${savedDeal.id}:`, noteError);
+              // Don't fail the entire sync if notes fail
+            }
           }
 
           // Log sync
@@ -951,6 +998,16 @@ class PipedriveSyncService {
       // Upsert deal
       const { deal: savedDeal, isNew } = await dealsRepository.upsertFromPipedrive(dealDto);
 
+      // Sync notes from Pipedrive for this deal
+      if (savedDeal) {
+        try {
+          await this.syncNotesForDeal(connectionId, savedDeal.id, pipedriveDealId);
+        } catch (noteError) {
+          console.warn(`Failed to sync notes for deal ${savedDeal.id}:`, noteError);
+          // Don't fail the entire sync if notes fail
+        }
+      }
+
       await this.logSync({
         eventType: 'webhook',
         direction: 'inbound',
@@ -1019,64 +1076,187 @@ class PipedriveSyncService {
   /**
    * Sync notes from Pipedrive for a specific lead
    * Fetches notes by lead_id (for Leads Inbox) and saves to lead_notes table
+   *
+   * Bi-directional sync:
+   * - Adds new notes from Pipedrive
+   * - Updates existing notes if content changed in Pipedrive
+   * - Deletes notes that were deleted in Pipedrive
    */
   private async syncNotesForLead(
     connectionId: string,
     leadId: string,
     pipedriveLeadId: string // Pipedrive Leads Inbox UUID
-  ): Promise<number> {
-    let syncedCount = 0;
+  ): Promise<{ added: number; updated: number; deleted: number }> {
+    let addedCount = 0;
+    let updatedCount = 0;
+    let deletedCount = 0;
 
     try {
       // Fetch notes from Pipedrive for this lead (using lead_id for Leads Inbox)
-      const notes = await pipedriveRateLimiter.execute(() =>
+      const pipedriveNotes = await pipedriveRateLimiter.execute(() =>
         pipedriveProvider.getNotes(connectionId, {
           leadId: pipedriveLeadId, // Use lead_id instead of person_id
           limit: 100,
         })
       );
 
-      if (!notes || notes.length === 0) {
-        return 0;
-      }
-
-      // Get existing note IDs for this lead to avoid duplicates
+      // Get existing notes for this lead
       const existingNotes = await leadsRepository.getNotes(leadId);
-      const existingPipedriveNoteIds = new Set(
+
+      // Create maps for easy lookup
+      const existingNotesMap = new Map(
         existingNotes
           .filter(n => n.pipedriveNoteId)
-          .map(n => n.pipedriveNoteId)
+          .map(n => [n.pipedriveNoteId!, n])
       );
 
-      // Save each note that doesn't already exist
-      for (const note of notes) {
+      const pipedriveNoteIds = new Set<number>();
+
+      // Process Pipedrive notes: add new or update existing
+      for (const note of pipedriveNotes || []) {
         if (!note.externalId || !note.content) continue;
 
         const pipedriveNoteId = parseInt(note.externalId);
+        pipedriveNoteIds.add(pipedriveNoteId);
 
-        // Skip if already synced
-        if (existingPipedriveNoteIds.has(pipedriveNoteId)) {
-          continue;
+        // Clean the note content - strip HTML and decode entities
+        const cleanContent = stripHtmlAndDecode(note.content);
+
+        const existingNote = existingNotesMap.get(pipedriveNoteId);
+
+        if (existingNote) {
+          // Note exists - check if content changed
+          if (existingNote.content !== cleanContent) {
+            await leadsRepository.updateNoteByPipedriveId(pipedriveNoteId, cleanContent);
+            updatedCount++;
+            console.log(`[PipedriveSyncNotes] Updated note ${pipedriveNoteId} for lead ${leadId}`);
+          }
+        } else {
+          // New note - add it
+          await leadsRepository.addNote(
+            leadId,
+            cleanContent,
+            undefined, // No userId - system sync
+            pipedriveNoteId
+          );
+          addedCount++;
         }
-
-        // Add the note with Pipedrive ID
-        await leadsRepository.addNote(
-          leadId,
-          note.content,
-          undefined, // No userId - system sync
-          pipedriveNoteId
-        );
-
-        syncedCount++;
       }
 
-      if (syncedCount > 0) {
-        console.log(`[PipedriveSyncNotes] Synced ${syncedCount} notes for lead ${leadId}`);
+      // Delete notes that no longer exist in Pipedrive
+      const notesToDelete: number[] = [];
+      for (const [pipedriveNoteId] of existingNotesMap) {
+        if (!pipedriveNoteIds.has(pipedriveNoteId)) {
+          notesToDelete.push(pipedriveNoteId);
+        }
       }
 
-      return syncedCount;
+      if (notesToDelete.length > 0) {
+        deletedCount = await leadsRepository.deleteNotesByPipedriveIds(notesToDelete);
+        console.log(`[PipedriveSyncNotes] Deleted ${deletedCount} notes for lead ${leadId}`);
+      }
+
+      if (addedCount > 0 || updatedCount > 0 || deletedCount > 0) {
+        console.log(`[PipedriveSyncNotes] Lead ${leadId}: +${addedCount} added, ~${updatedCount} updated, -${deletedCount} deleted`);
+      }
+
+      return { added: addedCount, updated: updatedCount, deleted: deletedCount };
     } catch (error) {
       console.error(`[PipedriveSyncNotes] Error syncing notes for lead ${leadId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Sync notes from Pipedrive for a specific deal
+   * Fetches notes by deal_id and saves to deal_notes table
+   *
+   * Bi-directional sync:
+   * - Adds new notes from Pipedrive
+   * - Updates existing notes if content changed in Pipedrive
+   * - Deletes notes that were deleted in Pipedrive
+   */
+  private async syncNotesForDeal(
+    connectionId: string,
+    dealId: string,
+    pipedriveDealId: number
+  ): Promise<{ added: number; updated: number; deleted: number }> {
+    let addedCount = 0;
+    let updatedCount = 0;
+    let deletedCount = 0;
+
+    try {
+      // Fetch notes from Pipedrive for this deal
+      const pipedriveNotes = await pipedriveRateLimiter.execute(() =>
+        pipedriveProvider.getNotes(connectionId, {
+          dealId: pipedriveDealId.toString(),
+          limit: 100,
+        })
+      );
+
+      // Get existing notes for this deal
+      const existingNotes = await dealsRepository.getNotes(dealId);
+
+      // Create maps for easy lookup
+      const existingNotesMap = new Map(
+        existingNotes
+          .filter(n => n.pipedriveNoteId)
+          .map(n => [n.pipedriveNoteId!, n])
+      );
+
+      const pipedriveNoteIds = new Set<number>();
+
+      // Process Pipedrive notes: add new or update existing
+      for (const note of pipedriveNotes || []) {
+        if (!note.externalId || !note.content) continue;
+
+        const pipedriveNoteId = parseInt(note.externalId);
+        pipedriveNoteIds.add(pipedriveNoteId);
+
+        // Clean the note content - strip HTML and decode entities
+        const cleanContent = stripHtmlAndDecode(note.content);
+
+        const existingNote = existingNotesMap.get(pipedriveNoteId);
+
+        if (existingNote) {
+          // Note exists - check if content changed
+          if (existingNote.content !== cleanContent) {
+            await dealsRepository.updateNoteByPipedriveId(pipedriveNoteId, cleanContent);
+            updatedCount++;
+            console.log(`[PipedriveSyncNotes] Updated note ${pipedriveNoteId} for deal ${dealId}`);
+          }
+        } else {
+          // New note - add it
+          await dealsRepository.addNote(
+            dealId,
+            cleanContent,
+            undefined, // No userId - system sync
+            pipedriveNoteId
+          );
+          addedCount++;
+        }
+      }
+
+      // Delete notes that no longer exist in Pipedrive
+      const notesToDelete: number[] = [];
+      for (const [pipedriveNoteId] of existingNotesMap) {
+        if (!pipedriveNoteIds.has(pipedriveNoteId)) {
+          notesToDelete.push(pipedriveNoteId);
+        }
+      }
+
+      if (notesToDelete.length > 0) {
+        deletedCount = await dealsRepository.deleteNotesByPipedriveIds(notesToDelete);
+        console.log(`[PipedriveSyncNotes] Deleted ${deletedCount} notes for deal ${dealId}`);
+      }
+
+      if (addedCount > 0 || updatedCount > 0 || deletedCount > 0) {
+        console.log(`[PipedriveSyncNotes] Deal ${dealId}: +${addedCount} added, ~${updatedCount} updated, -${deletedCount} deleted`);
+      }
+
+      return { added: addedCount, updated: updatedCount, deleted: deletedCount };
+    } catch (error) {
+      console.error(`[PipedriveSyncNotes] Error syncing notes for deal ${dealId}:`, error);
       throw error;
     }
   }

@@ -167,6 +167,7 @@ class LeadsService {
       qualified: 0,
       proposal: 0,
       negotiation: 0,
+      deal: 0,
       converted: 0,
       lost: 0,
     };

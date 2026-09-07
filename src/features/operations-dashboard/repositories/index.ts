@@ -133,6 +133,33 @@ export async function getOperationsStats(filters?: OperationsFilters): Promise<O
     throw shipError;
   }
 
+  // ============================================
+  // UNALLOCATED POs (not linked to any Sales Order)
+  // These represent speculative inventory ("Gesher" as customer)
+  // ============================================
+  let unallocatedPoQuery = supabase
+    .from('purchase_orders')
+    .select(`
+      id,
+      po_number,
+      status,
+      expected_delivery_date,
+      purchase_order_items(quantity_ordered, unit_price, product_id)
+    `)
+    .is('deleted_at', null)
+    .is('sales_order_id', null)  // No linked Sales Order = Unallocated
+    .neq('status', 'cancelled');
+
+  // Apply product filter to unallocated POs
+  // Note: customerId filter doesn't apply since these are unallocated (customer = "Gesher")
+
+  const { data: unallocatedPOs, error: poError } = await unallocatedPoQuery;
+
+  if (poError) {
+    console.error('Error fetching unallocated POs for stats:', poError);
+    // Don't throw - just log and continue with partial data
+  }
+
   // Initialize KPI values
   let availableInventoryQty = 0;
   let availableLoads = 0;
@@ -219,6 +246,48 @@ export async function getOperationsStats(filters?: OperationsFilters): Promise<O
     if (etaDate) {
       const eta = new Date(etaDate);
       if (eta >= now && eta <= next7Days) {
+        inTransitNext7Days += 1;
+      }
+    }
+  });
+
+  // ============================================
+  // UNALLOCATED PO CALCULATIONS
+  // These are speculative inventory (customer = "Gesher")
+  // Add to Available Inventory KPIs
+  // ============================================
+  unallocatedPOs?.forEach((po) => {
+    const items = po.purchase_order_items || [];
+
+    // Filter by productId if specified
+    if (filters?.productId) {
+      const hasProduct = items.some((item: { product_id?: string }) => item.product_id === filters.productId);
+      if (!hasProduct) return;
+    }
+
+    const totalQty = items.reduce((sum: number, item: { quantity_ordered: number }) => sum + (item.quantity_ordered || 0), 0);
+    const totalValue = items.reduce((sum: number, item: { quantity_ordered: number; unit_price: number }) => {
+      const qty = item.quantity_ordered || 0;
+      const price = item.unit_price ? item.unit_price / 100 : 0;
+      return sum + (qty * price);
+    }, 0);
+
+    // Unallocated POs are AVAILABLE inventory
+    // Status check: confirmed/received = truly available, in_production/in_transit = on the way
+    const isAvailableStatus = po.status === 'confirmed' || po.status === 'received' ||
+                               po.status === 'in_production' || po.status === 'ready_to_ship' ||
+                               po.status === 'in_transit';
+
+    if (isAvailableStatus) {
+      availableInventoryQty += totalQty;
+      availableLoads += 1;
+      availableInventoryValue += totalValue;
+    }
+
+    // Check expected delivery in next 7 days
+    if (po.expected_delivery_date) {
+      const deliveryDate = new Date(po.expected_delivery_date);
+      if (deliveryDate >= now && deliveryDate <= next7Days) {
         inTransitNext7Days += 1;
       }
     }
@@ -330,6 +399,66 @@ export async function getSKUBreakdown(filters?: OperationsFilters): Promise<SKUB
     if (productSource === 'warehouse') {
       current.gdc1 += qty;
     }
+  });
+
+  // ============================================
+  // UNALLOCATED PO ITEMS (speculative inventory)
+  // These are POs not linked to any Sales Order
+  // Add to GDC1 Available (customer = "Gesher")
+  // ============================================
+  let poItemsQuery = supabase
+    .from('purchase_order_items')
+    .select(`
+      sku,
+      quantity_ordered,
+      product_id,
+      description,
+      product:products(
+        id,
+        name,
+        item_type
+      ),
+      purchase_order:purchase_orders!inner(
+        id,
+        status,
+        deleted_at,
+        sales_order_id
+      )
+    `)
+    .is('purchase_order.deleted_at', null)
+    .is('purchase_order.sales_order_id', null)  // No linked Sales Order = Unallocated
+    .neq('purchase_order.status', 'cancelled');
+
+  // Apply product filter
+  if (filters?.productId) {
+    poItemsQuery = poItemsQuery.eq('product_id', filters.productId);
+  }
+
+  const { data: poItems, error: poError } = await poItemsQuery;
+
+  if (poError) {
+    console.error('Error fetching PO items for SKU breakdown:', poError);
+    // Don't throw - continue with partial data
+  }
+
+  // Add unallocated PO items to the SKU map
+  poItems?.forEach((item) => {
+    const product = toOne(item.product);
+
+    // Filter: only inventory products
+    if (product && product.item_type !== 'inventory') return;
+
+    const sku = item.sku || 'Unknown';
+    const qty = item.quantity_ordered || 0;
+    const productName = product?.name || item.description || sku;
+
+    if (!skuMap.has(sku)) {
+      skuMap.set(sku, { supplier: 0, gdc1: 0, productName });
+    }
+
+    const current = skuMap.get(sku)!;
+    // Unallocated POs are considered as GDC1 Available inventory
+    current.gdc1 += qty;
   });
 
   // Calculate totals
@@ -589,6 +718,53 @@ export async function getShipmentStatusMix(filters?: OperationsFilters): Promise
       // Fallback to sales order status
       displayStatus = getSoDisplayStatus(so);
     }
+
+    if (!statusMap.has(displayStatus)) {
+      statusMap.set(displayStatus, { loads: 0, qty: 0 });
+    }
+
+    const current = statusMap.get(displayStatus)!;
+    current.loads += 1;
+    current.qty += totalQty;
+  });
+
+  // ============================================
+  // UNALLOCATED POs (speculative inventory)
+  // These are POs not linked to any Sales Order
+  // Show as "AVAILABLE" status (customer = "Gesher")
+  // ============================================
+  let unallocatedPoQuery = supabase
+    .from('purchase_orders')
+    .select(`
+      id,
+      status,
+      purchase_order_items(quantity_ordered, product_id)
+    `)
+    .is('deleted_at', null)
+    .is('sales_order_id', null)  // No linked Sales Order = Unallocated
+    .neq('status', 'cancelled');
+
+  const { data: unallocatedPOs, error: poError } = await unallocatedPoQuery;
+
+  if (poError) {
+    console.error('Error fetching unallocated POs for status mix:', poError);
+    // Don't throw - continue with partial data
+  }
+
+  // Add unallocated POs to status map as "AVAILABLE"
+  unallocatedPOs?.forEach((po) => {
+    const items = po.purchase_order_items || [];
+
+    // Filter by productId if specified
+    if (filters?.productId) {
+      const hasProduct = items.some((item: { product_id?: string }) => item.product_id === filters.productId);
+      if (!hasProduct) return;
+    }
+
+    const totalQty = items.reduce((sum: number, item: { quantity_ordered: number }) => sum + (item.quantity_ordered || 0), 0);
+
+    // Unallocated POs are AVAILABLE inventory
+    const displayStatus: ShipmentStatus = 'AVAILABLE';
 
     if (!statusMap.has(displayStatus)) {
       statusMap.set(displayStatus, { loads: 0, qty: 0 });

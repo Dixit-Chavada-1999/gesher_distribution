@@ -542,6 +542,68 @@ export async function pushLeadNoteToPipedrive(
 }
 
 // ============================================
+// LEADS DIRECT SYNC ACTION
+// ============================================
+
+interface LeadSyncResult {
+  created: number;
+  updated: number;
+  skipped: number;
+  deleted: number;
+  errors: string[];
+}
+
+/**
+ * Sync leads from Pipedrive directly (no preview dialog)
+ * Similar to syncDealsFromPipedrive - direct sync
+ */
+export async function syncLeadsFromPipedrive(): Promise<ActionResult<LeadSyncResult>> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  try {
+    const isConnected = await pipedriveSyncService.isConnected();
+    if (!isConnected) {
+      return {
+        success: false,
+        error: 'Pipedrive is not connected. Please connect in Settings first.',
+      };
+    }
+
+    const result = await pipedriveSyncService.syncLeadsInboxToLeads({
+      skipExisting: false,
+      cleanupDeleted: true,
+    });
+
+    // Revalidate leads page
+    revalidatePath('/leads');
+
+    return {
+      success: true,
+      data: {
+        created: result.created,
+        updated: result.updated,
+        skipped: result.skipped,
+        deleted: result.deleted,
+        errors: result.errors.map(e => e.error),
+      },
+    };
+  } catch (error) {
+    console.error('[syncLeadsFromPipedrive] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Sync failed',
+    };
+  }
+}
+
+// ============================================
 // DEALS SYNC ACTIONS
 // ============================================
 

@@ -8,7 +8,8 @@
 
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { UserPlus, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
+import { UserPlus, Download } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import {
@@ -26,7 +27,7 @@ import {
   ConvertToCustomerDialog,
   CreateLeadDialog,
 } from '@/features/leads/components';
-import { SyncFromPipedriveDialog } from '@/features/pipedrive/components/SyncFromPipedriveDialog';
+import { syncLeadsFromPipedrive } from '@/features/pipedrive/actions';
 import { useLeads, useLeadStats, useLeadStatusCounts } from '@/features/leads/hooks';
 import type { Lead, LeadListItem, LeadStatus, LeadSource, LeadListParams } from '@/features/leads/types';
 
@@ -59,7 +60,7 @@ export function LeadsPageContent() {
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [leadToConvert, setLeadToConvert] = useState<Lead | LeadListItem | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isSyncOpen, setIsSyncOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // ----------------------------------------
   // DATA HOOKS
@@ -126,11 +127,28 @@ export function LeadsPageContent() {
     refetchStatusCounts();
   }, [refetch, refetchStats, refetchStatusCounts]);
 
-  const handleSyncSuccess = useCallback(() => {
-    refetch();
-    refetchStats();
-    refetchStatusCounts();
-  }, [refetch, refetchStats, refetchStatusCounts]);
+  const handleSyncFromPipedrive = async () => {
+    setIsSyncing(true);
+    try {
+      const result = await syncLeadsFromPipedrive();
+      if (result.success && result.data) {
+        const { created, updated, deleted } = result.data;
+        toast.success(
+          `Sync complete: ${created} created, ${updated} updated, ${deleted} removed`
+        );
+        refetch();
+        refetchStats();
+        refetchStatusCounts();
+      } else {
+        toast.error(result.error || 'Failed to sync leads');
+      }
+    } catch (error) {
+      console.error('Sync error:', error);
+      toast.error('Failed to sync leads from Pipedrive');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleCreateSuccess = useCallback(() => {
     refetch();
@@ -153,9 +171,13 @@ export function LeadsPageContent() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setIsSyncOpen(true)}>
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Sync from Pipedrive
+          <Button
+            variant="outline"
+            onClick={handleSyncFromPipedrive}
+            disabled={isSyncing}
+          >
+            <Download className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-pulse' : ''}`} />
+            {isSyncing ? 'Syncing...' : 'Sync from Pipedrive'}
           </Button>
           <Button onClick={() => setIsCreateOpen(true)}>
             <UserPlus className="mr-2 h-4 w-4" />
@@ -214,9 +236,13 @@ export function LeadsPageContent() {
               Leads will appear here once you sync from Pipedrive or add them manually.
               Click &quot;Sync from Pipedrive&quot; to import your leads.
             </p>
-            <Button variant="outline" onClick={() => setIsSyncOpen(true)}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Sync from Pipedrive
+            <Button
+              variant="outline"
+              onClick={handleSyncFromPipedrive}
+              disabled={isSyncing}
+            >
+              <Download className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-pulse' : ''}`} />
+              {isSyncing ? 'Syncing...' : 'Sync from Pipedrive'}
             </Button>
           </CardContent>
         </Card>
@@ -251,14 +277,6 @@ export function LeadsPageContent() {
         open={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
         onSuccess={handleCreateSuccess}
-      />
-
-      {/* Sync from Pipedrive Dialog */}
-      <SyncFromPipedriveDialog
-        open={isSyncOpen}
-        onClose={() => setIsSyncOpen(false)}
-        onSuccess={handleSyncSuccess}
-        syncType="leads"
       />
     </div>
   );

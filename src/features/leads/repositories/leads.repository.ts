@@ -56,6 +56,7 @@ interface LeadRow {
   pipedrive_owner_id: number | null;
   pipedrive_owner_name: string | null;
   notes: string | null;
+  converted_deal_id: string | null;
   converted_customer_id: string | null;
   converted_at: string | null;
   created_at: string;
@@ -119,6 +120,7 @@ function mapRowToLead(row: LeadRow): Lead {
     pipedriveOwnerId: row.pipedrive_owner_id,
     pipedriveOwnerName: row.pipedrive_owner_name,
     notes: row.notes,
+    convertedDealId: row.converted_deal_id,
     convertedCustomerId: row.converted_customer_id,
     convertedAt: row.converted_at ? new Date(row.converted_at) : null,
     createdAt: new Date(row.created_at),
@@ -287,7 +289,8 @@ class LeadsRepository {
 
     // Filters
     if (!includeConverted) {
-      query = query.is('converted_customer_id', null);
+      // Exclude leads that are converted to deal or customer
+      query = query.not('status', 'in', '("deal","converted")');
     }
 
     if (status) {
@@ -559,7 +562,7 @@ class LeadsRepository {
   }
 
   /**
-   * Mark lead as converted
+   * Mark lead as converted to customer
    */
   async markAsConverted(leadId: string, customerId: string, userId?: string): Promise<Lead> {
     const { data, error } = await db
@@ -577,6 +580,30 @@ class LeadsRepository {
     if (error || !data) {
       console.error('Error converting lead:', error);
       throw new Error('Failed to convert lead');
+    }
+
+    return mapRowToLead(data as LeadRow);
+  }
+
+  /**
+   * Mark lead as converted to deal (customer created later when deal is won)
+   */
+  async markAsConvertedToDeal(leadId: string, dealId: string, userId?: string): Promise<Lead> {
+    const { data, error } = await db
+      .from('leads')
+      .update({
+        status: 'deal', // New status: converted to deal (not customer yet)
+        converted_deal_id: dealId,
+        converted_at: new Date().toISOString(),
+        updated_by: userId || null,
+      })
+      .eq('id', leadId)
+      .select()
+      .single();
+
+    if (error || !data) {
+      console.error('Error converting lead to deal:', error);
+      throw new Error('Failed to convert lead to deal');
     }
 
     return mapRowToLead(data as LeadRow);
@@ -950,6 +977,70 @@ class LeadsRepository {
       console.error('Error deleting lead note:', error);
       throw new Error('Failed to delete lead note');
     }
+  }
+
+  /**
+   * Update a note by Pipedrive Note ID
+   * Used when syncing edits from Pipedrive
+   */
+  async updateNoteByPipedriveId(pipedriveNoteId: number, content: string): Promise<LeadNote | null> {
+    const { data, error } = await db
+      .from('lead_notes')
+      .update({
+        content,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('pipedrive_note_id', pipedriveNoteId)
+      .select('*, created_by_user:users!lead_notes_created_by_fkey(first_name, last_name)')
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return null; // Not found
+      console.error('Error updating lead note by Pipedrive ID:', error);
+      throw new Error('Failed to update lead note');
+    }
+
+    return data ? mapRowToLeadNote(data as LeadNoteRow) : null;
+  }
+
+  /**
+   * Delete notes by Pipedrive Note IDs
+   * Used when syncing deletes from Pipedrive
+   */
+  async deleteNotesByPipedriveIds(pipedriveNoteIds: number[]): Promise<number> {
+    if (pipedriveNoteIds.length === 0) return 0;
+
+    const { data, error } = await db
+      .from('lead_notes')
+      .delete()
+      .in('pipedrive_note_id', pipedriveNoteIds)
+      .select('id');
+
+    if (error) {
+      console.error('Error deleting lead notes by Pipedrive IDs:', error);
+      throw new Error('Failed to delete lead notes');
+    }
+
+    return data?.length || 0;
+  }
+
+  /**
+   * Get note by Pipedrive Note ID
+   */
+  async getNoteByPipedriveId(pipedriveNoteId: number): Promise<LeadNote | null> {
+    const { data, error } = await db
+      .from('lead_notes')
+      .select('*, created_by_user:users!lead_notes_created_by_fkey(first_name, last_name)')
+      .eq('pipedrive_note_id', pipedriveNoteId)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return null; // Not found
+      console.error('Error fetching lead note by Pipedrive ID:', error);
+      return null;
+    }
+
+    return data ? mapRowToLeadNote(data as LeadNoteRow) : null;
   }
 }
 
