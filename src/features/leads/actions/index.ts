@@ -753,6 +753,7 @@ export async function updateLeadNote(
 
 /**
  * Get lead statistics
+ * Only counts active leads (not deleted, not converted to deal/customer)
  */
 export async function getLeadStats(): Promise<ActionResult<{
   total: number;
@@ -769,10 +770,12 @@ export async function getLeadStats(): Promise<ActionResult<{
   }
 
   try {
-    // Get all leads
+    // Get only active leads (not deleted, not converted to deal/customer)
     const { data: leads, error } = await supabase
       .from('leads')
-      .select('id, status, deal_value, created_at');
+      .select('id, status, deal_value, created_at')
+      .is('deleted_at', null)
+      .not('status', 'in', '("deal","converted")');
 
     if (error) {
       throw new Error(error.message);
@@ -789,7 +792,7 @@ export async function getLeadStats(): Promise<ActionResult<{
       qualified: leads?.filter(
         (l) => l.status === 'qualified' || l.status === 'proposal'
       ).length || 0,
-      converted: leads?.filter((l) => l.status === 'converted').length || 0,
+      converted: 0, // Converted leads are now tracked in Deals module
       totalDealValue: leads?.reduce(
         (sum, l) => sum + (Number(l.deal_value) || 0),
         0

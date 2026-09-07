@@ -272,7 +272,7 @@ const NAV_SECTIONS = [
 
 export function Sidebar() {
   const [hasMounted, setHasMounted] = useState(false);
-  const [expandedMenus, setExpandedMenus] = useState<string[]>(['pipedrive']); // Start with Pipedrive expanded
+  const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
   const pathname = usePathname();
   const { hasPermission, logout } = useAuthStore();
   const { isCollapsed, isMobileOpen, closeMobile } = useSidebarStore();
@@ -281,6 +281,17 @@ export function Sidebar() {
   useEffect(() => {
     setHasMounted(true);
   }, []);
+
+  // Auto-expand parent menu when child route is active
+  useEffect(() => {
+    // Check if on Leads or Deals page - expand Pipedrive menu
+    if (pathname.startsWith('/leads') || pathname.startsWith('/deals')) {
+      setExpandedMenus(prev => prev.includes('pipedrive') ? prev : [...prev, 'pipedrive']);
+    } else {
+      // Collapse Pipedrive menu when not on Leads/Deals
+      setExpandedMenus(prev => prev.filter(id => id !== 'pipedrive'));
+    }
+  }, [pathname]);
 
   const toggleSubmenu = (id: string) => {
     setExpandedMenus(prev =>
