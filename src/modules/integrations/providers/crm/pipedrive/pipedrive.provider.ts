@@ -565,8 +565,38 @@ export class PipedriveProvider implements ICrmProvider {
 
     const pipedriveOrg: Partial<PipedriveOrganization> = {
       name: organization.name,
-      address: organization.address?.street,
     };
+
+    // Map address fields separately for proper Pipedrive format
+    if (organization.address) {
+      // Build full address string for display
+      const addressParts: string[] = [];
+      if (organization.address.street) {
+        addressParts.push(organization.address.street);
+        pipedriveOrg.address_route = organization.address.street;
+      }
+      if (organization.address.city) {
+        addressParts.push(organization.address.city);
+        pipedriveOrg.address_locality = organization.address.city;
+      }
+      if (organization.address.state) {
+        addressParts.push(organization.address.state);
+        pipedriveOrg.address_admin_area_level_1 = organization.address.state;
+      }
+      if (organization.address.postalCode) {
+        addressParts.push(organization.address.postalCode);
+        pipedriveOrg.address_postal_code = organization.address.postalCode;
+      }
+      if (organization.address.country) {
+        addressParts.push(organization.address.country);
+        pipedriveOrg.address_country = organization.address.country;
+      }
+
+      // Set the main address field with full address
+      if (addressParts.length > 0) {
+        pipedriveOrg.address = addressParts.join(', ');
+      }
+    }
 
     const response = await this.apiRequest<PipedriveOrganization>(
       tokenInfo.environment,
@@ -591,7 +621,37 @@ export class PipedriveProvider implements ICrmProvider {
 
     const pipedriveOrg: Partial<PipedriveOrganization> = {};
     if (organization.name) {pipedriveOrg.name = organization.name;}
-    if (organization.address?.street) {pipedriveOrg.address = organization.address.street;}
+
+    // Map address fields separately for proper Pipedrive format
+    if (organization.address) {
+      // Build full address string for display
+      const addressParts: string[] = [];
+      if (organization.address.street) {
+        addressParts.push(organization.address.street);
+        pipedriveOrg.address_route = organization.address.street;
+      }
+      if (organization.address.city) {
+        addressParts.push(organization.address.city);
+        pipedriveOrg.address_locality = organization.address.city;
+      }
+      if (organization.address.state) {
+        addressParts.push(organization.address.state);
+        pipedriveOrg.address_admin_area_level_1 = organization.address.state;
+      }
+      if (organization.address.postalCode) {
+        addressParts.push(organization.address.postalCode);
+        pipedriveOrg.address_postal_code = organization.address.postalCode;
+      }
+      if (organization.address.country) {
+        addressParts.push(organization.address.country);
+        pipedriveOrg.address_country = organization.address.country;
+      }
+
+      // Set the main address field with full address
+      if (addressParts.length > 0) {
+        pipedriveOrg.address = addressParts.join(', ');
+      }
+    }
 
     const response = await this.apiRequest<PipedriveOrganization>(
       tokenInfo.environment,
@@ -734,8 +794,10 @@ export class PipedriveProvider implements ICrmProvider {
     const pipedriveDeal: Partial<PipedriveDeal> = {};
     if (deal.title) {pipedriveDeal.title = deal.title;}
     if (deal.value !== undefined) {pipedriveDeal.value = deal.value;}
+    if (deal.currency) {pipedriveDeal.currency = deal.currency;}
     if (deal.stageId) {pipedriveDeal.stage_id = parseInt(deal.stageId);}
     if (deal.status) {pipedriveDeal.status = deal.status;}
+    if (deal.expectedCloseDate) {pipedriveDeal.expected_close_date = deal.expectedCloseDate;}
 
     const response = await this.apiRequest<PipedriveDeal>(
       tokenInfo.environment,
@@ -1509,16 +1571,53 @@ export class PipedriveProvider implements ICrmProvider {
   }
 
   private mapPipedriveOrganization(org: PipedriveOrganization): CrmOrganization {
+    // Construct street address from available fields
+    // Prefer org.address, but fall back to street_number + route if needed
+    let street = org.address;
+    let city = org.address_locality;
+    let state = org.address_admin_area_level_1;
+    let postalCode = org.address_postal_code;
+    let country = org.address_country;
+
+    // If street is empty but we have street_number + route, combine them
+    if (!street && (org.address_street_number || org.address_route)) {
+      street = [org.address_street_number, org.address_route]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+    }
+
+    // Parse comma-separated address if we have a full address string
+    // but separate fields are missing
+    if (street && street.includes(',') && (!city || !state || !postalCode || !country)) {
+      // Format: "Street, City, State, Postal, Country"
+      const parts = street.split(',').map(p => p.trim());
+
+      if (parts.length >= 2) {
+        // Only override if the current field is empty
+        if (!city && parts.length > 1) city = parts[1];
+        if (!state && parts.length > 2) state = parts[2];
+        if (!postalCode && parts.length > 3) postalCode = parts[3];
+        if (!country && parts.length > 4) country = parts[4];
+
+        // First part is always the street
+        street = parts[0];
+      }
+    }
+
+    // Create address object if any address field is present
+    const hasAnyAddressField = street || city || state || postalCode || country;
+
     return {
       externalId: org.id?.toString(),
       name: org.name,
-      address: org.address
+      address: hasAnyAddressField
         ? {
-            street: org.address,
-            city: org.address_locality,
-            state: org.address_admin_area_level_1,
-            postalCode: org.address_postal_code,
-            country: org.address_country,
+            street: street || undefined,
+            city: city || undefined,
+            state: state || undefined,
+            postalCode: postalCode || undefined,
+            country: country || undefined,
           }
         : undefined,
       metadata: {

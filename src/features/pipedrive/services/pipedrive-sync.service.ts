@@ -511,8 +511,20 @@ class PipedriveSyncService {
             }
           }
 
-          // Map Pipedrive Lead to our Lead DTO (with labels and person details)
-          const leadDto = this.mapPipedriveLeadToLeadDTO(pipedriveLead, labels, personDetails);
+          // Fetch full organization details if organization_id exists (to get full address)
+          let organizationDetails: CrmOrganization | null = null;
+          if (pipedriveLead.organization_id) {
+            try {
+              organizationDetails = await pipedriveRateLimiter.execute(() =>
+                pipedriveProvider.getOrganization(connectionId, String(pipedriveLead.organization_id))
+              );
+            } catch (e) {
+              console.warn(`Failed to fetch organization ${pipedriveLead.organization_id}:`, e);
+            }
+          }
+
+          // Map Pipedrive Lead to our Lead DTO (with labels, person details, and organization details)
+          const leadDto = this.mapPipedriveLeadToLeadDTO(pipedriveLead, labels, personDetails, organizationDetails);
 
           // Check if lead already exists by pipedrive_lead_id
           const existing = await leadsRepository.getByPipedriveLeadId(pipedriveLead.id);
@@ -1070,6 +1082,11 @@ class PipedriveSyncService {
       contactEmail: contact?.email || null,
       contactPhone: contact?.phone || null,
       organizationName: organization?.name || null,
+      organizationAddressStreet: organization?.address?.street || null,
+      organizationAddressCity: organization?.address?.city || null,
+      organizationAddressState: organization?.address?.state || null,
+      organizationAddressPostalCode: organization?.address?.postalCode || null,
+      organizationAddressCountry: organization?.address?.country || null,
     };
   }
 
@@ -1267,7 +1284,8 @@ class PipedriveSyncService {
   private mapPipedriveLeadToLeadDTO(
     lead: PipedriveLead,
     labels?: string[],
-    personDetails?: { email?: string; phone?: string }
+    personDetails?: { email?: string; phone?: string },
+    organizationDetails?: CrmOrganization | null
   ): CreateLeadDTO {
     const personName = lead.person?.name || lead.title;
     // Use fetched person details first, then fall back to embedded data
@@ -1278,8 +1296,13 @@ class PipedriveSyncService {
       name: personName,
       email: primaryEmail || null,
       phone: primaryPhone || null,
-      company: lead.organization?.name || null,
-      addressStreet: lead.organization?.address || null,
+      company: organizationDetails?.name || lead.organization?.name || null,
+      // Use full organization details if available for complete address
+      addressStreet: organizationDetails?.address?.street || null,
+      addressCity: organizationDetails?.address?.city || null,
+      addressState: organizationDetails?.address?.state || null,
+      addressPostalCode: organizationDetails?.address?.postalCode || null,
+      addressCountry: organizationDetails?.address?.country || null,
       // Pipedrive Leads have UUID id - store it in pipedriveLeadId
       pipedriveLeadId: lead.id, // UUID from Leads Inbox
       pipedriveLabels: labels || null, // Labels like "HOT", "WARM", etc.

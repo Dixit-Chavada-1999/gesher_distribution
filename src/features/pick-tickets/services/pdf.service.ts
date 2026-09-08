@@ -8,6 +8,8 @@
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
 
+import { getGesherLogoBase64 } from '@/shared/lib/logo-utils';
+
 // Check if running in production/serverless or local development
 const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
 
@@ -113,6 +115,9 @@ export async function generatePickTicketPdf(data: PickTicketPdfData): Promise<st
  * Generate HTML from pick ticket data using Gesher Distribution theme
  */
 function generatePickTicketHtml(data: PickTicketPdfData): string {
+  // Get Gesher logo as base64
+  const logoBase64 = getGesherLogoBase64();
+
   const formatDate = (dateStr: string | null): string => {
     if (!dateStr) {
       return '-';
@@ -203,29 +208,39 @@ function generatePickTicketHtml(data: PickTicketPdfData): string {
     }
 
     .logo {
-      width: 60px;
-      height: 60px;
-      background: var(--primary);
-      border-radius: 8px;
+      width: 140px;
+      height: 70px;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: white;
-      font-weight: bold;
-      font-size: 20px;
     }
 
-    .company-info h1 {
-      font-size: 22px;
+    .logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .company-info {
+      flex: 1;
+      padding-left: 15px;
+    }
+
+    .company-name {
+      font-size: 14px;
+      font-weight: 700;
       color: var(--primary);
-      margin-bottom: 4px;
-      letter-spacing: -0.5px;
+      margin-bottom: 6px;
     }
 
-    .company-info p {
+    .company-details {
+      font-size: 10px;
       color: var(--muted);
-      font-size: 11px;
       line-height: 1.5;
+    }
+
+    .company-details div {
+      margin-bottom: 2px;
     }
 
     .ticket-info {
@@ -550,10 +565,6 @@ function generatePickTicketHtml(data: PickTicketPdfData): string {
       margin-bottom: 3px;
     }
 
-    .footer-brand {
-      color: var(--primary);
-      font-weight: 600;
-    }
   </style>
 </head>
 <body>
@@ -561,11 +572,18 @@ function generatePickTicketHtml(data: PickTicketPdfData): string {
     <!-- Header -->
     <div class="header">
       <div class="company-section">
-        <div class="logo">GD</div>
+        <div class="logo">
+          ${logoBase64 ? `<img src="${logoBase64}" alt="Gesher Distribution" />` : '<div style="background: #23604c; color: white; font-weight: bold; font-size: 20px; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; border-radius: 8px;">GD</div>'}
+        </div>
         <div class="company-info">
-          <h1>GESHER DISTRIBUTION</h1>
-          <p>8700 Commerce Park Dr, Houston, TX 77036<br>
-          Phone: (713) 555-8200 | operations@gesherdist.com</p>
+          <div class="company-name">Gesher Distribution, Inc</div>
+          <div class="company-details">
+            <div>3141 Walnut St Ste 203B</div>
+            <div>Denver, CO 80205-2926</div>
+            <div>accounting@partnerwithgdc.com</div>
+            <div>+1 (917) 374-7389</div>
+            <div>https://partnerwithgdc.com</div>
+          </div>
         </div>
       </div>
       <div class="ticket-info">
@@ -685,7 +703,6 @@ function generatePickTicketHtml(data: PickTicketPdfData): string {
     <!-- Footer -->
     <div class="footer">
       <p class="footer-text">Generated on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} at ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</p>
-      <p class="footer-text"><span class="footer-brand">Gesher Distribution</span> Management System</p>
     </div>
   </div>
 </body>

@@ -12,6 +12,7 @@ import { Loader2, MapPin, Package, FileText, Calendar, User, Building2, Truck, A
 
 import { Button } from '@/shared/components/ui/button';
 import { useAuthStore } from '@/shared/stores';
+import { PdfViewerModal } from '@/shared/components/pdf-viewer';
 import {
   Sheet,
   SheetContent,
@@ -222,12 +223,12 @@ const [isReleasingHold, setIsReleasingHold] = useState(false);
   const [warehouses, setWarehouses] = useState<Array<{ id: string; code: string; name: string }>>([]);
   const [locationContacts, setLocationContacts] = useState<LocationContact[]>([]);
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
   const [contactsPopoverOpen, setContactsPopoverOpen] = useState(false);
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [warehouseUsers, setWarehouseUsers] = useState<UserListItem[]>([]);
   const [selectedAssignedTo, setSelectedAssignedTo] = useState<string>('');
+  const [showPdfModal, setShowPdfModal] = useState(false);
 
   // Order Series inline edit
   const [isEditingOrderSeries, setIsEditingOrderSeries] = useState(false);
@@ -402,18 +403,9 @@ const [isReleasingHold, setIsReleasingHold] = useState(false);
     }
   };
 
-  const handleViewPdf = async () => {
+  const handleViewPdf = () => {
     if (!order) { return; }
-
-    setIsGeneratingPdf(true);
-    try {
-      // Open PDF in new tab
-      window.open(`/api/sales-orders/${order.id}/pdf`, '_blank');
-    } catch (error) {
-      console.error('Failed to generate PDF:', error);
-    } finally {
-      setIsGeneratingPdf(false);
-    }
+    setShowPdfModal(true);
   };
 
 const handleReleaseHold = async () => {
@@ -1003,10 +995,9 @@ const handleReleaseHold = async () => {
                   variant="outline"
                   size="sm"
                   onClick={handleViewPdf}
-                  disabled={isGeneratingPdf}
                 >
                   <FileText className="mr-2 h-4 w-4" />
-                  {isGeneratingPdf ? 'Generating...' : 'View PDF'}
+                  View PDF
                 </Button>
                 {canEdit && onEdit && (
                   <Button variant="outline" size="sm" onClick={handleEdit}>
@@ -1325,6 +1316,17 @@ const handleReleaseHold = async () => {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* PDF Viewer Modal */}
+        {order && (
+          <PdfViewerModal
+            open={showPdfModal}
+            onClose={() => setShowPdfModal(false)}
+            pdfUrl={`/api/sales-orders/${order.id}/pdf`}
+            title={`Sales Order - ${order.orderNumber}`}
+            fileName={`SalesOrder-${order.orderNumber}.pdf`}
+          />
+        )}
       </SheetContent>
     </Sheet>
   );

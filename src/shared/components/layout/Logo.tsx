@@ -6,6 +6,7 @@
  */
 
 import Link from 'next/link';
+import Image from 'next/image';
 
 import { cn } from '@/shared/lib/utils';
 
@@ -38,6 +39,8 @@ export function Logo({
   variant = 'sidebar',
 }: LogoProps) {
   const isSidebar = variant === 'sidebar';
+  // Use white logo for dark backgrounds (sidebar), colored logo for light backgrounds (auth pages)
+  const logoSrc = isSidebar ? '/assets/gesher-logo-white.png' : '/assets/gesher-logo.png';
 
   const content = (
     <div
@@ -47,51 +50,24 @@ export function Logo({
         className
       )}
     >
-      {/* Logo Icon */}
+      {/* Logo Image Only */}
       <div
         className={cn(
-          'flex items-center justify-center rounded-lg',
+          'flex items-center justify-center',
           isSidebar
-            ? 'h-8 w-8 bg-sidebar-primary text-sidebar-primary-foreground'
-            : 'h-9 w-9 bg-primary text-primary-foreground'
+            ? (collapsed ? 'h-12 w-12' : 'h-12 w-44')
+            : 'h-16 w-48'
         )}
       >
-        <svg
-          className={cn(isSidebar ? 'h-5 w-5' : 'h-5 w-5')}
-          viewBox="0 0 24 24"
-          fill="currentColor"
-        >
-          <path d="M12 2L2 7l10 5 10-5-10-5z" opacity="0.9" />
-          <path d="M2 12l10 5 10-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M2 17l10 5 10-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+        <Image
+          src={logoSrc}
+          alt="Gesher Distribution"
+          width={isSidebar ? (collapsed ? 48 : 176) : 192}
+          height={isSidebar ? 48 : 64}
+          className="object-contain"
+          priority
+        />
       </div>
-
-      {/* Logo Text */}
-      {!collapsed && (
-        <div className="flex flex-col">
-          <span
-            className={cn(
-              'font-bold leading-none tracking-tight',
-              isSidebar
-                ? 'text-base text-sidebar-primary-foreground'
-                : 'text-lg text-foreground'
-            )}
-          >
-            Gesher
-          </span>
-          <span
-            className={cn(
-              'font-medium leading-none mt-0.5',
-              isSidebar
-                ? 'text-xs text-sidebar-foreground/70'
-                : 'text-xs text-primary'
-            )}
-          >
-            Distribution
-          </span>
-        </div>
-      )}
     </div>
   );
 

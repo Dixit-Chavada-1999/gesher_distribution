@@ -72,6 +72,13 @@ export interface Deal {
   contactPhone: string | null;
   organizationName: string | null;
 
+  // Organization Address
+  organizationAddressStreet: string | null;
+  organizationAddressCity: string | null;
+  organizationAddressState: string | null;
+  organizationAddressPostalCode: string | null;
+  organizationAddressCountry: string | null;
+
   // Linked entities
   customerId: string | null;
   leadId: string | null;
@@ -156,6 +163,11 @@ export interface CreateDealDTO {
   contactEmail?: string | null;
   contactPhone?: string | null;
   organizationName?: string | null;
+  organizationAddressStreet?: string | null;
+  organizationAddressCity?: string | null;
+  organizationAddressState?: string | null;
+  organizationAddressPostalCode?: string | null;
+  organizationAddressCountry?: string | null;
   customerId?: string | null;
   leadId?: string | null;
   ownerId?: string | null;
@@ -183,6 +195,11 @@ export interface UpdateDealDTO {
   contactEmail?: string | null;
   contactPhone?: string | null;
   organizationName?: string | null;
+  organizationAddressStreet?: string | null;
+  organizationAddressCity?: string | null;
+  organizationAddressState?: string | null;
+  organizationAddressPostalCode?: string | null;
+  organizationAddressCountry?: string | null;
   customerId?: string | null;
   leadId?: string | null;
   ownerId?: string | null;

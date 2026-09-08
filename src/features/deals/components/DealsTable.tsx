@@ -18,6 +18,7 @@ import {
   CheckCircle,
   XCircle,
   RotateCcw,
+  UserPlus,
 } from 'lucide-react';
 
 import { DataTable } from '@/shared/components/data-table';
@@ -41,9 +42,10 @@ import {
   AlertDialogTitle,
 } from '@/shared/components/ui/alert-dialog';
 
-import { deleteDeal, markDealAsWon, markDealAsLost, reopenDeal } from '../actions';
+import { deleteDeal, markDealAsWon, markDealAsLost, reopenDeal, getDeal } from '../actions';
 import { getPipedriveCompanyDomain } from '@/features/pipedrive/actions';
-import type { DealListItem, DealStatus } from '../types';
+import type { DealListItem, DealStatus, Deal } from '../types';
+import { ConvertDealToCustomerDialog } from './ConvertDealToCustomerDialog';
 
 // ============================================
 // TYPES
@@ -114,6 +116,8 @@ export function DealsTable({
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [pipedriveCompanyDomain, setPipedriveCompanyDomain] = useState<string | null>(null);
+  const [dealToConvert, setDealToConvert] = useState<Deal | null>(null);
+  const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
 
   // ----------------------------------------
   // EFFECTS
@@ -231,6 +235,30 @@ export function DealsTable({
 
   const handleDeleteCancel = () => {
     setDealToDelete(null);
+  };
+
+  const handleConvertToCustomer = async (deal: DealListItem) => {
+    // Fetch full deal to get all required fields
+    const result = await getDeal(deal.id);
+
+    if (!result.success) {
+      toast.error('Failed to load deal details');
+      return;
+    }
+
+    setDealToConvert(result.data);
+    setIsConvertDialogOpen(true);
+  };
+
+  const handleConvertSuccess = (_customerId: string, _quoteId: string) => {
+    setIsConvertDialogOpen(false);
+    setDealToConvert(null);
+    onRefresh?.();
+  };
+
+  const handleConvertCancel = () => {
+    setIsConvertDialogOpen(false);
+    setDealToConvert(null);
   };
 
   // ----------------------------------------
@@ -368,6 +396,15 @@ export function DealsTable({
                     Reopen Deal
                   </DropdownMenuItem>
                 )}
+                {deal.status === 'won' && (
+                  <DropdownMenuItem
+                    onClick={(e) => { e.stopPropagation(); handleConvertToCustomer(deal); }}
+                    disabled={isUpdating}
+                  >
+                    <UserPlus className="mr-2 h-4 w-4 text-emerald-600" />
+                    Convert to Customer
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={(e) => { e.stopPropagation(); handleDeleteClick(deal); }}
@@ -441,6 +478,14 @@ export function DealsTable({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Convert to Customer Dialog */}
+      <ConvertDealToCustomerDialog
+        open={isConvertDialogOpen}
+        onClose={handleConvertCancel}
+        deal={dealToConvert}
+        onSuccess={handleConvertSuccess}
+      />
     </>
   );
 }

@@ -17,6 +17,7 @@ import type { SalesOrderListItem } from '../types';
 import {
   ORDER_STATUS_LABELS,
   ORDER_STATUS_COLORS,
+  PRODUCT_SOURCE_LABELS,
   canEditOrder,
 } from '../types';
 import { formatDate } from '../lib/mock-data';
@@ -133,6 +134,28 @@ export function getSalesOrdersTableColumns(
             {deliveryDate ? formatDate(deliveryDate) : '-'}
           </div>
         );
+      },
+    },
+
+    // Product Source
+    {
+      accessorKey: 'productSource',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Product Source" />
+      ),
+      cell: ({ row }) => {
+        const productSource = row.getValue('productSource') as keyof typeof PRODUCT_SOURCE_LABELS;
+        return (
+          <Badge
+            variant={productSource === 'warehouse' ? 'default' : 'secondary'}
+            className="font-medium"
+          >
+            {PRODUCT_SOURCE_LABELS[productSource]}
+          </Badge>
+        );
+      },
+      filterFn: (row, id, value) => {
+        return value.includes(row.getValue(id));
       },
     },
 

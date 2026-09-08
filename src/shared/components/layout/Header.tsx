@@ -6,8 +6,8 @@
  * Modern dark header with logo, search, and user menu.
  */
 
-import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Menu, Search, LogOut, User, Settings } from 'lucide-react';
 import { NotificationBell } from '@/features/notifications/components';
 
@@ -31,18 +31,10 @@ interface HeaderProps {
 }
 
 export function Header({ className }: HeaderProps) {
-  const [hasMounted, setHasMounted] = useState(false);
   const { appUser, logout } = useAuthStore();
   const fullName = useAuthStore(selectFullName);
   const initials = useAuthStore(selectInitials);
-  const { isCollapsed, toggleMobile, toggleCollapse } = useSidebarStore();
-
-  // Handle hydration
-  useEffect(() => {
-    setHasMounted(true);
-  }, []);
-
-  const collapsed = hasMounted ? isCollapsed : false;
+  const { toggleMobile, toggleCollapse } = useSidebarStore();
 
   const handleLogout = async () => {
     // Clear client-side state
@@ -63,31 +55,15 @@ export function Header({ className }: HeaderProps) {
       <div className="flex items-center gap-4">
         {/* Logo */}
         <Link href="/dashboard" className="flex items-center">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[hsl(var(--sidebar-primary))]">
-            <svg
-              className="h-5 w-5 text-white"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 2L2 7l10 5 10-5-10-5z" />
-              <path d="M2 17l10 5 10-5" />
-              <path d="M2 12l10 5 10-5" />
-            </svg>
-          </div>
-          <div
-            className={cn(
-              "hidden sm:flex items-center overflow-hidden transition-all duration-300 ease-in-out",
-              collapsed ? "max-w-0 ml-0 opacity-0" : "max-w-[200px] ml-3 opacity-100"
-            )}
-          >
-            <span className="text-lg font-bold text-[hsl(var(--sidebar-foreground))] whitespace-nowrap">Gesher</span>
-            <span className="ml-1 text-sm font-medium text-[hsl(var(--sidebar-foreground))] whitespace-nowrap">
-              Distribution
-            </span>
+          <div className="flex h-12 w-44 items-center justify-center">
+            <Image
+              src="/assets/gesher-logo-white.png"
+              alt="Gesher Distribution"
+              width={176}
+              height={48}
+              className="object-contain"
+              priority
+            />
           </div>
         </Link>
 

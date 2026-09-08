@@ -10,18 +10,18 @@ import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import {
   Handshake,
-  Building2,
-  User,
   Mail,
   Phone,
   DollarSign,
   Calendar,
   Target,
-  MessageSquare,
   Trash2,
   ExternalLink,
   CheckCircle,
   XCircle,
+  UserPlus,
+  MapPin,
+  Pencil,
 } from 'lucide-react';
 
 import {
@@ -44,6 +44,8 @@ import {
 import { getDeal, getDealNotes, addDealNote, deleteDealNote, markDealAsWon, markDealAsLost } from '../actions';
 import { getPipedriveCompanyDomain } from '@/features/pipedrive/actions';
 import type { Deal, DealNote, DealStatus } from '../types';
+import { ConvertDealToCustomerDialog } from './ConvertDealToCustomerDialog';
+import { EditDealDialog } from './EditDealDialog';
 
 // ============================================
 // TYPES
@@ -106,6 +108,8 @@ export function DealDetailDrawer({
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [pipedriveCompanyDomain, setPipedriveCompanyDomain] = useState<string | null>(null);
+  const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   // ----------------------------------------
   // EFFECTS
@@ -259,13 +263,27 @@ export function DealDetailDrawer({
     window.open(pipedriveUrl, '_blank', 'noopener,noreferrer');
   };
 
+  const handleConvertToCustomer = () => {
+    setIsConvertDialogOpen(true);
+  };
+
+  const handleConvertSuccess = (_customerId: string, _quoteId: string) => {
+    setIsConvertDialogOpen(false);
+    onRefresh?.();
+    onClose();
+  };
+
+  const handleConvertCancel = () => {
+    setIsConvertDialogOpen(false);
+  };
+
   // ----------------------------------------
   // RENDER
   // ----------------------------------------
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
-      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <Handshake className="h-5 w-5" />
@@ -283,10 +301,7 @@ export function DealDetailDrawer({
             <div>
               <h2 className="text-xl font-semibold">{deal.title}</h2>
               {deal.organizationName && (
-                <p className="text-muted-foreground flex items-center gap-1 mt-1">
-                  <Building2 className="h-4 w-4" />
-                  {deal.organizationName}
-                </p>
+                <p className="text-muted-foreground">{deal.organizationName}</p>
               )}
               <div className="flex items-center gap-2 mt-2">
                 <Badge className={statusColors[deal.status]}>
@@ -300,99 +315,137 @@ export function DealDetailDrawer({
               </div>
             </div>
 
-            {/* Actions */}
+            <Separator />
+
+            {/* Quick Actions - Status Update */}
             {deal.status === 'open' && (
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleMarkAsWon}
-                  disabled={isUpdating}
-                  className="flex-1"
-                >
-                  <CheckCircle className="mr-2 h-4 w-4 text-emerald-600" />
-                  Mark as Won
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleMarkAsLost}
-                  disabled={isUpdating}
-                  className="flex-1"
-                >
-                  <XCircle className="mr-2 h-4 w-4 text-red-600" />
-                  Mark as Lost
-                </Button>
-              </div>
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleMarkAsWon}
+                    disabled={isUpdating}
+                    className="w-full"
+                  >
+                    <CheckCircle className="mr-2 h-4 w-4 text-emerald-600" />
+                    Mark as Won
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleMarkAsLost}
+                    disabled={isUpdating}
+                    className="w-full"
+                  >
+                    <XCircle className="mr-2 h-4 w-4 text-red-600" />
+                    Mark as Lost
+                  </Button>
+                </div>
+                <Separator />
+              </>
             )}
 
-            <Separator />
-
-            {/* Deal Value */}
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-2">
-                <DollarSign className="h-4 w-4" />
-                Value
+            {/* Contact Information */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold uppercase text-muted-foreground">
+                Contact Information
               </h3>
-              <p className="text-2xl font-bold">
-                {formatCurrency(deal.value, deal.currency)}
-              </p>
-            </div>
-
-            <Separator />
-
-            {/* Pipeline & Stage */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-2">
-                  <Target className="h-4 w-4" />
-                  Pipeline
-                </h3>
-                <p>{deal.pipelineName || '-'}</p>
-              </div>
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground mb-1">Stage</h3>
-                <p>{deal.stageName || '-'}</p>
-              </div>
-            </div>
-
-            {/* Probability & Expected Close */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground mb-1">Probability</h3>
-                <p>{deal.probability != null ? `${deal.probability}%` : '-'}</p>
-              </div>
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  Expected Close
-                </h3>
-                <p>{formatDate(deal.expectedCloseDate)}</p>
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Contact Info */}
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-2">
-                <User className="h-4 w-4" />
-                Contact
-              </h3>
-              <div className="space-y-1">
-                <p className="font-medium">{deal.contactName || '-'}</p>
+              <div className="space-y-2">
                 {deal.contactEmail && (
-                  <p className="text-sm text-muted-foreground flex items-center gap-1">
-                    <Mail className="h-3 w-3" />
-                    {deal.contactEmail}
-                  </p>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Mail className="h-4 w-4 text-muted-foreground" />
+                    <span>{deal.contactEmail}</span>
+                  </div>
                 )}
                 {deal.contactPhone && (
-                  <p className="text-sm text-muted-foreground flex items-center gap-1">
-                    <Phone className="h-3 w-3" />
-                    {deal.contactPhone}
-                  </p>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                    <span>{deal.contactPhone}</span>
+                  </div>
                 )}
+                {(deal.organizationAddressStreet || deal.organizationAddressCity) && (
+                  <div className="flex items-start gap-2 text-sm">
+                    <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      {deal.organizationAddressStreet && (
+                        <div>{deal.organizationAddressStreet}</div>
+                      )}
+                      {(deal.organizationAddressCity || deal.organizationAddressState || deal.organizationAddressPostalCode) && (
+                        <div>
+                          {[
+                            deal.organizationAddressCity,
+                            deal.organizationAddressState,
+                            deal.organizationAddressPostalCode
+                          ]
+                            .filter(Boolean)
+                            .join(', ')}
+                        </div>
+                      )}
+                      {deal.organizationAddressCountry && (
+                        <div>{deal.organizationAddressCountry}</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Deal Information */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold uppercase text-muted-foreground">
+                Deal Information
+              </h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                    <DollarSign className="h-4 w-4" />
+                    Value
+                  </div>
+                  <div className="text-lg font-semibold">
+                    {formatCurrency(deal.value, deal.currency)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground mb-1">Stage</div>
+                  <div className="font-medium">{deal.stageName || '-'}</div>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                    <Calendar className="h-4 w-4" />
+                    Expected Close
+                  </div>
+                  <div className="font-medium">{formatDate(deal.expectedCloseDate)}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground mb-1">Probability</div>
+                  <div className="font-medium">
+                    {deal.probability != null ? `${deal.probability}%` : '-'}
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                    <Target className="h-4 w-4" />
+                    Pipeline
+                  </div>
+                  <div className="font-medium">{deal.pipelineName || '-'}</div>
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Source */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold uppercase text-muted-foreground">
+                Source
+              </h3>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline">
+                  {deal.pipedriveDealId ? 'Pipedrive' : 'API'}
+                </Badge>
               </div>
             </div>
 
@@ -400,8 +453,8 @@ export function DealDetailDrawer({
             {deal.status === 'lost' && deal.lostReason && (
               <>
                 <Separator />
-                <div>
-                  <h3 className="text-sm font-medium text-muted-foreground mb-1">Lost Reason</h3>
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold uppercase text-muted-foreground">Lost Reason</h3>
                   <p className="text-red-600">{deal.lostReason}</p>
                 </div>
               </>
@@ -410,9 +463,8 @@ export function DealDetailDrawer({
             <Separator />
 
             {/* Notes */}
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-2">
-                <MessageSquare className="h-4 w-4" />
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold uppercase text-muted-foreground">
                 Notes
               </h3>
 
@@ -487,13 +539,52 @@ export function DealDetailDrawer({
 
             <Separator />
 
-            {/* Actions */}
-            <div className="flex gap-2">
-              {deal.pipedriveDealId && pipedriveCompanyDomain && (
+            {/* Bottom Actions */}
+            <div className="grid grid-cols-3 gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setIsEditDialogOpen(true)}
+                className="w-full"
+              >
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit Deal
+              </Button>
+
+              {deal.status === 'won' && !deal.customerId ? (
+                <Button
+                  variant="default"
+                  onClick={handleConvertToCustomer}
+                  className="w-full"
+                >
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Convert to Customer
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  disabled
+                  className="w-full opacity-50"
+                  title={deal.customerId ? 'Already converted to customer' : 'Only won deals can be converted'}
+                >
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  {deal.customerId ? 'Already Converted' : 'Convert to Customer'}
+                </Button>
+              )}
+
+              {deal.pipedriveDealId && pipedriveCompanyDomain ? (
                 <Button
                   variant="outline"
                   onClick={handleViewInPipedrive}
-                  className="flex-1"
+                  className="w-full"
+                >
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  View in Pipedrive
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  disabled
+                  className="w-full opacity-50"
                 >
                   <ExternalLink className="mr-2 h-4 w-4" />
                   View in Pipedrive
@@ -506,6 +597,25 @@ export function DealDetailDrawer({
             <p className="text-muted-foreground">Deal not found</p>
           </div>
         )}
+
+        {/* Convert to Customer Dialog */}
+        <ConvertDealToCustomerDialog
+          open={isConvertDialogOpen}
+          onClose={handleConvertCancel}
+          deal={deal}
+          onSuccess={handleConvertSuccess}
+        />
+
+        {/* Edit Deal Dialog */}
+        <EditDealDialog
+          open={isEditDialogOpen}
+          onClose={() => setIsEditDialogOpen(false)}
+          deal={deal}
+          onSuccess={() => {
+            fetchDeal();
+            onRefresh?.();
+          }}
+        />
       </SheetContent>
     </Sheet>
   );

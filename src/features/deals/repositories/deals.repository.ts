@@ -44,6 +44,11 @@ interface DealRow {
   contact_email: string | null;
   contact_phone: string | null;
   organization_name: string | null;
+  organization_address_street: string | null;
+  organization_address_city: string | null;
+  organization_address_state: string | null;
+  organization_address_postal_code: string | null;
+  organization_address_country: string | null;
   customer_id: string | null;
   lead_id: string | null;
   owner_id: string | null;
@@ -99,6 +104,11 @@ function mapRowToDeal(row: DealRow): Deal {
     contactEmail: row.contact_email,
     contactPhone: row.contact_phone,
     organizationName: row.organization_name,
+    organizationAddressStreet: row.organization_address_street,
+    organizationAddressCity: row.organization_address_city,
+    organizationAddressState: row.organization_address_state,
+    organizationAddressPostalCode: row.organization_address_postal_code,
+    organizationAddressCountry: row.organization_address_country,
     customerId: row.customer_id,
     leadId: row.lead_id,
     ownerId: row.owner_id,
@@ -417,6 +427,11 @@ class DealsRepository {
         contact_email: dto.contactEmail || null,
         contact_phone: dto.contactPhone || null,
         organization_name: dto.organizationName || null,
+        organization_address_street: dto.organizationAddressStreet || null,
+        organization_address_city: dto.organizationAddressCity || null,
+        organization_address_state: dto.organizationAddressState || null,
+        organization_address_postal_code: dto.organizationAddressPostalCode || null,
+        organization_address_country: dto.organizationAddressCountry || null,
         customer_id: dto.customerId || null,
         lead_id: dto.leadId || null,
         owner_id: dto.ownerId || null,
@@ -473,6 +488,11 @@ class DealsRepository {
     if (dto.contactEmail !== undefined) updateData.contact_email = dto.contactEmail;
     if (dto.contactPhone !== undefined) updateData.contact_phone = dto.contactPhone;
     if (dto.organizationName !== undefined) updateData.organization_name = dto.organizationName;
+    if (dto.organizationAddressStreet !== undefined) updateData.organization_address_street = dto.organizationAddressStreet;
+    if (dto.organizationAddressCity !== undefined) updateData.organization_address_city = dto.organizationAddressCity;
+    if (dto.organizationAddressState !== undefined) updateData.organization_address_state = dto.organizationAddressState;
+    if (dto.organizationAddressPostalCode !== undefined) updateData.organization_address_postal_code = dto.organizationAddressPostalCode;
+    if (dto.organizationAddressCountry !== undefined) updateData.organization_address_country = dto.organizationAddressCountry;
     if (dto.customerId !== undefined) updateData.customer_id = dto.customerId;
     if (dto.leadId !== undefined) updateData.lead_id = dto.leadId;
     if (dto.ownerId !== undefined) updateData.owner_id = dto.ownerId;
@@ -575,6 +595,11 @@ class DealsRepository {
     if (dto.contactEmail !== undefined) updateData.contact_email = dto.contactEmail;
     if (dto.contactPhone !== undefined) updateData.contact_phone = dto.contactPhone;
     if (dto.organizationName !== undefined) updateData.organization_name = dto.organizationName;
+    if (dto.organizationAddressStreet !== undefined) updateData.organization_address_street = dto.organizationAddressStreet;
+    if (dto.organizationAddressCity !== undefined) updateData.organization_address_city = dto.organizationAddressCity;
+    if (dto.organizationAddressState !== undefined) updateData.organization_address_state = dto.organizationAddressState;
+    if (dto.organizationAddressPostalCode !== undefined) updateData.organization_address_postal_code = dto.organizationAddressPostalCode;
+    if (dto.organizationAddressCountry !== undefined) updateData.organization_address_country = dto.organizationAddressCountry;
     if (dto.pipedriveOwnerId !== undefined) updateData.pipedrive_owner_id = dto.pipedriveOwnerId;
     if (dto.pipedriveOwnerName !== undefined) updateData.pipedrive_owner_name = dto.pipedriveOwnerName;
 

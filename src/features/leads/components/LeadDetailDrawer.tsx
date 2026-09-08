@@ -391,10 +391,10 @@ export function LeadDetailDrawer({
 
               <Separator />
 
-              {/* Deal Info */}
+              {/* Lead Info */}
               <div className="space-y-3">
                 <h3 className="text-sm font-semibold uppercase text-muted-foreground">
-                  Deal Information
+                  Lead Information
                 </h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -443,7 +443,7 @@ export function LeadDetailDrawer({
                   {lead.dealTitle && (
                     <div>
                       <div className="text-sm text-muted-foreground">
-                        Deal Title
+                        Lead Title
                       </div>
                       <div className="font-medium">{lead.dealTitle}</div>
                     </div>
@@ -649,7 +649,7 @@ export function LeadDetailDrawer({
               <Separator />
 
               {/* Actions */}
-              <div className="flex flex-col gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {!isConvertedOrDeal && (
                   <Button
                     variant="outline"

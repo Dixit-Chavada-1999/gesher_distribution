@@ -679,6 +679,120 @@ class PipedrivePushService {
   }
 
   // ============================================
+  // DEAL UPDATE SYNC
+  // ============================================
+
+  /**
+   * Push complete deal update to Pipedrive
+   * Updates deal, person, and organization
+   */
+  async pushDealUpdate(dealId: string): Promise<PushDealUpdateResult> {
+    const connectionId = await this.getConnectionId();
+    if (!connectionId) {
+      return { success: false, error: 'Pipedrive not connected' };
+    }
+
+    // Get deal with all fields
+    const { data: deal } = await db
+      .from('deals')
+      .select('*')
+      .eq('id', dealId)
+      .single();
+
+    if (!deal) {
+      return { success: false, error: 'Deal not found' };
+    }
+
+    if (!deal.pipedrive_deal_id) {
+      // Deal not linked to Pipedrive, skip sync
+      return { success: true };
+    }
+
+    try {
+      // 1. Update the deal
+      await pipedriveRateLimiter.execute(() =>
+        retryWithBackoff(
+          async () => {
+            await pipedriveProvider.updateDeal(connectionId, deal.pipedrive_deal_id.toString(), {
+              title: deal.title,
+              value: deal.value || undefined,
+              currency: deal.currency || 'USD',
+              expectedCloseDate: deal.expected_close_date
+                ? new Date(deal.expected_close_date).toISOString().split('T')[0]
+                : undefined,
+            });
+          },
+          { shouldRetry: isRetryableError }
+        )
+      );
+
+      // 2. Update person if exists (contact info)
+      if (deal.pipedrive_person_id && (deal.contact_name || deal.contact_email || deal.contact_phone)) {
+        try {
+          await pipedriveRateLimiter.execute(() =>
+            retryWithBackoff(
+              async () => {
+                // Parse name into firstName and lastName
+                const fullName = deal.contact_name || '';
+                const nameParts = fullName.trim().split(' ');
+                const firstName = nameParts[0] || '';
+                const lastName = nameParts.slice(1).join(' ') || undefined;
+
+                await pipedriveProvider.updateContact(connectionId, deal.pipedrive_person_id.toString(), {
+                  firstName,
+                  lastName,
+                  email: deal.contact_email || undefined,
+                  phone: deal.contact_phone || undefined,
+                });
+              },
+              { shouldRetry: isRetryableError }
+            )
+          );
+        } catch (personError) {
+          console.warn('[PipedrivePush] Failed to update person (non-blocking):', personError);
+        }
+      }
+
+      // 3. Update organization if exists (company name and address)
+      if (deal.pipedrive_org_id && (deal.organization_name || deal.organization_address_street)) {
+        try {
+          await pipedriveRateLimiter.execute(() =>
+            retryWithBackoff(
+              async () => {
+                await pipedriveProvider.updateOrganization(connectionId, deal.pipedrive_org_id.toString(), {
+                  name: deal.organization_name || undefined,
+                  address: {
+                    street: deal.organization_address_street || undefined,
+                    city: deal.organization_address_city || undefined,
+                    state: deal.organization_address_state || undefined,
+                    postalCode: deal.organization_address_postal_code || undefined,
+                    country: deal.organization_address_country || undefined,
+                  },
+                });
+              },
+              { shouldRetry: isRetryableError }
+            )
+          );
+        } catch (orgError) {
+          console.warn('[PipedrivePush] Failed to update organization (non-blocking):', orgError);
+        }
+      }
+
+      // Log success
+      await this.logSync('push', 'deal_update', deal.pipedrive_deal_id, 'success', 'Deal updated in Pipedrive');
+
+      return { success: true };
+    } catch (error) {
+      console.error('[PipedrivePush] Error pushing deal update:', error);
+      await this.logSync('push', 'deal_update', deal.pipedrive_deal_id, 'failed', error instanceof Error ? error.message : 'Unknown error');
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to update deal in Pipedrive',
+      };
+    }
+  }
+
+  // ============================================
   // DEAL STATUS SYNC
   // ============================================
 
