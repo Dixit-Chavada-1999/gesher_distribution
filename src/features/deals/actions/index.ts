@@ -547,7 +547,7 @@ export async function convertDealToCustomer(
     }
 
     // 5. Update deal to mark as converted
-    // await dealsService.update(dealId, { ... }); // If you want to track conversion
+    await dealsService.updateDeal(dealId, { customerId: customer.id }, user.id);
 
     revalidatePath('/deals');
     revalidatePath('/customers');

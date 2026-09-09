@@ -396,7 +396,7 @@ export function DealsTable({
                     Reopen Deal
                   </DropdownMenuItem>
                 )}
-                {deal.status === 'won' && (
+                {deal.status === 'won' && !deal.customerId && (
                   <DropdownMenuItem
                     onClick={(e) => { e.stopPropagation(); handleConvertToCustomer(deal); }}
                     disabled={isUpdating}
