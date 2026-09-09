@@ -36,7 +36,7 @@ interface DbQuote {
   sales_rep_id: string | null;
   currency_code: string;
   status: QuoteStatus;
-  product_source: 'dropship' | 'warehouse';
+  product_source: 'direct' | 'warehouse';
   billing_address_street: string | null;
   billing_address_city: string | null;
   billing_address_state: string | null;
@@ -853,7 +853,7 @@ class QuoteRepositoryImpl {
       salesRepId: data.sales_rep_id,
       currencyCode: data.currency_code,
       status: data.status,
-      productSource: data.product_source || 'dropship',
+      productSource: data.product_source || 'direct',
       billingAddressStreet: data.billing_address_street,
       billingAddressCity: data.billing_address_city,
       billingAddressState: data.billing_address_state,
@@ -914,7 +914,7 @@ class QuoteRepositoryImpl {
       quote_date: string;
       valid_until: string | null;
       status: QuoteStatus;
-      product_source?: 'dropship' | 'warehouse';
+      product_source?: 'direct' | 'warehouse';
       grand_total: number;
       currency_code: string;
       created_at: string;
@@ -932,7 +932,7 @@ class QuoteRepositoryImpl {
       quoteDate: data.quote_date,
       validUntil: data.valid_until,
       status: data.status,
-      productSource: data.product_source || 'dropship',
+      productSource: data.product_source || 'direct',
       grandTotal: data.grand_total,
       currencyCode: data.currency_code,
       itemCount: itemCounts[data.id] || 0,

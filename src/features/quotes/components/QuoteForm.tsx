@@ -136,6 +136,7 @@ const getDefaultValues = (initialData?: Partial<QuoteFormInput>): any => {
     customerNotes: initialData?.customerNotes || '',
     internalNotes: initialData?.internalNotes || '',
     termsAndConditions: initialData?.termsAndConditions || '',
+    customerPoNumber: initialData?.customerPoNumber || '',
   };
 };
 

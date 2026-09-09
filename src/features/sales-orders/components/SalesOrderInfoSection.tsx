@@ -13,11 +13,13 @@
  * - Uses React.memo to prevent unnecessary re-renders
  */
 
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useFormContext, Controller } from 'react-hook-form';
+import { Wand2 } from 'lucide-react';
 
 import { Label } from '@/shared/components/ui/label';
 import { Input } from '@/shared/components/ui/input';
+import { Button } from '@/shared/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -26,6 +28,7 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 import { Separator } from '@/shared/components/ui/separator';
+import { getNextOrderNumber } from '../actions';
 
 import type { SalesOrderInfoSectionProps } from '../types';
 import { ORDER_STATUS_LABELS, type OrderStatus } from '../types';
@@ -42,7 +45,23 @@ function SalesOrderInfoSectionComponent({
   warehouses,
   currencies,
 }: SalesOrderInfoSectionProps) {
-  const { register, control, formState: { errors } } = useFormContext<SalesOrderFormInput>();
+  const { register, control, formState: { errors }, setValue } = useFormContext<SalesOrderFormInput>();
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  // Auto-generate order number
+  const handleAutoGenerate = async () => {
+    setIsGenerating(true);
+    try {
+      const result = await getNextOrderNumber();
+      if (result.success && result.data) {
+        setValue('orderNumber', result.data);
+      }
+    } catch (error) {
+      console.error('Failed to generate order number:', error);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   // Memoized order statuses
   const orderStatuses = useMemo<OrderStatus[]>(() => [
@@ -74,13 +93,30 @@ function SalesOrderInfoSectionComponent({
         {/* Sales Order Number */}
         <div className="space-y-2">
           <Label htmlFor="orderNumber">Sales Order Number</Label>
-          <Input
-            id="orderNumber"
-            placeholder="Auto-generated"
-            disabled
-            className="bg-muted"
-            {...register('orderNumber')}
-          />
+          <div className="flex gap-2">
+            <Input
+              id="orderNumber"
+              placeholder="Enter or auto-generate"
+              className={errors.orderNumber ? 'border-destructive' : ''}
+              {...register('orderNumber')}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={handleAutoGenerate}
+              disabled={isGenerating}
+              title="Auto-generate order number"
+            >
+              <Wand2 className={`h-4 w-4 ${isGenerating ? 'animate-pulse' : ''}`} />
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Enter a custom number or click the wand to auto-generate
+          </p>
+          {errors.orderNumber && (
+            <p className="text-sm text-destructive">{errors.orderNumber.message}</p>
+          )}
         </div>
 
         {/* Order Date */}
@@ -218,13 +254,13 @@ function SalesOrderInfoSectionComponent({
 
         {/* Order Series */}
         <div className="space-y-2">
-          <Label htmlFor="orderSeries">Order Series</Label>
+          <Label htmlFor="orderSeries">Order Series *</Label>
           <Controller
             name="orderSeries"
             control={control}
             render={({ field }) => (
               <Select value={field.value || ''} onValueChange={field.onChange}>
-                <SelectTrigger id="orderSeries">
+                <SelectTrigger id="orderSeries" className={errors.orderSeries ? 'border-destructive' : ''}>
                   <SelectValue placeholder="Select order series" />
                 </SelectTrigger>
                 <SelectContent>
@@ -237,6 +273,9 @@ function SalesOrderInfoSectionComponent({
               </Select>
             )}
           />
+          {errors.orderSeries && (
+            <p className="text-sm text-destructive">{errors.orderSeries.message}</p>
+          )}
         </div>
 
         {/* Order Status */}

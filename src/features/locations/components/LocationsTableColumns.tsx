@@ -78,7 +78,7 @@ export function getLocationsTableColumns(options: ColumnOptions = {}): ColumnDef
         const type = row.getValue('locationType') as string;
         const typeLabels: Record<string, string> = {
           warehouse: 'Warehouse',
-          drop_ship: 'Drop Ship',
+          drop_ship: 'Direct',
           virtual: 'Virtual',
         };
         const typeColors: Record<string, string> = {

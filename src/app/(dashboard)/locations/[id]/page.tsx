@@ -30,7 +30,7 @@ export default async function LocationPage({ params }: LocationPageProps) {
 
   const typeLabels: Record<string, string> = {
     warehouse: 'Warehouse',
-    drop_ship: 'Drop Ship',
+    drop_ship: 'Direct',
     virtual: 'Virtual',
   };
 

@@ -5,6 +5,7 @@
  * Handles workflow, validation, and orchestration.
  */
 
+import { db } from '@/shared/lib/supabase/database';
 import { PackingListRepository } from '../repositories';
 import { PickTicketRepository } from '../repositories';
 import type {
@@ -182,23 +183,51 @@ export const PackingListService = {
         };
       }
 
-      // Map pick ticket items to packing list items
-      const items = pickTicket.items.map((item) => ({
-        pickTicketItemId: item.id,
-        productId: item.productId,
-        sku: item.sku,
-        description: item.description,
-        quantityPacked: item.quantityPicked, // Pack what was picked
-        packageNumber: 1, // Default to single package
-        weight: null,
-      }));
+      // Fetch product weights for all items
+      const productIds = pickTicket.items.map((item) => item.productId);
+      const { data: products, error: productsError } = await db
+        .from('products')
+        .select('id, weight_lbs')
+        .in('id', productIds);
+
+      if (productsError) {
+        console.error('[PackingListService.createFromPickTicket] Failed to fetch product weights:', productsError);
+      }
+
+      // Create a map of productId -> weight_lbs
+      const productWeightMap = new Map<string, number>();
+      if (products) {
+        products.forEach((product) => {
+          if (product.weight_lbs) {
+            productWeightMap.set(product.id, product.weight_lbs);
+          }
+        });
+      }
+
+      // Map pick ticket items to packing list items with calculated weights
+      let totalWeight = 0;
+      const items = pickTicket.items.map((item) => {
+        const productWeight = productWeightMap.get(item.productId) || 0;
+        const itemWeight = item.quantityPicked * productWeight;
+        totalWeight += itemWeight;
+
+        return {
+          pickTicketItemId: item.id,
+          productId: item.productId,
+          sku: item.sku,
+          description: item.description,
+          quantityPacked: item.quantityPicked, // Pack what was picked
+          packageNumber: 1, // Default to single package
+          weight: itemWeight > 0 ? itemWeight : null,
+        };
+      });
 
       // Create packing list
       const dto: CreatePackingListDTO = {
         pickTicketId,
         salesOrderId: pickTicket.salesOrderId,
         totalPackages: 1,
-        totalWeight: null,
+        totalWeight: totalWeight > 0 ? totalWeight : null,
         weightUnit: 'lbs',
         notes: null,
         items,

@@ -24,6 +24,7 @@ export interface PickTicketPdfData {
   warehouseCode: string;
   assignedTo: string | null;
   status?: string;
+  totalWeight?: number;
   items: Array<{
     rowNum: number;
     sku: string;
@@ -31,6 +32,7 @@ export interface PickTicketPdfData {
     binLocation?: string;
     quantity: number;
     uom: string;
+    weight?: number;
   }>;
   notes?: string | null;
   customerPoNumber?: string | null;
@@ -674,6 +676,12 @@ function generatePickTicketHtml(data: PickTicketPdfData): string {
           <div class="summary-label">Total Qty</div>
           <div class="summary-value">${totalQty}</div>
         </div>
+        ${data.totalWeight ? `
+        <div class="summary-card">
+          <div class="summary-label">Total Weight</div>
+          <div class="summary-value">${data.totalWeight.toLocaleString()} lbs</div>
+        </div>
+        ` : ''}
       </div>
     </div>
 

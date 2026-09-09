@@ -40,7 +40,7 @@ interface DbSalesOrder {
   customer_po_number: string | null;
   status: OrderStatus;
   credit_status?: OrderCreditStatus;
-  product_source?: 'dropship' | 'warehouse';
+  product_source?: 'direct' | 'warehouse';
   order_series?: string | null;
   billing_address_street: string | null;
   billing_address_city: string | null;
@@ -437,8 +437,8 @@ class SalesOrderRepositoryImpl {
    * Create a new sales order with items
    */
   async create(data: CreateSalesOrderDTO, userId?: string): Promise<SalesOrderWithItems> {
-    // Generate order number
-    const orderNumber = await this.getNextOrderNumber();
+    // Use provided order number or generate one
+    const orderNumber = data.orderNumber || await this.getNextOrderNumber();
 
     // Calculate totals from items
     const totals = calculateOrderTotals(data.items);
@@ -456,7 +456,7 @@ class SalesOrderRepositoryImpl {
         currency_code: data.currencyCode || 'USD',
         customer_po_number: data.customerPoNumber || null,
         status: data.status || 'draft',
-        product_source: data.productSource || 'dropship',
+        product_source: data.productSource || 'direct',
         order_series: data.orderSeries || null,
         billing_address_street: data.billingAddress.street,
         billing_address_city: data.billingAddress.city,
@@ -961,7 +961,7 @@ class SalesOrderRepositoryImpl {
       customerPoNumber: data.customer_po_number,
       status: data.status,
       creditStatus: data.credit_status || 'ok',
-      productSource: data.product_source || 'dropship',
+      productSource: data.product_source || 'direct',
       orderSeries: data.order_series || null,
       billingAddressStreet: data.billing_address_street,
       billingAddressCity: data.billing_address_city,
@@ -1029,7 +1029,7 @@ class SalesOrderRepositoryImpl {
       requested_delivery_date: string | null;
       status: OrderStatus;
       credit_status?: OrderCreditStatus;
-      product_source?: 'dropship' | 'warehouse';
+      product_source?: 'direct' | 'warehouse';
       order_series?: string | null;
       grand_total: number;
       currency_code: string;
@@ -1049,7 +1049,7 @@ class SalesOrderRepositoryImpl {
       requestedDeliveryDate: data.requested_delivery_date,
       status: data.status,
       creditStatus: data.credit_status || 'ok',
-      productSource: data.product_source || 'dropship',
+      productSource: data.product_source || 'direct',
       orderSeries: data.order_series || null,
       grandTotal: data.grand_total,
       currencyCode: data.currency_code,

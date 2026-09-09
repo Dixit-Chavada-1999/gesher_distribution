@@ -10,7 +10,7 @@ import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Separator } from '@/shared/components/ui/separator';
 import { Skeleton } from '@/shared/components/ui/skeleton';
-import { Pencil, CreditCard, Building2, MapPin, Package, Calendar } from 'lucide-react';
+import { Pencil, CreditCard, Building2, MapPin, Package, Calendar, FileText } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useInvoice } from '../hooks/useInvoice';
 import { INVOICE_STATUS_COLORS, INVOICE_STATUS_LABELS } from '../types';
@@ -120,6 +120,37 @@ export function ViewInvoiceDrawer({
             </div>
 
             <Separator />
+
+            {/* Order Information - Only show if linked to Sales Order */}
+            {invoice.salesOrder && (
+              <>
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                    Order Information
+                  </h3>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div className="flex items-start gap-2">
+                      <FileText className="h-4 w-4 text-muted-foreground mt-0.5" />
+                      <div>
+                        <p className="text-muted-foreground">Sales Order</p>
+                        <p className="font-medium">{invoice.salesOrder.orderNumber}</p>
+                      </div>
+                    </div>
+                    {invoice.salesOrder.customerPoNumber && (
+                      <div className="flex items-start gap-2">
+                        <FileText className="h-4 w-4 text-muted-foreground mt-0.5" />
+                        <div>
+                          <p className="text-muted-foreground">Customer PO</p>
+                          <p className="font-medium">{invoice.salesOrder.customerPoNumber}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <Separator />
+              </>
+            )}
 
             {/* Billing Address */}
             <div className="space-y-3">

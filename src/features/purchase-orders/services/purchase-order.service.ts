@@ -143,6 +143,18 @@ export const purchaseOrderService = {
         };
       }
 
+      // Check for duplicate PO number if manually entered
+      if (input.poNumber && input.poNumber.trim() !== '') {
+        const existing = await purchaseOrderRepository.findByPONumber(input.poNumber.trim());
+        if (existing) {
+          return {
+            success: false,
+            error: `Purchase order number "${input.poNumber}" already exists.`,
+            errors: { poNumber: [`PO number "${input.poNumber}" already exists`] },
+          };
+        }
+      }
+
       const po = await purchaseOrderRepository.create(validation.data, userId);
 
       // Log audit event (fire and forget)

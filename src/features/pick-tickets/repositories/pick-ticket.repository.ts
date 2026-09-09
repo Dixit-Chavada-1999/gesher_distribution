@@ -326,7 +326,7 @@ class PickTicketRepositoryImpl {
         items:pick_ticket_items(*),
         sales_orders(id, order_number, status, customers(name)),
         locations(id, location_code, name),
-        packing_lists(id, packing_list_number, status)
+        packing_lists(id, packing_list_number, status, deleted_at)
       `
       )
       .eq('id', id)
@@ -350,7 +350,11 @@ class PickTicketRepositoryImpl {
     const warehouse = data.locations as Record<string, unknown>;
     const packingListsRaw = data.packing_lists;
     // packing_lists returns an array, get the first one (there should only be one per pick ticket)
-    const packingListData = Array.isArray(packingListsRaw) ? packingListsRaw[0] : packingListsRaw;
+    // Filter out deleted packing lists
+    let packingListData = Array.isArray(packingListsRaw) ? packingListsRaw[0] : packingListsRaw;
+    if (packingListData && (packingListData as any).deleted_at) {
+      packingListData = null; // Treat deleted packing list as if it doesn't exist
+    }
 
     const pickTicket = mapToPickTicket(data as unknown as DbPickTicket);
     const items = ((data.items as DbPickTicketItem[]) || []).map(mapToPickTicketItem);
@@ -423,18 +427,45 @@ class PickTicketRepositoryImpl {
   }
 
   /**
+   * Find a pick ticket by pick ticket number
+   */
+  async findByPickTicketNumber(pickTicketNumber: string): Promise<PickTicketWithItems | null> {
+    const { data, error } = await db
+      .from('pick_tickets')
+      .select('id')
+      .eq('pick_ticket_number', pickTicketNumber)
+      .is('deleted_at', null)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {return null;}
+      console.error('[PickTicketRepository.findByPickTicketNumber] Error:', error);
+      throw new Error(`Failed to fetch pick ticket: ${error.message}`);
+    }
+
+    if (!data) {return null;}
+
+    return this.findById(data.id);
+  }
+
+  /**
    * Create a new pick ticket
    */
   async create(dto: CreatePickTicketDTO, userId?: string): Promise<PickTicket> {
-    // Generate pick ticket number
-    const { data: numberData, error: numberError } = await db.rpc('generate_pick_ticket_number');
+    // Use provided pick ticket number or auto-generate
+    let pickTicketNumber: string;
+    if (dto.pickTicketNumber && dto.pickTicketNumber.trim() !== '') {
+      pickTicketNumber = dto.pickTicketNumber.trim();
+    } else {
+      const { data: numberData, error: numberError } = await db.rpc('generate_pick_ticket_number');
 
-    if (numberError) {
-      console.error('[PickTicketRepository.create] Number generation error:', numberError);
-      throw new Error(`Failed to generate pick ticket number: ${numberError.message}`);
+      if (numberError) {
+        console.error('[PickTicketRepository.create] Number generation error:', numberError);
+        throw new Error(`Failed to generate pick ticket number: ${numberError.message}`);
+      }
+
+      pickTicketNumber = numberData as string;
     }
-
-    const pickTicketNumber = numberData as string;
 
     // Insert pick ticket
     const { data: pickTicketData, error: pickTicketError } = await db

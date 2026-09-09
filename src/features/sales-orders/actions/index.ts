@@ -256,7 +256,7 @@ export async function updateSalesOrder(
 
   const fields = [
     'orderDate', 'requestedDeliveryDate', 'customerId', 'salesRepId',
-    'warehouseId', 'currencyCode', 'customerPoNumber',
+    'warehouseId', 'currencyCode', 'customerPoNumber', 'orderSeries',
     'shippingMethod', 'customerNotes', 'internalNotes'
   ];
 
@@ -378,6 +378,67 @@ export async function updateSalesOrderSeries(
 }
 
 /**
+ * Update order header and items from DTO (for Edit drawer)
+ */
+export async function updateSalesOrderFromDTO(
+  orderId: string,
+  dto: {
+    orderDate: Date;
+    requestedDeliveryDate: Date | null;
+    customerId: string;
+    salesRepId: string | null;
+    warehouseId: string | null;
+    currencyCode: string;
+    customerPoNumber: string | null;
+    orderSeries: string | null;
+    status: OrderStatus;
+    billingAddress: {
+      street: string | null;
+      city: string | null;
+      state: string | null;
+      postalCode: string | null;
+      country: string | null;
+    };
+    shippingAddress: {
+      street: string | null;
+      city: string | null;
+      state: string | null;
+      postalCode: string | null;
+      country: string | null;
+    };
+    shippingMethod: string | null;
+    items: CreateSalesOrderItemDTO[];
+    customerNotes: string | null;
+    internalNotes: string | null;
+  }
+): Promise<ActionResult<SalesOrderWithItems>> {
+  const auth = await authorize('orders.edit');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  // Extract items and header data
+  const { items, ...headerData } = dto;
+
+  // Update header fields
+  const headerResult = await salesOrderService.update(orderId, headerData, auth.user.id);
+  if (!headerResult.success) {
+    return headerResult as ActionResult<SalesOrderWithItems>;
+  }
+
+  // Update items
+  const itemsResult = await salesOrderService.updateItems(orderId, items, auth.user.id);
+
+  if (itemsResult.success) {
+    revalidatePath('/sales-orders');
+    revalidatePath(`/sales-orders/${orderId}`);
+    revalidatePath('/api/sales-orders');
+  }
+
+  return itemsResult;
+}
+
+/**
  * Update order items
  */
 export async function updateSalesOrderItems(
@@ -444,7 +505,7 @@ export async function submitSalesOrder(id: string): Promise<ActionResult<SalesOr
 
 /**
  * Confirm a pending order (pending -> confirmed)
- * Also creates a Purchase Order automatically for dropship orders
+ * Also creates a Purchase Order automatically for direct orders
  * Note: Inventory allocation happens when Pick Ticket is created (not here)
  */
 export async function confirmSalesOrder(id: string): Promise<ActionResult<SalesOrder>> {
@@ -470,11 +531,11 @@ export async function confirmSalesOrder(id: string): Promise<ActionResult<SalesO
   const result = await salesOrderService.confirm(id, auth.user.id);
 
   if (result.success) {
-    // Only dropship orders need a supplier PO. Warehouse orders ship from our
+    // Only direct orders need a supplier PO. Warehouse orders ship from our
     // own stock, so raising a PO would put a phantom order in front of the
     // supplier — and their confirmation would create a second shipment for an
     // order the warehouse is already fulfilling.
-    if (result.data?.productSource === 'dropship') {
+    if (result.data?.productSource === 'direct') {
       try {
         await createPurchaseOrderFromSalesOrder(id, auth.user.id);
       } catch (error) {
@@ -519,9 +580,9 @@ export async function regeneratePurchaseOrder(salesOrderId: string): Promise<Act
     return { success: false, error: 'Sales Order must be confirmed or processing to create a PO' };
   }
 
-  // Validate product source - must be dropship
-  if (so.product_source !== 'dropship') {
-    return { success: false, error: 'Only dropship orders can have Purchase Orders' };
+  // Validate product source - must be direct
+  if (so.product_source !== 'direct') {
+    return { success: false, error: 'Only direct orders can have Purchase Orders' };
   }
 
   // Validate order series
@@ -1232,8 +1293,8 @@ export async function getSalesOrdersOnHold(): Promise<ActionResult<SalesOrderLis
       requestedDeliveryDate: row.requested_delivery_date,
       status: row.status as OrderStatus,
       creditStatus: row.credit_status as 'ok' | 'hold',
-      // Matches the repository mapper, which defaults a null source to dropship
-      productSource: row.product_source || 'dropship',
+      // Matches the repository mapper, which defaults a null source to direct
+      productSource: row.product_source || 'direct',
       grandTotal: row.grand_total,
       currencyCode: row.currency_code,
       orderSeries: row.order_series,

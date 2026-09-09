@@ -123,6 +123,17 @@ class PickTicketServiceImpl {
         }
       }
 
+      // Check for duplicate pick ticket number if manually entered
+      if (dto.pickTicketNumber && dto.pickTicketNumber.trim() !== '') {
+        const existing = await PickTicketRepository.findByPickTicketNumber(dto.pickTicketNumber.trim());
+        if (existing) {
+          return {
+            success: false,
+            error: `Pick ticket number "${dto.pickTicketNumber}" already exists.`,
+          };
+        }
+      }
+
       const pickTicket = await PickTicketRepository.create(dto, userId);
 
       // Log audit event (fire and forget)

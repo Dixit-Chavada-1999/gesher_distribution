@@ -26,7 +26,7 @@ import { Separator } from '@/shared/components/ui/separator';
 import { Alert, AlertDescription } from '@/shared/components/ui/alert';
 
 import { SalesOrderForm } from './SalesOrderForm';
-import { getSalesOrder, updateSalesOrderItems } from '../actions';
+import { getSalesOrder, updateSalesOrderFromDTO } from '../actions';
 import { orderToFormValues, formToCreateDTO } from '../lib/schemas';
 import type { SalesOrderWithItems, SalesOrderMasterData } from '../types';
 
@@ -124,8 +124,15 @@ export function EditSalesOrderDrawer({
       // Convert form data to DTO
       const dto = formToCreateDTO(formData);
 
-      // Update order items
-      const result = await updateSalesOrderItems(orderId, dto.items);
+      console.log('[EditSalesOrderDrawer] Updating order with DTO:', {
+        orderDate: dto.orderDate,
+        requestedDeliveryDate: dto.requestedDeliveryDate,
+        orderSeries: dto.orderSeries,
+        itemsCount: dto.items.length,
+      });
+
+      // Update order header AND items
+      const result = await updateSalesOrderFromDTO(orderId, dto);
 
       if (result.success && result.data) {
         toast.success(`Order ${result.data.orderNumber} updated successfully`);
@@ -187,6 +194,28 @@ export function EditSalesOrderDrawer({
     })),
   }) : undefined;
 
+  // Debug: Log the order data and converted form data
+  useEffect(() => {
+    if (order) {
+      console.log('[EditSalesOrderDrawer] Raw order data:', {
+        id: order.id,
+        orderNumber: order.orderNumber,
+        orderDate: order.orderDate,
+        requestedDeliveryDate: order.requestedDeliveryDate,
+        orderSeries: order.orderSeries,
+        status: order.status,
+      });
+    }
+    if (initialFormData) {
+      console.log('[EditSalesOrderDrawer] initialFormData:', {
+        orderDate: initialFormData.orderDate,
+        requestedDeliveryDate: initialFormData.requestedDeliveryDate,
+        orderSeries: initialFormData.orderSeries,
+        orderNumber: initialFormData.orderNumber,
+      });
+    }
+  }, [order, initialFormData]);
+
   // ----------------------------------------
   // RENDER
   // ----------------------------------------
@@ -222,6 +251,7 @@ export function EditSalesOrderDrawer({
               </div>
             ) : order && initialFormData ? (
               <SalesOrderForm
+                key={order.id}
                 masterData={masterData}
                 initialData={initialFormData}
                 onSubmit={handleUpdate}

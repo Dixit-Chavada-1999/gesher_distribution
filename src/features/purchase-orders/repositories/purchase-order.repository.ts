@@ -219,6 +219,27 @@ class PurchaseOrderRepositoryImpl {
   }
 
   /**
+   * Find a single PO by PO number
+   */
+  async findByPONumber(poNumber: string): Promise<PurchaseOrderWithItems | null> {
+    const { data, error } = await db
+      .from('purchase_orders')
+      .select('id')
+      .eq('po_number', poNumber)
+      .is('deleted_at', null)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {return null;}
+      throw new Error(`Failed to fetch purchase order: ${error.message}`);
+    }
+
+    if (!data) {return null;}
+
+    return this.findById(data.id);
+  }
+
+  /**
    * Find all items for a PO
    */
   async findItemsByPOId(poId: string): Promise<PurchaseOrderItem[]> {

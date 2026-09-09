@@ -566,7 +566,7 @@ class InvoiceRepositoryImpl {
   private async getSalesOrderSummary(soId: string): Promise<SalesOrderSummary | null> {
     const { data, error } = await db
       .from('sales_orders')
-      .select('id, order_number, status')
+      .select('id, order_number, status, customer_po_number')
       .eq('id', soId)
       .single();
 
@@ -576,6 +576,7 @@ class InvoiceRepositoryImpl {
       id: data.id,
       orderNumber: data.order_number,
       status: data.status,
+      customerPoNumber: data.customer_po_number,
     };
   }
 

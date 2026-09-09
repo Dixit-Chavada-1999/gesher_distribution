@@ -93,7 +93,53 @@ function SalesOrderFormComponent({
     mode: 'onBlur',
   });
 
-  const { watch, setValue, handleSubmit } = methods;
+  const { watch, setValue, handleSubmit, reset } = methods;
+
+  // Reset form when initialData changes (for edit mode)
+  useEffect(() => {
+    if (initialData) {
+      console.log('[SalesOrderForm] Resetting form with initialData:', {
+        orderDate: initialData.orderDate,
+        requestedDeliveryDate: initialData.requestedDeliveryDate,
+        orderSeries: initialData.orderSeries,
+        orderNumber: initialData.orderNumber,
+        status: initialData.status,
+      });
+
+      // Use reset to update all form values at once
+      reset({
+        ...getDefaultFormValues(),
+        ...initialData,
+      });
+
+      // Double-check critical fields are set (belt-and-suspenders approach)
+      if (initialData.orderDate) {
+        setValue('orderDate', initialData.orderDate, { shouldValidate: false });
+      }
+      if (initialData.requestedDeliveryDate) {
+        setValue('requestedDeliveryDate', initialData.requestedDeliveryDate, { shouldValidate: false });
+      }
+      if (initialData.orderSeries) {
+        setValue('orderSeries', initialData.orderSeries, { shouldValidate: false });
+      }
+      if (initialData.orderNumber) {
+        setValue('orderNumber', initialData.orderNumber, { shouldValidate: false });
+      }
+
+      console.log('[SalesOrderForm] Form reset complete');
+
+      // Log the actual form values after reset to verify they were set
+      setTimeout(() => {
+        const currentValues = methods.getValues();
+        console.log('[SalesOrderForm] Form values after reset:', {
+          orderDate: currentValues.orderDate,
+          requestedDeliveryDate: currentValues.requestedDeliveryDate,
+          orderSeries: currentValues.orderSeries,
+          orderNumber: currentValues.orderNumber,
+        });
+      }, 100);
+    }
+  }, [initialData, reset, setValue, methods]);
 
   // Watch form values for auto-calculations and auto-fill
   const customerId = watch('customerId');

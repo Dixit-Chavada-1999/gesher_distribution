@@ -21,7 +21,7 @@ export const quoteStatusSchema = z.enum([
   'converted',
 ]);
 
-export const productSourceSchema = z.enum(['dropship', 'warehouse']);
+export const productSourceSchema = z.enum(['direct', 'warehouse']);
 
 export const unitCodeSchema = z.enum(['EA', 'SET', 'PR', 'BOX']);
 
@@ -142,14 +142,14 @@ export const quoteFormSchema = z.object({
   salesRepId: z.string().default(''),
   currencyId: z.string().default('USD'),
   status: quoteStatusSchema.default('draft'),
-  productSource: z.string().default(''),
+  productSource: z.string().min(1, 'Product source is required.'),
   billingAddress: addressFormSchema,
   shippingAddress: addressFormSchema,
   items: z.array(quoteItemFormSchema).min(1, 'At least one line item is required.'),
   customerNotes: z.string().default(''),
   internalNotes: z.string().default(''),
   termsAndConditions: z.string().default(''),
-  customerPoNumber: z.string().default(''),
+  customerPoNumber: z.string().min(1, 'Customer PO number is required.'),
 });
 
 // ============================================
@@ -206,7 +206,7 @@ export function formToCreateDTO(form: QuoteFormInput) {
     salesRepId: form.salesRepId || null,
     currencyCode: form.currencyId || 'USD',
     status: form.status as QuoteStatus,
-    productSource: form.productSource ? (form.productSource as 'dropship' | 'warehouse') : null,
+    productSource: form.productSource ? (form.productSource as 'direct' | 'warehouse') : null,
     billingAddress: {
       street: form.billingAddress.street || null,
       city: form.billingAddress.city || null,
@@ -248,7 +248,7 @@ export function quoteToFormValues(quote: {
   salesRepId: string | null;
   currencyCode: string;
   status: QuoteStatus;
-  productSource?: 'dropship' | 'warehouse' | null;
+  productSource?: 'direct' | 'warehouse' | null;
   billingAddressStreet: string | null;
   billingAddressCity: string | null;
   billingAddressState: string | null;

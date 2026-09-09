@@ -39,6 +39,7 @@ import { Separator } from '@/shared/components/ui/separator';
 
 import type { Deal } from '../types';
 import type { ProductSource } from '@/features/quotes/types';
+import { PRODUCT_SOURCE_LABELS } from '@/features/quotes/types';
 import { convertDealToCustomer } from '../actions';
 
 // ============================================
@@ -98,7 +99,7 @@ const formSchema = z.object({
   customerPoNumber: z.string().nullable(),
 
   // Product Source
-  productSource: z.enum(['dropship', 'warehouse'] as const),
+  productSource: z.enum(['direct', 'warehouse'] as const),
 
   // Notes & Terms
   customerNotes: z.string().nullable(),
@@ -798,8 +799,8 @@ export function ConvertDealToCustomerDialog({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="warehouse">Direct / Warehouse</SelectItem>
-                        <SelectItem value="dropship">Dropship</SelectItem>
+                        <SelectItem value="warehouse">{PRODUCT_SOURCE_LABELS.warehouse}</SelectItem>
+                        <SelectItem value="direct">{PRODUCT_SOURCE_LABELS.direct}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

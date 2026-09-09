@@ -63,17 +63,17 @@ export const ORDER_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 // PRODUCT SOURCE (Where product is sourced from)
 // ============================================
 
-export type ProductSource = 'dropship' | 'warehouse';
+export type ProductSource = 'direct' | 'warehouse';
 
-export const PRODUCT_SOURCES: ProductSource[] = ['dropship', 'warehouse'];
+export const PRODUCT_SOURCES: ProductSource[] = ['direct', 'warehouse'];
 
 export const PRODUCT_SOURCE_LABELS: Record<ProductSource, string> = {
-  dropship: 'Dropship',
-  warehouse: 'Direct / Warehouse',
+  direct: 'Direct',
+  warehouse: 'Warehouse',
 };
 
 export const PRODUCT_SOURCE_DESCRIPTIONS: Record<ProductSource, string> = {
-  dropship: 'Ships from Galileo to customer',
+  direct: 'Ships from Galileo to customer',
   warehouse: 'Ships from US warehouse',
 };
 
@@ -275,6 +275,7 @@ export interface UpdateSalesOrderItemDTO {
 }
 
 export interface CreateSalesOrderDTO {
+  orderNumber?: string | null;
   orderDate: Date;
   requestedDeliveryDate?: Date | null;
   customerId: string;

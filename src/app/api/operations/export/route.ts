@@ -488,7 +488,7 @@ function createShipmentOverviewSheet(workbook: ExcelJS.Workbook, data: Operation
   // FILTER FOR DROPSHIP ONLY (same as UI)
   // ============================================
   const filteredItems = (data.immediateAttention || []).filter(
-    item => item.productSource === 'dropship'
+    item => item.productSource === 'direct'
   );
 
   // Split into sections like UI

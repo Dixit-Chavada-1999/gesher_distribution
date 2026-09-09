@@ -22,7 +22,7 @@ export const orderStatusSchema = z.enum([
   'cancelled',
 ]);
 
-export const productSourceSchema = z.enum(['dropship', 'warehouse']);
+export const productSourceSchema = z.enum(['direct', 'warehouse']);
 
 export const unitCodeSchema = z.enum(['EA', 'SET', 'PR', 'BOX']);
 
@@ -102,6 +102,7 @@ export const orderItemFormSchema = z.object({
 // ============================================
 
 export const createSalesOrderSchema = z.object({
+  orderNumber: z.string().max(50).nullable().optional(), // Optional: auto-generate if not provided
   orderDate: z.coerce.date(),
   requestedDeliveryDate: z.coerce.date().nullable(),
   customerId: z.string().uuid('Invalid customer ID'),
@@ -150,7 +151,7 @@ export const salesOrderFormSchema = z.object({
   warehouseId: z.string().optional().default(''),
   currencyId: z.string().optional().default('USD'),
   customerPoNumber: z.string().optional().default(''),
-  orderSeries: z.string().optional().default(''), // GDC 1, GDC 2, GDC 3
+  orderSeries: z.string().min(1, 'Order series is required'), // GDC 1, GDC 2, GDC 3
   status: orderStatusSchema.default('draft'),
   billingAddress: addressFormSchema,
   shippingAddress: addressFormSchema,
@@ -209,6 +210,7 @@ export type AddressFormInput = z.infer<typeof addressFormSchema>;
  */
 export function formToCreateDTO(form: SalesOrderFormInput) {
   return {
+    orderNumber: form.orderNumber || null, // Manual entry or null for auto-generate
     orderDate: new Date(form.orderDate),
     requestedDeliveryDate: form.requestedDeliveryDate
       ? new Date(form.requestedDeliveryDate)

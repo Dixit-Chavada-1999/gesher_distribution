@@ -30,6 +30,7 @@ export const pickTicketItemSchema = z.object({
 // ============================================
 
 export const createPickTicketSchema = z.object({
+  pickTicketNumber: z.string().max(50).nullable().optional(), // Optional: auto-generate if not provided
   salesOrderId: z.string().uuid('Invalid sales order ID'),
   warehouseId: z.string().uuid('Invalid warehouse ID'),
   assignedTo: z.string().uuid().nullable().optional(),

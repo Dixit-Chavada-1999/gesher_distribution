@@ -1376,7 +1376,7 @@ export async function linkExtractionToQuote(
  */
 export async function updateQuoteProductSource(
   quoteId: string,
-  productSource: 'dropship' | 'warehouse' | null
+  productSource: 'direct' | 'warehouse' | null
 ): Promise<ActionResult<Quote>> {
   const auth = await authorize('quotes.edit');
   if (!auth.ok) {

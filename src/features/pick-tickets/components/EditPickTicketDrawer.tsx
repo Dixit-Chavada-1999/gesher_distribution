@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ClipboardList, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -22,7 +22,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/shared/components/ui/dialog';
-import { ScrollArea } from '@/shared/components/ui/scroll-area';
 import {
   Form,
   FormControl,
@@ -52,12 +51,14 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 
-import { getPickTicket, updatePickTicket } from '../actions';
+import { getPickTicket, updatePickTicket, completePicking } from '../actions';
+import { createPackingListFromPickTicket } from '../actions/packing-list.actions';
 import { getUsers } from '@/features/users/actions';
 import { getLocations } from '@/features/locations/actions';
 import {
   PICK_TICKET_STATUSES,
   PICK_TICKET_STATUS_LABELS,
+  PICK_TICKET_STATUS_TRANSITIONS,
   PICK_TICKET_PRIORITIES,
   PICK_TICKET_PRIORITY_LABELS,
   type PickTicketStatus,
@@ -123,6 +124,9 @@ export function EditPickTicketDrawer({
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
   const [isLoadingOptions, setIsLoadingOptions] = useState(false);
   const [editableItems, setEditableItems] = useState<EditableItem[]>([]);
+  const [isCreatingPackingList, setIsCreatingPackingList] = useState(false);
+  const [isCompletingPicking, setIsCompletingPicking] = useState(false);
+  const [selectedAction, setSelectedAction] = useState<'create_packing_list' | 'complete_picking' | null>(null);
 
   const form = useForm<EditPickTicketForm>({
     resolver: zodResolver(editPickTicketSchema),
@@ -234,6 +238,12 @@ export function EditPickTicketDrawer({
       return;
     }
 
+    // If status is "picked" and action selected, validate all items are picked
+    if (data.status === 'picked' && selectedAction && !allItemsPicked) {
+      toast.error('Please pick all items before completing');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       // Get items that have changed quantities (use Number() to ensure consistent comparison)
@@ -251,6 +261,7 @@ export function EditPickTicketDrawer({
       console.log('[EditPickTicketDrawer] Submitting update:', {
         pickTicketId,
         changedItems,
+        selectedAction,
         editableItems: editableItems.map(i => ({
           id: i.id,
           sku: i.sku,
@@ -261,6 +272,7 @@ export function EditPickTicketDrawer({
         })),
       });
 
+      // Step 1: Always update pick ticket first
       const result = await updatePickTicket(pickTicketId, {
         status: data.status as PickTicketStatus,
         assignedTo: data.assignedTo || null,
@@ -271,15 +283,30 @@ export function EditPickTicketDrawer({
         items: changedItems.length > 0 ? changedItems : undefined,
       });
 
-      if (result.success) {
-        toast.success('Pick ticket updated successfully');
-        onSuccess?.();
-        onClose();
-      } else {
+      if (!result.success) {
         const errorMessage = 'error' in result ? result.error : 'Failed to update pick ticket';
         toast.error(errorMessage || 'Failed to update pick ticket');
+        setIsSubmitting(false);
+        return;
       }
-    } catch {
+
+      // Step 2: If status is "picked" and an action is selected, execute that action
+      if (data.status === 'picked' && selectedAction && pickTicket) {
+        if (selectedAction === 'create_packing_list') {
+          await handleCreatePackingList();
+          return;
+        } else if (selectedAction === 'complete_picking') {
+          await handleCompletePicking();
+          return;
+        }
+      }
+
+      // Step 3: No action selected, just show success
+      toast.success('Pick ticket updated successfully');
+      onSuccess?.();
+      onClose();
+    } catch (error) {
+      console.error('Error updating pick ticket:', error);
       toast.error('Failed to update pick ticket');
     } finally {
       setIsSubmitting(false);
@@ -320,20 +347,115 @@ export function EditPickTicketDrawer({
     );
   };
 
+  // Get valid next statuses based on current status
+  const getValidNextStatuses = (currentStatus: PickTicketStatus): PickTicketStatus[] => {
+    const validTransitions = PICK_TICKET_STATUS_TRANSITIONS[currentStatus] || [];
+
+    // Hide only 'packing' from manual selection (auto-set when Create Packing List clicked)
+    // Keep 'packed' visible - user can manually change from 'packing' to 'packed'
+    return validTransitions.filter(s => s !== 'packing');
+  };
+
+  // Check if we can show action buttons based on FORM status (not original pick ticket status)
+  const formStatus = form.watch('status');
+
+  const canShowActionButtons = pickTicket &&
+    formStatus === 'picked' &&
+    !pickTicket.packingList;
+
+  // Check if all items are picked
+  const allItemsPicked = editableItems.every(
+    (item) => item.newQuantityPicked >= item.newQuantityToPick
+  );
+  const hasIncompleteItems = formStatus === 'picked' && !allItemsPicked;
+
+  // Check if shipped status should be disabled
+  const isShippedDisabled = (status: PickTicketStatus): boolean => {
+    if (status !== 'shipped') return false;
+
+    // If packing list exists but not packed/shipped, disable "shipped" status
+    if (pickTicket?.packingList) {
+      const plStatus = pickTicket.packingList.status;
+      return plStatus !== 'packed' && plStatus !== 'shipped';
+    }
+
+    return false;
+  };
+
+  // Handlers for action buttons (now just selects the action)
+  const handleSelectCreatePackingList = () => {
+    setSelectedAction('create_packing_list');
+  };
+
+  const handleSelectCompletePicking = () => {
+    setSelectedAction('complete_picking');
+  };
+
+  // Actual execution handlers (called from handleSubmit after pick ticket is updated)
+  const handleCreatePackingList = async () => {
+    if (!pickTicket) return;
+
+    setIsCreatingPackingList(true);
+    try {
+      const result = await createPackingListFromPickTicket(pickTicket.id);
+      if (result.success) {
+        toast.success('Pick ticket updated and packing list created successfully');
+        onSuccess?.();
+        handleClose();
+      } else {
+        toast.error(result.error || 'Failed to create packing list');
+      }
+    } catch (error) {
+      console.error('Error creating packing list:', error);
+      toast.error('Failed to create packing list');
+    } finally {
+      setIsCreatingPackingList(false);
+    }
+  };
+
+  const handleCompletePicking = async () => {
+    if (!pickTicket) return;
+
+    setIsCompletingPicking(true);
+    try {
+      const result = await completePicking(pickTicket.id);
+      if (result.success) {
+        toast.success('Pick ticket completed and shipped successfully');
+        onSuccess?.();
+        handleClose();
+      } else {
+        toast.error(result.error || 'Failed to complete picking');
+      }
+    } catch (error) {
+      console.error('Error completing picking:', error);
+      toast.error('Failed to complete picking');
+    } finally {
+      setIsCompletingPicking(false);
+    }
+  };
+
   const handleClose = () => {
     if (!isSubmitting) {
       setPickTicket(null);
       setUsers([]);
       setWarehouses([]);
       setEditableItems([]);
+      setSelectedAction(null);
       form.reset();
       onClose();
     }
   };
 
+  // Reset selected action when status changes from "picked"
+  useEffect(() => {
+    if (formStatus !== 'picked') {
+      setSelectedAction(null);
+    }
+  }, [formStatus]);
+
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
-      <DialogContent className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden p-0">
+      <DialogContent className="flex max-h-[90vh] w-full max-w-2xl flex-col p-0">
         <DialogHeader className="flex-shrink-0 border-b px-6 py-4">
           <DialogTitle className="text-xl font-semibold">
             {isLoading ? 'Loading...' : `Edit ${pickTicket?.pickTicketNumber || 'Pick Ticket'}`}
@@ -343,8 +465,7 @@ export function EditPickTicketDrawer({
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="px-6 py-4">
+        <div className="flex-1 overflow-y-auto px-6 py-4" style={{ maxHeight: 'calc(90vh - 180px)' }}>
         {isLoading ? (
           <div className="space-y-6">
             <Skeleton className="h-10 w-full" />
@@ -364,30 +485,52 @@ export function EditPickTicketDrawer({
                 <FormField
                   control={form.control}
                   name="status"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Status</FormLabel>
-                      <Select
-                        value={field.value}
-                        onValueChange={field.onChange}
-                        disabled={isSubmitting}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select status" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {PICK_TICKET_STATUSES.map((status) => (
-                            <SelectItem key={status} value={status}>
-                              {PICK_TICKET_STATUS_LABELS[status]}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  render={({ field }) => {
+                    const validStatuses = pickTicket
+                      ? getValidNextStatuses(pickTicket.status)
+                      : [];
+
+                    // Always include current status
+                    const displayStatuses = pickTicket
+                      ? [pickTicket.status, ...validStatuses.filter(s => s !== pickTicket.status)]
+                      : PICK_TICKET_STATUSES;
+
+                    return (
+                      <FormItem>
+                        <FormLabel>Status</FormLabel>
+                        <Select
+                          value={field.value}
+                          onValueChange={field.onChange}
+                          disabled={isSubmitting || pickTicket?.status === 'shipped' || pickTicket?.status === 'cancelled'}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {displayStatuses.map((status) => {
+                              const isCurrent = status === pickTicket?.status;
+                              const isDisabled = isCurrent || isShippedDisabled(status);
+
+                              return (
+                                <SelectItem
+                                  key={status}
+                                  value={status}
+                                  disabled={isDisabled}
+                                >
+                                  {PICK_TICKET_STATUS_LABELS[status]}
+                                  {isCurrent && ' (Current)'}
+                                  {isShippedDisabled(status) && ' (Complete packing first)'}
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    );
+                  }}
                 />
 
                 {/* Priority */}
@@ -420,6 +563,51 @@ export function EditPickTicketDrawer({
                   )}
                 />
               </div>
+
+              {/* Action Buttons - Show ONLY when status is "picked" */}
+              {canShowActionButtons && (
+                <>
+                  <Separator />
+                  <div className="space-y-3 rounded-lg border border-red-200 bg-red-50 p-4">
+                    <Label className="text-red-900">Quick Actions Required</Label>
+                    <p className="text-sm text-red-700">
+                      {!allItemsPicked ? (
+                        <>⚠️ Please pick all items first, then select an action below and click Save Changes.</>
+                      ) : (
+                        <>Status is now "Picked". Please select an action below, then click Save Changes.</>
+                      )}
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        onClick={handleSelectCreatePackingList}
+                        disabled={isSubmitting || !allItemsPicked}
+                        variant={selectedAction === 'create_packing_list' ? 'default' : 'outline'}
+                        className={`flex-1 ${selectedAction === 'create_packing_list' ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+                      >
+                        <ClipboardList className="mr-2 h-4 w-4" />
+                        Create Packing List
+                        {selectedAction === 'create_packing_list' && (
+                          <CheckCircle2 className="ml-2 h-4 w-4" />
+                        )}
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={handleSelectCompletePicking}
+                        disabled={isSubmitting || !allItemsPicked}
+                        variant={selectedAction === 'complete_picking' ? 'default' : 'outline'}
+                        className={`flex-1 ${selectedAction === 'complete_picking' ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+                      >
+                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                        Complete Picking
+                        {selectedAction === 'complete_picking' && (
+                          <CheckCircle2 className="ml-2 h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
 
               <Separator />
 
@@ -492,7 +680,14 @@ export function EditPickTicketDrawer({
               {editableItems.length > 0 && (
                 <div className="space-y-3">
                   <Label>Items</Label>
-                  <div className="rounded-md border">
+                  {hasIncompleteItems && (
+                    <div className="rounded-md border border-red-200 bg-red-50 p-3">
+                      <p className="text-sm text-red-700 font-medium">
+                        ⚠️ Not all items have been picked. Please pick all items before completing.
+                      </p>
+                    </div>
+                  )}
+                  <div className={`rounded-md border ${hasIncompleteItems ? 'border-red-500 border-2' : ''}`}>
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -595,25 +790,32 @@ export function EditPickTicketDrawer({
             Pick ticket not found
           </div>
         )}
-          </div>
-        </ScrollArea>
+        </div>
 
         <DialogFooter className="flex-shrink-0 gap-2 border-t px-6 py-4 sm:justify-end">
           <Button
             type="button"
             variant="outline"
             onClick={handleClose}
-            disabled={isSubmitting}
+            disabled={isSubmitting || isCreatingPackingList || isCompletingPicking}
           >
             Cancel
           </Button>
           <Button
             type="submit"
             form="edit-pick-ticket-form"
-            disabled={isSubmitting || isLoading || !pickTicket}
+            disabled={Boolean(
+              isSubmitting ||
+              isLoading ||
+              !pickTicket ||
+              (canShowActionButtons && !selectedAction) ||
+              (canShowActionButtons && !!selectedAction && !allItemsPicked)
+            )}
           >
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save Changes
+            {selectedAction === 'create_packing_list' && 'Create Packing List & Save'}
+            {selectedAction === 'complete_picking' && 'Complete Picking & Save'}
+            {!selectedAction && 'Save Changes'}
           </Button>
         </DialogFooter>
       </DialogContent>

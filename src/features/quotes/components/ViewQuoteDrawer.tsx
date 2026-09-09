@@ -43,7 +43,7 @@ import { getQuote, getPODocumentSignedUrl, updateQuoteProductSource } from '../a
 import { getInventoryByProductIds } from '@/features/inventory/actions';
 import type { InventoryListItem } from '@/features/inventory/types';
 import type { QuoteWithItems } from '../types';
-import { QUOTE_STATUS_LABELS, QUOTE_STATUS_COLORS } from '../types';
+import { QUOTE_STATUS_LABELS, QUOTE_STATUS_COLORS, PRODUCT_SOURCE_LABELS } from '../types';
 
 // ============================================
 // TYPES
@@ -323,7 +323,7 @@ export function ViewQuoteDrawer({
     }
   };
 
-  const handleUpdateProductSource = async (value: 'dropship' | 'warehouse' | 'none') => {
+  const handleUpdateProductSource = async (value: 'direct' | 'warehouse' | 'none') => {
     if (!quote) { return; }
 
     setIsUpdatingProductSource(true);
@@ -333,8 +333,8 @@ export function ViewQuoteDrawer({
       const result = await updateQuoteProductSource(quote.id, productSource);
       if (result.success) {
         // Update local state. The repository maps a null product_source back to
-        // 'dropship' on read, so mirror that here to match a refetch.
-        setQuote({ ...quote, productSource: productSource ?? 'dropship' });
+        // 'direct' on read, so mirror that here to match a refetch.
+        setQuote({ ...quote, productSource: productSource ?? 'direct' });
         setIsEditingProductSource(false);
         toast.success('Product source updated');
       } else {
@@ -434,7 +434,7 @@ export function ViewQuoteDrawer({
                           <div className="flex items-center gap-2">
                             <Select
                               defaultValue={quote.productSource || 'none'}
-                              onValueChange={(value) => handleUpdateProductSource(value as 'dropship' | 'warehouse' | 'none')}
+                              onValueChange={(value) => handleUpdateProductSource(value as 'direct' | 'warehouse' | 'none')}
                               disabled={isUpdatingProductSource}
                             >
                               <SelectTrigger className="h-8 w-[180px]">
@@ -442,8 +442,8 @@ export function ViewQuoteDrawer({
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="none">Select product source</SelectItem>
-                                <SelectItem value="dropship">Dropship</SelectItem>
-                                <SelectItem value="warehouse">Direct / Warehouse</SelectItem>
+                                <SelectItem value="direct">{PRODUCT_SOURCE_LABELS.direct}</SelectItem>
+                                <SelectItem value="warehouse">{PRODUCT_SOURCE_LABELS.warehouse}</SelectItem>
                               </SelectContent>
                             </Select>
                             {isUpdatingProductSource ? (
@@ -462,7 +462,7 @@ export function ViewQuoteDrawer({
                         ) : (
                           <div className="flex items-center gap-2">
                             <p className="text-sm font-medium text-foreground">
-                              {quote.productSource === 'warehouse' ? 'Direct / Warehouse' : quote.productSource === 'dropship' ? 'Dropship' : '-'}
+                              {quote.productSource ? PRODUCT_SOURCE_LABELS[quote.productSource] : '-'}
                             </p>
                             {quote.status !== 'converted' && (
                               <Button
@@ -599,7 +599,7 @@ export function ViewQuoteDrawer({
                               <AlertTriangle className="h-8 w-8 text-amber-500 mb-2" />
                               <p className="text-sm text-muted-foreground">No inventory records found</p>
                               <p className="text-xs text-muted-foreground mt-1">
-                                Consider using Dropship for this order
+                                Consider using {PRODUCT_SOURCE_LABELS.direct} for this order
                               </p>
                             </div>
                           ) : (
@@ -637,7 +637,7 @@ export function ViewQuoteDrawer({
                                         </TableCell>
                                         <TableCell className="text-center">
                                           <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-                                            Dropship
+                                            {PRODUCT_SOURCE_LABELS.direct}
                                           </Badge>
                                         </TableCell>
                                       </TableRow>

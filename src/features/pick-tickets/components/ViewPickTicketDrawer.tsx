@@ -63,7 +63,6 @@ export function ViewPickTicketDrawer({
   const [isStartingPicking, setIsStartingPicking] = useState(false);
   const [isCompletingPicking, setIsCompletingPicking] = useState(false);
   const [pickingItemId, setPickingItemId] = useState<string | null>(null);
-  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
   const [showShippedEditConfirm, setShowShippedEditConfirm] = useState(false);
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [pdfModalType, setPdfModalType] = useState<'pickTicket' | 'packingList'>('pickTicket');
@@ -72,9 +71,16 @@ export function ViewPickTicketDrawer({
   const canEdit = pickTicket && pickTicket.status !== 'cancelled';
   const isShipped = pickTicket?.status === 'shipped';
   const canStartPicking = pickTicket && pickTicket.status === 'assigned';
-  // Allow Complete Picking from both 'picking' and 'picked' statuses (before packing list is created)
-  const canCompletePicking = pickTicket && ['picking', 'picked'].includes(pickTicket.status) && !pickTicket.packingList;
-  const canCreatePackingList = pickTicket && pickTicket.status === 'picked' && !pickTicket.packingList;
+
+  // Show "Complete Picking" button when status is 'picking' or 'picked' AND no packing list exists
+  const canCompletePicking = pickTicket &&
+    ['picking', 'picked'].includes(pickTicket.status) &&
+    !pickTicket.packingList;
+
+  // Show "Create Packing List" button ONLY when status is exactly 'picked' AND no packing list exists
+  const canCreatePackingList = pickTicket &&
+    pickTicket.status === 'picked' &&
+    !pickTicket.packingList;
 
   const handleViewPdf = () => {
     if (!pickTicket) { return; }
@@ -130,23 +136,11 @@ export function ViewPickTicketDrawer({
   const handleCompletePicking = async () => {
     if (!pickTicket) { return; }
 
-    setShowCompleteConfirm(false);
     setIsCompletingPicking(true);
     try {
       const result = await completePicking(pickTicket.id);
       if (result.success) {
-        // The shipment is created separately and can fail on its own; say what
-        // actually happened rather than always claiming success.
-        const warning =
-          'warning' in result && typeof result.warning === 'string'
-            ? result.warning
-            : null;
-
-        if (warning) {
-          toast.warning(warning);
-        } else {
-          toast.success('Picking completed. Shipment created.');
-        }
+        toast.success('Picking completed and shipped successfully');
         refetch();
         onClose();
       } else {
@@ -510,9 +504,6 @@ export function ViewPickTicketDrawer({
                     Start Picking
                   </Button>
                 )}
-                {/* Creating the packing list is the normal next step, so it
-                    leads. Completing picking skips the packing list for good,
-                    so it sits below behind a confirmation. */}
                 {canCreatePackingList && (
                   <Button
                     onClick={handleCreatePackingList}
@@ -531,7 +522,7 @@ export function ViewPickTicketDrawer({
               <div className="flex flex-wrap gap-2">
                 {canCompletePicking && (
                   <Button
-                    onClick={() => setShowCompleteConfirm(true)}
+                    onClick={handleCompletePicking}
                     disabled={isCompletingPicking}
                     variant="outline"
                   >
@@ -583,29 +574,6 @@ export function ViewPickTicketDrawer({
             Pick ticket not found
           </div>
         )}
-
-        <AlertDialog open={showCompleteConfirm} onOpenChange={setShowCompleteConfirm}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Complete picking without a packing list?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This ships {pickTicket?.pickTicketNumber} straight away: stock leaves the
-                warehouse and a shipment is created. No packing list will exist for this
-                order, and one can no longer be created afterwards.
-                <br />
-                <br />
-                If the warehouse needs a packing list, cancel and choose{' '}
-                <span className="font-medium">Create Packing List</span> instead.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleCompletePicking}>
-                Ship without packing list
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
 
         {/* Confirmation dialog for editing shipped pick tickets */}
         <AlertDialog open={showShippedEditConfirm} onOpenChange={setShowShippedEditConfirm}>

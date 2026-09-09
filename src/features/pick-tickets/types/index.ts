@@ -304,6 +304,7 @@ export interface CreatePickTicketItemDTO {
 export interface CreatePickTicketDTO {
   salesOrderId: string;
   warehouseId: string;
+  pickTicketNumber?: string;
   assignedTo?: string | null;
   priority?: PickTicketPriority;
   notes?: string | null;

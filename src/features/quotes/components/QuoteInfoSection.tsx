@@ -29,6 +29,7 @@ import { Separator } from '@/shared/components/ui/separator';
 
 import type { QuoteFormInput } from '../lib/schemas';
 import { getNextQuoteNumber } from '../actions';
+import { PRODUCT_SOURCE_LABELS } from '../types';
 
 // ============================================
 // TYPES
@@ -244,7 +245,7 @@ function QuoteInfoSectionComponent({
 
         {/* Product Source */}
         <div className="space-y-2">
-          <Label htmlFor="productSource">Product Source</Label>
+          <Label htmlFor="productSource">Product Source *</Label>
           <Controller
             name="productSource"
             control={control}
@@ -255,8 +256,8 @@ function QuoteInfoSectionComponent({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">Select product source</SelectItem>
-                  <SelectItem value="dropship">Dropship</SelectItem>
-                  <SelectItem value="warehouse">Direct / Warehouse</SelectItem>
+                  <SelectItem value="direct">{PRODUCT_SOURCE_LABELS.direct}</SelectItem>
+                  <SelectItem value="warehouse">{PRODUCT_SOURCE_LABELS.warehouse}</SelectItem>
                 </SelectContent>
               </Select>
             )}
@@ -268,7 +269,7 @@ function QuoteInfoSectionComponent({
 
         {/* Customer PO Number */}
         <div className="space-y-2">
-          <Label htmlFor="customerPoNumber">Customer PO Number</Label>
+          <Label htmlFor="customerPoNumber">Customer PO Number *</Label>
           <Input
             id="customerPoNumber"
             placeholder="Enter customer PO number"

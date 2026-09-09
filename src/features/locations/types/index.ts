@@ -177,7 +177,7 @@ export interface LocationTableRow {
  */
 export const LOCATION_TYPE_OPTIONS = [
   { value: 'warehouse', label: 'Warehouse' },
-  { value: 'drop_ship', label: 'Drop Ship' },
+  { value: 'drop_ship', label: 'Direct' },
   { value: 'virtual', label: 'Virtual' },
 ] as const;
 

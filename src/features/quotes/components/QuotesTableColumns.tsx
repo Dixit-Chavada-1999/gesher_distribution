@@ -13,7 +13,7 @@ import { DataTableColumnHeader } from '@/shared/components/data-table/DataTableC
 import { DataTableRowActions, createCommonRowActions } from '@/shared/components/data-table/DataTableRowActions';
 
 import type { QuoteListItem } from '../types';
-import { QUOTE_STATUS_LABELS, QUOTE_STATUS_COLORS } from '../types';
+import { QUOTE_STATUS_LABELS, QUOTE_STATUS_COLORS, PRODUCT_SOURCE_LABELS } from '../types';
 
 // ============================================
 // TYPES
@@ -171,10 +171,10 @@ export function getQuotesTableColumns(
         <DataTableColumnHeader column={column} title="Source" />
       ),
       cell: ({ row }) => {
-        const source = row.getValue('productSource') as string | null;
+        const source = row.getValue('productSource') as 'direct' | 'warehouse' | null;
         return (
           <div className="text-sm">
-            {source === 'warehouse' ? 'Direct / Warehouse' : source === 'dropship' ? 'Dropship' : '-'}
+            {source ? PRODUCT_SOURCE_LABELS[source] : '-'}
           </div>
         );
       },

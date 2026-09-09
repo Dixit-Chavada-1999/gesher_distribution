@@ -55,6 +55,45 @@ export async function GET(
         pickTicket.assignedUser.email
       : null;
 
+    // Fetch product weights for weight calculation
+    const { db } = await import('@/shared/lib/supabase/database');
+    const productIds = (pickTicket.items || []).map((item) => item.productId);
+    const { data: products } = await db
+      .from('products')
+      .select('id, weight_lbs')
+      .in('id', productIds);
+
+    // Create a map of productId -> weight_lbs
+    const productWeightMap = new Map<string, number>();
+    if (products) {
+      products.forEach((product) => {
+        if (product.weight_lbs) {
+          productWeightMap.set(product.id, product.weight_lbs);
+        }
+      });
+    }
+
+    // Calculate total weight
+    let totalWeight = 0;
+    const itemsWithWeights = (pickTicket.items || [])
+      .slice()
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((item, index) => {
+        const productWeight = productWeightMap.get(item.productId) || 0;
+        const itemWeight = item.quantityToPick * productWeight;
+        totalWeight += itemWeight;
+
+        return {
+          rowNum: index + 1,
+          sku: item.sku,
+          productName: item.description || item.sku,
+          binLocation: item.binLocation || undefined,
+          quantity: item.quantityToPick,
+          uom: 'EA',
+          weight: itemWeight > 0 ? itemWeight : undefined,
+        };
+      });
+
     const pdfData: PickTicketPdfData = {
       pickTicketNumber: pickTicket.pickTicketNumber,
       createdAt: new Date(pickTicket.createdAt).toISOString(),
@@ -68,17 +107,8 @@ export async function GET(
       status: pickTicket.status,
       customerPoNumber: salesOrder?.customer_po_number || null,
       notes: pickTicket.notes || pickTicket.specialInstructions || null,
-      items: (pickTicket.items || [])
-        .slice()
-        .sort((a, b) => a.sortOrder - b.sortOrder)
-        .map((item, index) => ({
-          rowNum: index + 1,
-          sku: item.sku,
-          productName: item.description || item.sku,
-          binLocation: item.binLocation || undefined,
-          quantity: item.quantityToPick,
-          uom: 'EA',
-        })),
+      totalWeight: totalWeight > 0 ? totalWeight : undefined,
+      items: itemsWithWeights,
     };
 
     const pdfBase64 = await generatePickTicketPdf(pdfData);

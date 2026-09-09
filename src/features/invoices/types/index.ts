@@ -177,6 +177,7 @@ export interface SalesOrderSummary {
   id: string;
   orderNumber: string;
   status: string;
+  customerPoNumber: string | null;
 }
 
 export interface ShipmentSummary {

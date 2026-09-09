@@ -44,7 +44,7 @@ export interface CustomerCommitment {
   outstandingQty: number;
   invoiceAmount: number;
   inTransitNext7Days: number;
-  productSource?: 'dropship' | 'warehouse';  // For filtering Shipment Overview
+  productSource?: 'direct' | 'warehouse';  // For filtering Shipment Overview
 }
 
 // ============================================
@@ -94,7 +94,7 @@ export interface ImmediateAttentionItem {
   actionRequired: string;
   isOverdue: boolean;
   isThisWeek: boolean;
-  productSource?: 'dropship' | 'warehouse';  // For filtering Shipment Overview
+  productSource?: 'direct' | 'warehouse';  // For filtering Shipment Overview
   // LFD (Last Free Day) Alert fields
   lfdDate?: string | null;        // Last Free Day - deadline before demurrage charges
   isLFDApproaching?: boolean;     // LFD within 3 days

@@ -43,7 +43,7 @@ export function ShipmentOverviewTable({
 }: ShipmentOverviewTableProps) {
   // Filter to only show DROPSHIP orders (not warehouse)
   const filteredItems = useMemo(() => {
-    return inTransitItems.filter(item => item.productSource === 'dropship');
+    return inTransitItems.filter(item => item.productSource === 'direct');
   }, [inTransitItems]);
 
   // Split items into two sections based on status
@@ -55,7 +55,7 @@ export function ShipmentOverviewTable({
     return filteredItems.filter(item => item.status === 'OPEN' && !item.isThisWeek);
   }, [filteredItems]);
 
-  // Derive customer summary from filtered items (dropship only)
+  // Derive customer summary from filtered items (direct only)
   const filteredCustomerSummary = useMemo(() => {
     const customerMap = new Map<string, {
       id: string;
@@ -92,9 +92,9 @@ export function ShipmentOverviewTable({
     const inTransitNext7Days = filteredItems.filter(item => item.isThisWeek || item.status === 'IN_TRANSIT').length;
     const openLoads = filteredItems.filter(item => item.status === 'OPEN').length;
     const outstandingQty = filteredItems.reduce((sum, item) => sum + item.qty, 0);
-    // Get invoice amount from customerSummary (dropship filtered)
+    // Get invoice amount from customerSummary (direct filtered)
     const invoiceAmount = customerSummary
-      .filter(c => c.productSource === 'dropship')
+      .filter(c => c.productSource === 'direct')
       .reduce((sum, c) => sum + c.invoiceAmount, 0) ||
       filteredItems.reduce((sum, item) => sum + (item.qty * 1000), 0); // Fallback estimate
 

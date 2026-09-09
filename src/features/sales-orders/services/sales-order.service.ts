@@ -181,6 +181,18 @@ export const salesOrderService = {
         };
       }
 
+      // Check for duplicate order number if manually entered
+      if (input.orderNumber && input.orderNumber.trim() !== '') {
+        const existing = await salesOrderRepository.findByOrderNumber(input.orderNumber.trim());
+        if (existing) {
+          return {
+            success: false,
+            error: `Sales order number "${input.orderNumber}" already exists.`,
+            errors: { orderNumber: [`Order number "${input.orderNumber}" already exists`] },
+          };
+        }
+      }
+
       // Create order
       const order = await salesOrderRepository.create(validation.data, userId);
 

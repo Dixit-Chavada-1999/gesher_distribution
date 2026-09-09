@@ -77,6 +77,7 @@ import {
   ORDER_STATUS_COLORS,
   ORDER_CREDIT_STATUS_LABELS,
   ORDER_CREDIT_STATUS_COLORS,
+  PRODUCT_SOURCE_LABELS,
 } from '../types';
 import { toast } from 'sonner';
 
@@ -340,8 +341,8 @@ const [isReleasingHold, setIsReleasingHold] = useState(false);
       const result = await getSalesOrder(orderId);
       if (result.success && result.data) {
         setOrder(result.data);
-        // Check if PO exists for this SO (for dropship orders)
-        if (result.data.productSource === 'dropship') {
+        // Check if PO exists for this SO (for direct orders)
+        if (result.data.productSource === 'direct') {
           checkPurchaseOrderExists(orderId);
         }
       } else {
@@ -602,7 +603,7 @@ const handleReleaseHold = async () => {
   // Check if pick ticket already exists
   const hasPickTicket = order?.pickTickets && order.pickTickets.length > 0;
 
-  // Can create pick ticket for confirmed or processing orders (only for warehouse, not dropship, and no existing pick ticket)
+  // Can create pick ticket for confirmed or processing orders (only for warehouse, not direct, and no existing pick ticket)
   const canCreatePickTicket = order &&
     ['confirmed', 'processing'].includes(order.status) &&
     order.productSource === 'warehouse' &&
@@ -614,10 +615,10 @@ const handleReleaseHold = async () => {
     ['confirmed', 'processing', 'shipped', 'delivered'].includes(order.status) &&
     canEditPermission;
 
-  // Can create PO for confirmed/processing dropship orders that don't have a PO
+  // Can create PO for confirmed/processing direct orders that don't have a PO
   const canCreatePO = order &&
     ['confirmed', 'processing'].includes(order.status) &&
-    order.productSource === 'dropship' &&
+    order.productSource === 'direct' &&
     !hasPurchaseOrder &&
     canEditPermission;
 
@@ -735,7 +736,7 @@ const handleReleaseHold = async () => {
                     />
                     <InfoItem
                       label="Product Source"
-                      value={order.productSource === 'warehouse' ? 'Direct / Warehouse' : order.productSource === 'dropship' ? 'Dropship' : '-'}
+                      value={order.productSource ? PRODUCT_SOURCE_LABELS[order.productSource] : '-'}
                     />
 
                     {/* Order Series - Inline Edit */}

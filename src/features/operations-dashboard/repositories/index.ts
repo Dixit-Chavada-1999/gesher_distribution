@@ -183,7 +183,7 @@ export async function getOperationsStats(filters?: OperationsFilters): Promise<O
     const totalQty = items.reduce((sum: number, item: { quantity: number }) => sum + (item.quantity || 0), 0);
     const invoiceAmt = so.grand_total ? so.grand_total / 100 : 0;
     const isWarehouse = so.product_source === 'warehouse';  // GDC1 Inventory
-    const isDropship = so.product_source === 'dropship';    // Supplier Schedule (Galileo)
+    const isDropship = so.product_source === 'direct';    // Supplier Schedule (Galileo)
     const hasLoadNumber = !!so.order_number;  // Load # not null
 
     // Status mapping: draft/pending = AVAILABLE, confirmed/processing = SOLD
@@ -208,7 +208,7 @@ export async function getOperationsStats(filters?: OperationsFilters): Promise<O
     }
 
     // ============================================
-    // SUPPLIER SCHEDULE CALCULATIONS (dropship/Galileo orders)
+    // SUPPLIER SCHEDULE CALCULATIONS (direct/Galileo orders)
     // ============================================
     if (isDropship) {
       // Committed Customer Qty from Supplier Schedule: Load # not null → outstanding qty
@@ -216,12 +216,12 @@ export async function getOperationsStats(filters?: OperationsFilters): Promise<O
         committedCustomerQty += totalQty;
       }
 
-      // Outstanding = all dropship orders not yet delivered
+      // Outstanding = all direct orders not yet delivered
       if (so.status === 'pending' || so.status === 'confirmed' || so.status === 'processing') {
         outstandingQty += totalQty;
       }
 
-      // Open loads = dropship orders that are pending
+      // Open loads = direct orders that are pending
       if (so.status === 'draft' || so.status === 'pending') {
         openLoads += 1;
       }
@@ -313,7 +313,7 @@ export async function getOperationsStats(filters?: OperationsFilters): Promise<O
  * SKU Breakdown - Combined inventory across Supplier and GDC1
  *
  * Fetches from sales_order_items based on product_source:
- * - Supplier Outstanding: sales_orders where product_source = 'dropship'
+ * - Supplier Outstanding: sales_orders where product_source = 'direct'
  * - GDC1 Available: sales_orders where product_source = 'warehouse'
  * - Only includes inventory-type products (excludes non_inventory and service)
  */
@@ -381,7 +381,7 @@ export async function getSKUBreakdown(filters?: OperationsFilters): Promise<SKUB
 
     const sku = item.sku || 'Unknown';
     const qty = item.quantity || 0;
-    const productSource = salesOrder.product_source || 'dropship';
+    const productSource = salesOrder.product_source || 'direct';
     const productName = product?.name || sku;
 
     if (!skuMap.has(sku)) {
@@ -390,8 +390,8 @@ export async function getSKUBreakdown(filters?: OperationsFilters): Promise<SKUB
 
     const current = skuMap.get(sku)!;
 
-    // Supplier outstanding = dropship orders
-    if (productSource === 'dropship') {
+    // Supplier outstanding = direct orders
+    if (productSource === 'direct') {
       current.supplier += qty;
     }
 
@@ -489,10 +489,10 @@ export async function getSKUBreakdown(filters?: OperationsFilters): Promise<SKUB
 
 // ============================================
 // GET CUSTOMER COMMITMENTS
-// Optional productSource filter: 'dropship' for Shipment Overview, 'warehouse' for GDC1
+// Optional productSource filter: 'direct' for Shipment Overview, 'warehouse' for GDC1
 // ============================================
 
-export async function getCustomerCommitments(productSource?: 'dropship' | 'warehouse', filters?: OperationsFilters): Promise<CustomerCommitment[]> {
+export async function getCustomerCommitments(productSource?: 'direct' | 'warehouse', filters?: OperationsFilters): Promise<CustomerCommitment[]> {
   const supabase = await createClient();
 
   const now = new Date();
@@ -615,7 +615,7 @@ export async function getCustomerCommitments(productSource?: 'dropship' | 'wareh
 // Based on Jenny's Excel logic - same as KPI calculations:
 // - AVAILABLE: GDC1 (warehouse) where status = draft/pending
 // - SOLD: GDC1 (warehouse) where status = confirmed/processing
-// - OPEN: Supplier Schedule (dropship) where status = draft/pending
+// - OPEN: Supplier Schedule (direct) where status = draft/pending
 // - IN_TRANSIT: Any order where status = shipped
 // - HOLD: From shipments table
 // ============================================
@@ -663,7 +663,7 @@ export async function getShipmentStatusMix(filters?: OperationsFilters): Promise
   // Helper to get SO status (fallback when no shipment)
   const getSoDisplayStatus = (so: { status: string; product_source: string }): ShipmentStatus => {
     const isWarehouse = so.product_source === 'warehouse';
-    const isDropship = so.product_source === 'dropship';
+    const isDropship = so.product_source === 'direct';
 
     if (isWarehouse) {
       // GDC1 Inventory
@@ -879,7 +879,7 @@ export async function getImmediateAttention(filters?: OperationsFilters): Promis
     const salesOrderData = toOne(s.sales_orders);
 
     // Only include DROPSHIP shipments - warehouse orders shown in GDC1 Inventory
-    const productSource = salesOrderData?.product_source as 'dropship' | 'warehouse';
+    const productSource = salesOrderData?.product_source as 'direct' | 'warehouse';
     if (productSource === 'warehouse') {
       return; // Skip warehouse shipments
     }
@@ -944,7 +944,7 @@ export async function getImmediateAttention(filters?: OperationsFilters): Promis
         actionRequired: s.action_required || '',
         isOverdue,
         isThisWeek,
-        productSource: productSource || 'dropship',
+        productSource: productSource || 'direct',
         // LFD Alert fields
         lfdDate: lfdDateStr,
         isLFDApproaching,
@@ -972,7 +972,7 @@ export async function getImmediateAttention(filters?: OperationsFilters): Promis
     'SOLD': ['confirmed'],
     'IN_TRANSIT': ['processing', 'shipped'],
     'DELIVERED': ['delivered'],
-    // AVAILABLE is for warehouse inventory, not dropship orders - returns empty
+    // AVAILABLE is for warehouse inventory, not direct orders - returns empty
   };
 
   let soQuery = supabase
@@ -990,7 +990,7 @@ export async function getImmediateAttention(filters?: OperationsFilters): Promis
       sales_order_items(quantity, product_id)
     `)
     .is('deleted_at', null)
-    .eq('product_source', 'dropship')  // Only DROPSHIP orders
+    .eq('product_source', 'direct')  // Only DROPSHIP orders
     .order('requested_delivery_date', { ascending: true });
 
   // Apply status filter - if status doesn't map to SO statuses, skip SO query
@@ -999,7 +999,7 @@ export async function getImmediateAttention(filters?: OperationsFilters): Promis
     if (soStatuses && soStatuses.length > 0) {
       soQuery = soQuery.in('status', soStatuses);
     } else {
-      // Status like AVAILABLE doesn't apply to dropship orders - return empty for SO
+      // Status like AVAILABLE doesn't apply to direct orders - return empty for SO
       soQuery = soQuery.eq('status', 'NONE_MATCH'); // Will return empty
     }
   } else {
@@ -1093,7 +1093,7 @@ export async function getImmediateAttention(filters?: OperationsFilters): Promis
         actionRequired: so.internal_notes || '',
         isOverdue,
         isThisWeek,
-        productSource: so.product_source as 'dropship' | 'warehouse',
+        productSource: so.product_source as 'direct' | 'warehouse',
         // Delay Alert
         isDelayed: isDelayed || false,
       });
@@ -1152,7 +1152,7 @@ export async function getUniqueSKUs(): Promise<string[]> {
 /**
  * Supplier Shipment Schedule - Sales Orders fulfilled via Dropship
  *
- * Shows Sales Orders where product_source = 'dropship'
+ * Shows Sales Orders where product_source = 'direct'
  * These are orders that ship directly from supplier (Galileo) to customer
  * Status mapping:
  *   - draft, pending → OPEN (order placed, not yet confirmed)
@@ -1172,7 +1172,7 @@ export async function getSupplierShipmentSchedule(filters?: OperationsFilters): 
     'DELIVERED': ['delivered'],
   };
 
-  // Get Sales Orders where product_source = 'dropship' (Supplier/Galileo)
+  // Get Sales Orders where product_source = 'direct' (Supplier/Galileo)
   // Also fetch linked shipments to get load_status for consistent status display
   let soQuery = supabase
     .from('sales_orders')
@@ -1203,7 +1203,7 @@ export async function getSupplierShipmentSchedule(filters?: OperationsFilters): 
       )
     `)
     .is('deleted_at', null)
-    .eq('product_source', 'dropship')
+    .eq('product_source', 'direct')
     .neq('status', 'cancelled')
     .order('created_at', { ascending: false });
 
@@ -1336,7 +1336,7 @@ export async function getSupplierShipmentSchedule(filters?: OperationsFilters): 
       so.shipping_address_postal_code,
     ].filter(Boolean);
 
-    // For dropship orders, use order_number as load number
+    // For direct orders, use order_number as load number
     const loadNumber = so.order_number || 'N/A';
 
     // PO # from customer_po_number
