@@ -598,4 +598,13 @@ export interface SalesOrdersTableProps {
   onConfirm?: (order: SalesOrderListItem) => void;
   onCancel?: (order: SalesOrderListItem) => void;
   toolbarContent?: React.ReactNode;
+  // Server-side pagination
+  pagination?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+    onPageChange: (page: number) => void;
+    onPageSizeChange: (pageSize: number) => void;
+  };
 }

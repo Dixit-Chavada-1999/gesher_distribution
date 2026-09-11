@@ -21,7 +21,7 @@ import {
   type RowSelectionState,
   type PaginationState,
 } from '@tanstack/react-table';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 
 import { cn } from '@/shared/lib/utils';
 import {
@@ -74,6 +74,12 @@ export interface DataTableProps<TData, TValue> {
   manualPagination?: boolean;
   /** Total row count for server-side pagination */
   rowCount?: number;
+  /** Total page count for server-side pagination */
+  pageCount?: number;
+  /** External page index (0-based) for controlled pagination */
+  pageIndex?: number;
+  /** External page size for controlled pagination */
+  pageSize?: number;
   /** Callback when pagination changes (server-side) */
   onPaginationChange?: (pagination: PaginationState) => void;
   /** Callback when row selection changes */
@@ -107,6 +113,9 @@ export function DataTable<TData, TValue>({
   defaultPageSize = 10,
   manualPagination = false,
   rowCount,
+  pageCount,
+  pageIndex: externalPageIndex,
+  pageSize: externalPageSize,
   onPaginationChange,
   onRowSelectionChange,
   className,
@@ -120,9 +129,22 @@ export function DataTable<TData, TValue>({
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [globalFilter, setGlobalFilter] = useState('');
   const [pagination, setPagination] = useState<PaginationState>({
-    pageIndex: 0,
-    pageSize: defaultPageSize,
+    pageIndex: externalPageIndex ?? 0,
+    pageSize: externalPageSize ?? defaultPageSize,
   });
+
+  // Track pagination state for deferred callback
+  const paginationUpdaterRef = useRef<PaginationState | null>(null);
+
+  // Sync internal pagination state with external props
+  useEffect(() => {
+    if (externalPageIndex !== undefined || externalPageSize !== undefined) {
+      setPagination((prev) => ({
+        pageIndex: externalPageIndex ?? prev.pageIndex,
+        pageSize: externalPageSize ?? prev.pageSize,
+      }));
+    }
+  }, [externalPageIndex, externalPageSize]);
 
   // Handle row selection changes
   const handleRowSelectionChange = useCallback(
@@ -147,21 +169,27 @@ export function DataTable<TData, TValue>({
     [data, onRowSelectionChange]
   );
 
-  // Handle pagination changes - don't call parent callback inside setState
+  // Handle pagination changes
   const handlePaginationChange = useCallback(
     (updater: PaginationState | ((old: PaginationState) => PaginationState)) => {
+      // Update internal state
       setPagination((old) => {
         const newPagination = typeof updater === 'function' ? updater(old) : updater;
+        // Store the new pagination state for deferred callback
+        paginationUpdaterRef.current = newPagination;
         return newPagination;
       });
     },
     []
   );
 
-  // Notify parent of pagination changes via useEffect (not during render)
+  // Call parent pagination callback after state update (deferred to avoid setState-in-render)
   useEffect(() => {
-    onPaginationChange?.(pagination);
-  }, [pagination, onPaginationChange]);
+    if (manualPagination && onPaginationChange && paginationUpdaterRef.current) {
+      onPaginationChange(paginationUpdaterRef.current as any);
+      paginationUpdaterRef.current = null;
+    }
+  }, [pagination, manualPagination, onPaginationChange]);
 
   // Create table instance
   const table = useReactTable({
@@ -182,6 +210,7 @@ export function DataTable<TData, TValue>({
     enableMultiRowSelection,
     manualPagination,
     rowCount,
+    pageCount: pageCount ?? -1,
     state: {
       sorting,
       columnFilters,
@@ -214,7 +243,7 @@ export function DataTable<TData, TValue>({
   });
 
   return (
-    <div className={cn('space-y-4', className)}>
+    <div className={cn('space-y-4 w-full', className)}>
       {/* Toolbar */}
       {(enableGlobalFilter || enableColumnVisibility || toolbarContent) && (
         <DataTableToolbar
@@ -230,7 +259,7 @@ export function DataTable<TData, TValue>({
       )}
 
       {/* Table */}
-      <div className="relative rounded-md border">
+      <div className="relative rounded-md border w-full">
         {/* Loading Overlay */}
         {loading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm">

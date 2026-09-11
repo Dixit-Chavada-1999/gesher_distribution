@@ -461,6 +461,15 @@ export interface QuotesTableProps {
   onApprove?: (quote: QuoteListItem) => void;
   onReject?: (quote: QuoteListItem) => void;
   toolbarContent?: React.ReactNode;
+  // Server-side pagination
+  pagination?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+    onPageChange: (page: number) => void;
+    onPageSizeChange: (pageSize: number) => void;
+  };
 }
 
 export interface CreateQuoteDrawerProps {

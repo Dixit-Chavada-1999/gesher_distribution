@@ -444,6 +444,15 @@ export interface PickTicketsTableProps {
   onAssign?: (pickTicket: PickTicketListItem) => void;
   onStartPicking?: (pickTicket: PickTicketListItem) => void;
   toolbarContent?: React.ReactNode;
+  // Server-side pagination
+  pagination?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+    onPageChange: (page: number) => void;
+    onPageSizeChange: (pageSize: number) => void;
+  };
 }
 
 export interface CreatePickTicketDrawerProps {
@@ -467,6 +476,25 @@ export interface PickingInterfaceProps {
   onItemPicked?: (itemId: string, quantity: number) => void;
   onComplete?: () => void;
   onCancel?: () => void;
+}
+
+export interface PackingListsTableProps {
+  data: PackingListListItem[];
+  isLoading?: boolean;
+  onRowClick?: (packingList: PackingListListItem) => void;
+  onView?: (packingList: PackingListListItem) => void;
+  onDelete?: (packingList: PackingListListItem) => void;
+  onMarkAsPacked?: (packingList: PackingListListItem) => void;
+  toolbarContent?: React.ReactNode;
+  // Server-side pagination
+  pagination?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+    onPageChange: (page: number) => void;
+    onPageSizeChange: (pageSize: number) => void;
+  };
 }
 
 export interface PackingListDrawerProps {

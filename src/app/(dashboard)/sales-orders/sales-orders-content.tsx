@@ -13,7 +13,7 @@
  * - Data flows down via props
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -112,6 +112,15 @@ export function SalesOrdersPageContent() {
   const [statusFilter, setStatusFilter] = useState<OrderStatus | 'all'>('all');
   const [orderSeriesFilter, setOrderSeriesFilter] = useState<string>('all');
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, orderSeriesFilter]);
+
   // ----------------------------------------
   // DATA HOOKS
   // ----------------------------------------
@@ -119,15 +128,20 @@ export function SalesOrdersPageContent() {
   // Master data hook - fetches once, caches, shares across components
   const { data: masterData } = useSalesOrderMasterData();
 
-  // Sales orders list with status and order series filters
-  const {
-    data: salesOrders,
-    isLoading: isOrdersLoading,
-    refetch: refetchOrders,
-  } = useSalesOrders({
+  // Sales orders list with status and order series filters and pagination
+  const salesOrdersParams = useMemo(() => ({
     ...(statusFilter !== 'all' && { status: statusFilter }),
     ...(orderSeriesFilter !== 'all' && { orderSeries: orderSeriesFilter }),
-  });
+    page,
+    limit: pageSize,
+  }), [statusFilter, orderSeriesFilter, page, pageSize]);
+
+  const {
+    data: salesOrders,
+    meta,
+    isLoading: isOrdersLoading,
+    refetch: refetchOrders,
+  } = useSalesOrders(salesOrdersParams);
 
 
   // ----------------------------------------
@@ -299,7 +313,7 @@ export function SalesOrdersPageContent() {
   // ----------------------------------------
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 self-start w-full">
       {/* Page Header */}
       <PageHeader
         title="Sales Orders"
@@ -334,6 +348,17 @@ export function SalesOrdersPageContent() {
         onDelete={canDelete ? handleDeleteClick : undefined}
         onConfirm={canEdit ? handleConfirmClick : undefined}
         onCancel={canEdit ? handleCancelClick : undefined}
+        pagination={{
+          page: meta.page,
+          pageSize: meta.limit,
+          total: meta.total,
+          totalPages: meta.totalPages,
+          onPageChange: setPage,
+          onPageSizeChange: (newSize) => {
+            setPageSize(newSize);
+            setPage(1); // Reset to first page when page size changes
+          },
+        }}
         toolbarContent={
           <div className="flex items-center gap-2">
             <Select value={statusFilter} onValueChange={handleStatusFilterChange}>

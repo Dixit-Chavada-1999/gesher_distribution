@@ -934,7 +934,7 @@ export async function getImmediateAttention(filters?: OperationsFilters): Promis
     if (shouldIncludeFinal) {
       result.push({
         id: s.id,
-        loadNumber: s.shipment_number || s.supplier_reference_number || 'N/A',
+        loadNumber: salesOrderData?.order_number || s.shipment_number || 'N/A',
         customer: toOne(salesOrderData?.customers)?.name || 'Unknown',
         po: salesOrderData?.customer_po_number || 'N/A',
         qty: s.total_qty || 0,
@@ -1655,54 +1655,57 @@ export async function getGDCInventoryByOrderSeries(
   const supabase = createAdminClient();
 
   // ============================================
-  // QUERY 1: POs with linked Sales Orders (allocated)
+  // QUERY 1: Get ALL Sales Orders with this order_series
   // ============================================
-  let allocatedQuery = supabase
-    .from('purchase_orders')
+  let soQuery = supabase
+    .from('sales_orders')
     .select(`
       id,
-      po_number,
-      po_date,
-      expected_delivery_date,
-      status,
-      internal_notes,
+      order_number,
+      order_date,
       order_series,
-      ship_to_address_street,
-      ship_to_address_city,
-      ship_to_address_state,
-      ship_to_address_postal_code,
-      sales_order_id,
+      customer_id,
+      customer_po_number,
+      product_source,
+      status,
+      requested_delivery_date,
+      shipping_address_street,
+      shipping_address_city,
+      shipping_address_state,
+      shipping_address_postal_code,
       created_at,
-      sales_orders!inner(
-        id,
-        order_number,
-        order_series,
-        customer_id,
-        customers(id, name)
-      )
+      customers(id, name)
     `)
     .is('deleted_at', null)
-    .eq('sales_orders.order_series', orderSeries)
+    .eq('order_series', orderSeries)
     .neq('status', 'cancelled')
     .order('created_at', { ascending: false });
 
   // Apply filters
   if (filters?.salesOrderId) {
-    allocatedQuery = allocatedQuery.eq('sales_order_id', filters.salesOrderId);
+    soQuery = soQuery.eq('id', filters.salesOrderId);
+  }
+  if (filters?.customerId) {
+    soQuery = soQuery.eq('customer_id', filters.customerId);
   }
 
-  const { data: allocatedPOs, error: allocatedError } = await allocatedQuery;
+  const { data: salesOrders, error: soError } = await soQuery;
 
-  if (allocatedError) {
-    console.error(`Error fetching allocated GDC inventory for ${orderSeries}:`, allocatedError);
-    throw allocatedError;
+  if (soError) {
+    console.error(`Error fetching sales orders for ${orderSeries}:`, soError);
+    throw soError;
   }
 
+  if (!salesOrders || salesOrders.length === 0) {
+    return { orderSeries, items: [], uniqueSkus: [] };
+  }
+
+  const soIds = salesOrders.map(so => so.id);
+
   // ============================================
-  // QUERY 2: Unallocated POs (no linked Sales Order)
-  // These have order_series set directly on the PO
+  // QUERY 2: Get POs linked to these Sales Orders
   // ============================================
-  let unallocatedQuery = supabase
+  const { data: purchaseOrders } = await supabase
     .from('purchase_orders')
     .select(`
       id,
@@ -1712,70 +1715,52 @@ export async function getGDCInventoryByOrderSeries(
       status,
       internal_notes,
       order_series,
-      ship_to_address_street,
-      ship_to_address_city,
-      ship_to_address_state,
-      ship_to_address_postal_code,
       sales_order_id,
       created_at
     `)
     .is('deleted_at', null)
-    .is('sales_order_id', null)  // No linked Sales Order = Unallocated
-    .eq('order_series', orderSeries)  // Filter by PO's own order_series
-    .neq('status', 'cancelled')
-    .order('created_at', { ascending: false });
+    .in('sales_order_id', soIds)
+    .neq('status', 'cancelled');
 
-  const { data: unallocatedPOs, error: unallocatedError } = await unallocatedQuery;
+  // Create SO -> PO mapping
+  type POType = NonNullable<typeof purchaseOrders>[number];
+  const soToPOMap = new Map<string, POType>();
+  purchaseOrders?.forEach(po => {
+    if (po.sales_order_id) {
+      soToPOMap.set(po.sales_order_id, po);
+    }
+  });
 
-  if (unallocatedError) {
-    console.error(`Error fetching unallocated GDC inventory for ${orderSeries}:`, unallocatedError);
-    throw unallocatedError;
-  }
+  console.log(`[GDC] Found ${salesOrders.length} Sales Orders for '${orderSeries}', ${soToPOMap.size} have POs, ${salesOrders.length - soToPOMap.size} are warehouse orders`);
 
-  // Combine both sets of POs
-  const allPOs = [
-    ...(allocatedPOs || []),
-    ...(unallocatedPOs || []).map(po => ({
-      ...po,
-      sales_orders: null,  // Mark as unallocated
-    })),
-  ];
-
-  console.log(`[GDC] Found ${allocatedPOs?.length || 0} allocated + ${unallocatedPOs?.length || 0} unallocated POs for '${orderSeries}'`);
-
-  // Get purchase order items for SKU breakdown
-  const poIds = allPOs.map((po) => po.id);
-
-  if (poIds.length === 0) {
-    return { orderSeries, items: [], uniqueSkus: [] };
-  }
-
-  let itemsQuery = supabase
-    .from('purchase_order_items')
+  // ============================================
+  // QUERY 3: Get Sales Order Items for SKU breakdown
+  // ============================================
+  let soItemsQuery = supabase
+    .from('sales_order_items')
     .select(`
-      purchase_order_id,
+      sales_order_id,
       sku,
       description,
-      quantity_ordered,
+      quantity,
       unit_price,
-      supplier_name,
       product_id,
       products(id, name, item_type)
     `)
-    .in('purchase_order_id', poIds);
+    .in('sales_order_id', soIds);
 
   // Apply product filter
   if (filters?.productId) {
-    itemsQuery = itemsQuery.eq('product_id', filters.productId);
+    soItemsQuery = soItemsQuery.eq('product_id', filters.productId);
   }
 
-  const { data: items } = await itemsQuery;
+  const { data: soItems } = await soItemsQuery;
 
-  // Group items by purchase order and build SKU info map
-  const itemsByPO = new Map<string, { sku: string; productName: string; qty: number; unitPrice: number; supplierName: string | null }[]>();
+  // Group items by sales order and build SKU info map
+  const itemsBySO = new Map<string, { sku: string; productName: string; qty: number; unitPrice: number }[]>();
   const skuInfoMap = new Map<string, string>(); // sku -> productName
 
-  items?.forEach((item) => {
+  soItems?.forEach((item) => {
     const productData = toOne(item.products);
     const productName = productData?.name || item.description || item.sku;
     const unitPrice = item.unit_price ? item.unit_price / 100 : 0;
@@ -1785,72 +1770,57 @@ export async function getGDCInventoryByOrderSeries(
       skuInfoMap.set(item.sku, productName);
     }
 
-    if (!itemsByPO.has(item.purchase_order_id)) {
-      itemsByPO.set(item.purchase_order_id, []);
+    if (!itemsBySO.has(item.sales_order_id)) {
+      itemsBySO.set(item.sales_order_id, []);
     }
-    itemsByPO.get(item.purchase_order_id)!.push({
+    itemsBySO.get(item.sales_order_id)!.push({
       sku: item.sku || 'Unknown',
       productName,
-      qty: item.quantity_ordered || 0,
+      qty: item.quantity || 0,
       unitPrice,
-      supplierName: item.supplier_name,
     });
   });
 
   const result: GDCInventoryItem[] = [];
 
-  allPOs.forEach((po, index) => {
-    const salesOrderData = toOne(po.sales_orders);
-    const customerData = salesOrderData ? toOne(salesOrderData.customers) : null;
-    const isUnallocated = !po.sales_order_id;
+  salesOrders.forEach((so, index) => {
+    const customerData = toOne(so.customers);
+    const linkedPO = soToPOMap.get(so.id);
+    const hasPO = !!linkedPO;
 
-    // Apply customer filter (skip unallocated POs if customer filter is set)
-    if (filters?.customerId) {
-      if (isUnallocated) {
-        return; // Skip unallocated POs when filtering by specific customer
-      }
-      if (customerData?.id !== filters.customerId) {
-        return;
-      }
-    }
-
-    const poItems = itemsByPO.get(po.id) || [];
-    const totalQty = poItems.reduce((sum, item) => sum + item.qty, 0);
-
-    // Get first supplier name from items
-    const supplierName = poItems.find(item => item.supplierName)?.supplierName || null;
+    const soItemsList = itemsBySO.get(so.id) || [];
+    const totalQty = soItemsList.reduce((sum, item) => sum + item.qty, 0);
 
     // Build address
     const addressParts = [
-      po.ship_to_address_street,
-      po.ship_to_address_city,
-      po.ship_to_address_state,
-      po.ship_to_address_postal_code,
+      so.shipping_address_street,
+      so.shipping_address_city,
+      so.shipping_address_state,
+      so.shipping_address_postal_code,
     ].filter(Boolean);
 
     result.push({
-      id: po.id,
+      id: so.id,
       no: index + 1,
-      poNumber: po.po_number,
-      soNumber: salesOrderData?.order_number || null,
-      orderSeries: salesOrderData?.order_series || po.order_series || orderSeries,
-      items: poItems.map(item => ({
+      poNumber: so.customer_po_number || null,  // Always show Customer PO Number (from Excel)
+      soNumber: so.order_number,
+      orderSeries: so.order_series,
+      items: soItemsList.map(item => ({
         sku: item.sku,
         productName: item.productName,
         qty: item.qty,
         unitPrice: item.unitPrice,
       })),
       totalQty,
-      // For unallocated POs, show "Gesher" as customer (speculative inventory)
-      customer: isUnallocated ? 'Gesher' : (customerData?.name || 'Unknown'),
-      supplierName,
+      customer: customerData?.name || 'Unknown',
+      supplierName: hasPO ? 'Galileo manufacturing' : null,
       etaToUsPort: null, // Can be updated from shipment tracking
       deliveryAddress: addressParts.join(', '),
-      expectedDelivery: po.expected_delivery_date,
-      status: po.status,
-      actionRequired: po.internal_notes || '',
+      expectedDelivery: so.requested_delivery_date || (linkedPO?.expected_delivery_date || null),
+      status: linkedPO?.status || so.status,
+      actionRequired: linkedPO?.internal_notes || '',
       notes: '',
-      isUnallocated, // Flag to identify unallocated POs in UI
+      isUnallocated: !hasPO, // Flag warehouse orders (no PO)
     });
   });
 

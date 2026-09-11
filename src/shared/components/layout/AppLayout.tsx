@@ -30,12 +30,13 @@ export function AppLayout({ children, className, fullWidth = false }: AppLayoutP
         {/* Content - Light Background (Scrollable) */}
         <main
           className={cn(
-            'flex-1 overflow-auto bg-background',
-            !fullWidth && 'p-6',
+            'flex-1 overflow-auto bg-background min-h-0',
             className
           )}
         >
-          {children}
+          <div className={cn(!fullWidth && 'p-6', 'h-fit')}>
+            {children}
+          </div>
         </main>
       </div>
     </div>

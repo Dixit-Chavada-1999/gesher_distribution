@@ -36,7 +36,14 @@ export function usePickTickets(params: PickTicketListParams = {}) {
 
   return {
     data: data?.data ?? [],
-    meta: data?.meta,
+    meta: data?.meta ?? {
+      total: 0,
+      page: 1,
+      limit: 10,
+      totalPages: 0,
+      hasNextPage: false,
+      hasPreviousPage: false,
+    },
     isLoading,
     error,
     refetch: fetchPickTickets,

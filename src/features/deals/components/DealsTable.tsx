@@ -44,21 +44,8 @@ import {
 
 import { deleteDeal, markDealAsWon, markDealAsLost, reopenDeal, getDeal } from '../actions';
 import { getPipedriveCompanyDomain } from '@/features/pipedrive/actions';
-import type { DealListItem, DealStatus, Deal } from '../types';
+import type { DealListItem, DealStatus, Deal, DealsTableProps } from '../types';
 import { ConvertDealToCustomerDialog } from './ConvertDealToCustomerDialog';
-
-// ============================================
-// TYPES
-// ============================================
-
-interface DealsTableProps {
-  data: DealListItem[];
-  isLoading?: boolean;
-  onRowClick?: (deal: DealListItem) => void;
-  onDelete?: (deal: DealListItem) => void;
-  onRefresh?: () => void;
-  toolbarContent?: React.ReactNode;
-}
 
 // ============================================
 // HELPERS
@@ -107,6 +94,7 @@ export function DealsTable({
   onDelete,
   onRefresh,
   toolbarContent,
+  pagination,
 }: DealsTableProps) {
   // ----------------------------------------
   // STATE
@@ -439,7 +427,29 @@ export function DealsTable({
         searchableColumns={['title', 'contactName', 'contactEmail', 'organizationName']}
         showPagination
         pageSizeOptions={[10, 25, 50, 100]}
-        defaultPageSize={25}
+        defaultPageSize={pagination?.pageSize || 25}
+        // Server-side pagination props
+        manualPagination={!!pagination}
+        pageCount={pagination?.totalPages}
+        pageIndex={pagination ? pagination.page - 1 : 0}
+        pageSize={pagination?.pageSize || 25}
+        onPaginationChange={
+          pagination
+            ? (updater: any) => {
+                if (typeof updater === 'function') {
+                  const newState = updater({
+                    pageIndex: pagination.page - 1,
+                    pageSize: pagination.pageSize,
+                  });
+                  pagination.onPageChange(newState.pageIndex + 1);
+                  if (newState.pageSize !== pagination.pageSize) {
+                    pagination.onPageSizeChange(newState.pageSize);
+                  }
+                }
+              }
+            : undefined
+        }
+        rowCount={pagination?.total}
         onRowClick={onRowClick}
         getRowId={(row) => row.id}
         toolbarContent={toolbarContent}

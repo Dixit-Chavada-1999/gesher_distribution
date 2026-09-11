@@ -371,6 +371,15 @@ export interface LeadsTableProps {
   onConvert?: (lead: LeadListItem) => void;
   onDelete?: (lead: LeadListItem) => void;
   toolbarContent?: React.ReactNode;
+  // Server-side pagination
+  pagination?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+    onPageChange: (page: number) => void;
+    onPageSizeChange: (pageSize: number) => void;
+  };
 }
 
 export interface LeadDetailDrawerProps {

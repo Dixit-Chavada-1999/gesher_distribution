@@ -6,7 +6,7 @@
  * Client component for displaying and managing Pipedrive deals.
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import {
   Handshake,
@@ -60,14 +60,23 @@ export function DealsPageContent() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
+  // Reset to page 1 when status filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter]);
+
   // ----------------------------------------
   // QUERY PARAMS
   // ----------------------------------------
 
   const queryParams = useMemo<DealListParams>(() => {
     const params: DealListParams = {
-      page: 1,
-      limit: 100,
+      page,
+      limit: pageSize,
       sortBy: 'created_at',
       sortOrder: 'desc',
     };
@@ -77,7 +86,7 @@ export function DealsPageContent() {
     }
 
     return params;
-  }, [statusFilter]);
+  }, [statusFilter, page, pageSize]);
 
   // ----------------------------------------
   // DATA FETCHING
@@ -85,6 +94,7 @@ export function DealsPageContent() {
 
   const {
     data: deals,
+    meta,
     isLoading,
     refetch,
   } = useDeals(queryParams);
@@ -255,6 +265,17 @@ export function DealsPageContent() {
             isLoading={isLoading}
             onRowClick={handleRowClick}
             onRefresh={handleRefresh}
+            pagination={{
+              page: meta.page,
+              pageSize: meta.limit,
+              total: meta.total,
+              totalPages: meta.totalPages,
+              onPageChange: setPage,
+              onPageSizeChange: (newSize) => {
+                setPageSize(newSize);
+                setPage(1);
+              },
+            }}
           />
         </CardContent>
       </Card>

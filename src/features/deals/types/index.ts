@@ -321,7 +321,17 @@ export interface DealsTableProps {
   onView?: (deal: DealListItem) => void;
   onEdit?: (deal: DealListItem) => void;
   onDelete?: (deal: DealListItem) => void;
+  onRefresh?: () => void;
   toolbarContent?: React.ReactNode;
+  // Server-side pagination
+  pagination?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+    onPageChange: (page: number) => void;
+    onPageSizeChange: (pageSize: number) => void;
+  };
 }
 
 export interface DealDetailDrawerProps {

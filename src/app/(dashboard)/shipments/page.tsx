@@ -83,17 +83,29 @@ export default function ShipmentsPage() {
   // Filters
   const [statusFilter, setStatusFilter] = useState<ShipmentStatus | 'all'>('all');
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Reset to page 1 when status filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter]);
+
   // ----------------------------------------
   // DATA HOOKS
   // ----------------------------------------
 
   const {
     data: shipments,
+    meta,
     isLoading: isShipmentsLoading,
     refetch: refetchShipments,
-  } = useShipments(
-    statusFilter === 'all' ? {} : { status: statusFilter }
-  );
+  } = useShipments({
+    ...(statusFilter !== 'all' && { status: statusFilter }),
+    page,
+    limit: pageSize,
+  });
 
   // ----------------------------------------
   // HANDLERS
@@ -229,6 +241,17 @@ export default function ShipmentsPage() {
             </SelectContent>
           </Select>
         }
+        pagination={{
+          page: meta.page,
+          pageSize: meta.limit,
+          total: meta.total,
+          totalPages: meta.totalPages,
+          onPageChange: setPage,
+          onPageSizeChange: (newSize) => {
+            setPageSize(newSize);
+            setPage(1);
+          },
+        }}
       />
 
       {/* View Shipment Drawer */}

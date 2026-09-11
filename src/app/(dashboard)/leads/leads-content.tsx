@@ -6,7 +6,7 @@
  * Client component for managing leads from Pipedrive.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { UserPlus, Download } from 'lucide-react';
@@ -62,6 +62,15 @@ export function LeadsPageContent() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, sourceFilter]);
+
   // ----------------------------------------
   // DATA HOOKS
   // ----------------------------------------
@@ -69,10 +78,11 @@ export function LeadsPageContent() {
   const params: LeadListParams = {
     status: statusFilter !== 'all' ? statusFilter : undefined,
     source: sourceFilter !== 'all' ? sourceFilter : undefined,
-    limit: 100,
+    page,
+    limit: pageSize,
   };
 
-  const { data: leads, isLoading, refetch } = useLeads(params);
+  const { data: leads, meta, isLoading, refetch } = useLeads(params);
   const { data: stats, refetch: refetchStats } = useLeadStats();
   const { data: statusCounts, refetch: refetchStatusCounts } = useLeadStatusCounts();
 
@@ -253,6 +263,17 @@ export function LeadsPageContent() {
           onRowClick={handleRowClick}
           onConvert={handleConvertClick}
           onDelete={handleDelete}
+          pagination={{
+            page: meta.page,
+            pageSize: meta.limit,
+            total: meta.total,
+            totalPages: meta.totalPages,
+            onPageChange: setPage,
+            onPageSizeChange: (newSize) => {
+              setPageSize(newSize);
+              setPage(1);
+            },
+          }}
         />
       )}
 

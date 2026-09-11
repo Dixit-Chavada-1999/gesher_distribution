@@ -7,7 +7,7 @@
  * Part of the Pick -> Pack -> Ship fulfillment workflow.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -64,17 +64,29 @@ export default function PickTicketsPage() {
   // Filters
   const [statusFilter, setStatusFilter] = useState<PickTicketStatus | 'all'>('all');
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Reset to page 1 when status filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter]);
+
   // ----------------------------------------
   // DATA HOOKS
   // ----------------------------------------
 
   const {
     data: pickTickets,
+    meta,
     isLoading: isPickTicketsLoading,
     refetch: refetchPickTickets,
-  } = usePickTickets(
-    statusFilter === 'all' ? {} : { status: statusFilter }
-  );
+  } = usePickTickets({
+    ...(statusFilter !== 'all' && { status: statusFilter }),
+    page,
+    limit: pageSize,
+  });
 
   // ----------------------------------------
   // HANDLERS
@@ -237,6 +249,17 @@ export default function PickTicketsPage() {
             </SelectContent>
           </Select>
         }
+        pagination={{
+          page: meta.page,
+          pageSize: meta.limit,
+          total: meta.total,
+          totalPages: meta.totalPages,
+          onPageChange: setPage,
+          onPageSizeChange: (newSize) => {
+            setPageSize(newSize);
+            setPage(1);
+          },
+        }}
       />
 
       {/* View Pick Ticket Drawer */}

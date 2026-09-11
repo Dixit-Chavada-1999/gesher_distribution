@@ -4,6 +4,7 @@ import { useState } from 'react';
 import {
   useReactTable,
   getCoreRowModel,
+  getPaginationRowModel,
   flexRender,
 } from '@tanstack/react-table';
 import {
@@ -15,6 +16,8 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 import { Skeleton } from '@/shared/components/ui/skeleton';
+import { Button } from '@/shared/components/ui/button';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,6 +41,7 @@ export function PickTicketsTable({
   onAssign,
   onStartPicking,
   toolbarContent,
+  pagination,
 }: PickTicketsTableProps) {
   const [showShippedEditConfirm, setShowShippedEditConfirm] = useState(false);
   const [pendingEditPickTicket, setPendingEditPickTicket] = useState<PickTicketListItem | null>(null);
@@ -60,6 +64,34 @@ export function PickTicketsTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    // Server-side pagination
+    manualPagination: !!pagination,
+    pageCount: pagination?.totalPages ?? -1,
+    state: pagination
+      ? {
+          pagination: {
+            pageIndex: pagination.page - 1,
+            pageSize: pagination.pageSize,
+          },
+        }
+      : undefined,
+    onPaginationChange: pagination
+      ? (updater) => {
+          if (typeof updater === 'function') {
+            const current = {
+              pageIndex: pagination.page - 1,
+              pageSize: pagination.pageSize,
+            };
+            const newState = updater(current);
+            pagination.onPageChange(newState.pageIndex + 1);
+            if (newState.pageSize !== pagination.pageSize) {
+              pagination.onPageSizeChange(newState.pageSize);
+            }
+          }
+        }
+      : undefined,
+    rowCount: pagination?.total,
   });
 
   if (isLoading) {
@@ -147,6 +179,40 @@ export function PickTicketsTable({
             </TableBody>
           </Table>
         </div>
+
+        {/* Pagination Controls */}
+        {pagination && (
+          <div className="flex items-center justify-between px-2">
+            <div className="flex-1 text-sm text-muted-foreground">
+              Showing {(pagination.page - 1) * pagination.pageSize + 1} to{' '}
+              {Math.min(pagination.page * pagination.pageSize, pagination.total)} of{' '}
+              {pagination.total} results
+            </div>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => pagination.onPageChange(pagination.page - 1)}
+                disabled={pagination.page <= 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+              </Button>
+              <div className="text-sm font-medium">
+                Page {pagination.page} of {pagination.totalPages}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => pagination.onPageChange(pagination.page + 1)}
+                disabled={pagination.page >= pagination.totalPages}
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Confirmation dialog for editing shipped pick tickets */}

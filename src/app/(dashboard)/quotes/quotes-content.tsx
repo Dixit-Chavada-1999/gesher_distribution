@@ -131,6 +131,10 @@ export function QuotesPageContent() {
   const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'all'>(defaultStatusFilter);
   const [hasSetInitialFilter, setHasSetInitialFilter] = useState(false);
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
   // Set filter to pending_approval for Finance role once user is loaded
   useEffect(() => {
     if (!hasSetInitialFilter && appUser?.role?.name) {
@@ -142,18 +146,26 @@ export function QuotesPageContent() {
     }
   }, [appUser?.role?.name, hasSetInitialFilter]);
 
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter]);
+
   // ----------------------------------------
   // DATA HOOKS
   // ----------------------------------------
 
-  // Quotes list with status filter
+  // Quotes list with status filter and pagination
   const {
     data: quotes,
+    meta,
     isLoading: isQuotesLoading,
     refetch: refetchQuotes,
-  } = useQuotes(
-    statusFilter === 'all' ? {} : { status: statusFilter }
-  );
+  } = useQuotes({
+    ...(statusFilter !== 'all' && { status: statusFilter }),
+    page,
+    limit: pageSize,
+  });
 
   // ----------------------------------------
   // SHARED PO PROCESSING FUNCTION
@@ -629,6 +641,17 @@ export function QuotesPageContent() {
         onSubmitForApproval={canSubmitForApproval ? handleSubmitForApproval : undefined}
         onApprove={canApprove ? handleApproveClick : undefined}
         onReject={canApprove ? handleRejectClick : undefined}
+        pagination={{
+          page: meta.page,
+          pageSize: meta.limit,
+          total: meta.total,
+          totalPages: meta.totalPages,
+          onPageChange: setPage,
+          onPageSizeChange: (newSize) => {
+            setPageSize(newSize);
+            setPage(1); // Reset to first page when page size changes
+          },
+        }}
         toolbarContent={
           <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
             <SelectTrigger className="h-8 w-[150px]">

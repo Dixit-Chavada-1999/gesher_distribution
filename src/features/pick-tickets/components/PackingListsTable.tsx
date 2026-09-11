@@ -29,19 +29,10 @@ import {
 } from '@/shared/components/ui/table';
 import { Button } from '@/shared/components/ui/button';
 import { Skeleton } from '@/shared/components/ui/skeleton';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-import type { PackingListListItem } from '../types';
+import type { PackingListsTableProps } from '../types';
 import { getPackingListsTableColumns } from './PackingListsTableColumns';
-
-interface PackingListsTableProps {
-  data: PackingListListItem[];
-  isLoading?: boolean;
-  onRowClick?: (packingList: PackingListListItem) => void;
-  onView?: (packingList: PackingListListItem) => void;
-  onDelete?: (packingList: PackingListListItem) => void;
-  onMarkAsPacked?: (packingList: PackingListListItem) => void;
-  toolbarContent?: React.ReactNode;
-}
 
 export function PackingListsTable({
   data,
@@ -51,6 +42,7 @@ export function PackingListsTable({
   onDelete,
   onMarkAsPacked,
   toolbarContent,
+  pagination,
 }: PackingListsTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -74,10 +66,38 @@ export function PackingListsTable({
     getFilteredRowModel: getFilteredRowModel(),
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
-    state: {
-      sorting,
-      columnFilters,
-    },
+    // Server-side pagination
+    manualPagination: !!pagination,
+    pageCount: pagination?.totalPages ?? -1,
+    state: pagination
+      ? {
+          sorting,
+          columnFilters,
+          pagination: {
+            pageIndex: pagination.page - 1,
+            pageSize: pagination.pageSize,
+          },
+        }
+      : {
+          sorting,
+          columnFilters,
+        },
+    onPaginationChange: pagination
+      ? (updater) => {
+          if (typeof updater === 'function') {
+            const current = {
+              pageIndex: pagination.page - 1,
+              pageSize: pagination.pageSize,
+            };
+            const newState = updater(current);
+            pagination.onPageChange(newState.pageIndex + 1);
+            if (newState.pageSize !== pagination.pageSize) {
+              pagination.onPageSizeChange(newState.pageSize);
+            }
+          }
+        }
+      : undefined,
+    rowCount: pagination?.total,
   });
 
   if (isLoading) {
@@ -140,24 +160,58 @@ export function PackingListsTable({
         </Table>
       </div>
 
-      <div className="flex items-center justify-end space-x-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => table.previousPage()}
-          disabled={!table.getCanPreviousPage()}
-        >
-          Previous
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => table.nextPage()}
-          disabled={!table.getCanNextPage()}
-        >
-          Next
-        </Button>
-      </div>
+      {/* Pagination Controls */}
+      {pagination ? (
+        <div className="flex items-center justify-between px-2">
+          <div className="flex-1 text-sm text-muted-foreground">
+            Showing {(pagination.page - 1) * pagination.pageSize + 1} to{' '}
+            {Math.min(pagination.page * pagination.pageSize, pagination.total)} of{' '}
+            {pagination.total} results
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => pagination.onPageChange(pagination.page - 1)}
+              disabled={pagination.page <= 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Previous
+            </Button>
+            <div className="text-sm font-medium">
+              Page {pagination.page} of {pagination.totalPages}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => pagination.onPageChange(pagination.page + 1)}
+              disabled={pagination.page >= pagination.totalPages}
+            >
+              Next
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-end space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+          >
+            Previous
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+          >
+            Next
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

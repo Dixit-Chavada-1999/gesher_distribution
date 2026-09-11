@@ -30,6 +30,7 @@ export function SalesOrdersTable({
   onConfirm,
   onCancel,
   toolbarContent,
+  pagination,
 }: SalesOrdersTableProps) {
   // ----------------------------------------
   // COLUMNS
@@ -64,6 +65,28 @@ export function SalesOrdersTable({
       showPagination
       pageSizeOptions={[10, 20, 50, 100]}
       defaultPageSize={10}
+      // Server-side pagination props
+      manualPagination={!!pagination}
+      pageCount={pagination?.totalPages}
+      pageIndex={pagination ? pagination.page - 1 : 0}
+      pageSize={pagination?.pageSize || 10}
+      onPaginationChange={
+        pagination
+          ? (updater: any) => {
+              if (typeof updater === 'function') {
+                const newState = updater({
+                  pageIndex: pagination.page - 1,
+                  pageSize: pagination.pageSize,
+                });
+                pagination.onPageChange(newState.pageIndex + 1);
+                if (newState.pageSize !== pagination.pageSize) {
+                  pagination.onPageSizeChange(newState.pageSize);
+                }
+              }
+            }
+          : undefined
+      }
+      rowCount={pagination?.total}
       onRowClick={onRowClick}
       getRowId={(row) => row.id}
       toolbarContent={toolbarContent}

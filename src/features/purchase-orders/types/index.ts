@@ -336,6 +336,15 @@ export interface PurchaseOrdersTableProps {
   onEdit?: (po: POListItem) => void;
   onDelete?: (po: POListItem) => void;
   toolbarContent?: React.ReactNode;
+  // Server-side pagination
+  pagination?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+    onPageChange: (page: number) => void;
+    onPageSizeChange: (pageSize: number) => void;
+  };
 }
 
 export interface CreatePurchaseOrderDrawerProps {

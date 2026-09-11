@@ -41,20 +41,7 @@ import {
 
 import { deleteLead } from '../actions';
 import { getPipedriveCompanyDomain } from '@/features/pipedrive/actions';
-import type { LeadListItem, LeadStatus } from '../types';
-
-// ============================================
-// TYPES
-// ============================================
-
-interface LeadsTableProps {
-  data: LeadListItem[];
-  isLoading?: boolean;
-  onRowClick?: (lead: LeadListItem) => void;
-  onConvert?: (lead: LeadListItem) => void;
-  onDelete?: (lead: LeadListItem) => void;
-  toolbarContent?: React.ReactNode;
-}
+import type { LeadListItem, LeadStatus, LeadsTableProps } from '../types';
 
 // ============================================
 // HELPERS
@@ -102,6 +89,7 @@ export function LeadsTable({
   onConvert,
   onDelete,
   toolbarContent,
+  pagination,
 }: LeadsTableProps) {
   // ----------------------------------------
   // STATE
@@ -348,7 +336,29 @@ export function LeadsTable({
         searchableColumns={['name', 'email', 'company', 'phone']}
         showPagination
         pageSizeOptions={[10, 20, 50, 100]}
-        defaultPageSize={10}
+        defaultPageSize={pagination?.pageSize || 10}
+        // Server-side pagination props
+        manualPagination={!!pagination}
+        pageCount={pagination?.totalPages}
+        pageIndex={pagination ? pagination.page - 1 : 0}
+        pageSize={pagination?.pageSize || 10}
+        onPaginationChange={
+          pagination
+            ? (updater: any) => {
+                if (typeof updater === 'function') {
+                  const newState = updater({
+                    pageIndex: pagination.page - 1,
+                    pageSize: pagination.pageSize,
+                  });
+                  pagination.onPageChange(newState.pageIndex + 1);
+                  if (newState.pageSize !== pagination.pageSize) {
+                    pagination.onPageSizeChange(newState.pageSize);
+                  }
+                }
+              }
+            : undefined
+        }
+        rowCount={pagination?.total}
         onRowClick={onRowClick}
         getRowId={(row) => row.id}
         toolbarContent={toolbarContent}

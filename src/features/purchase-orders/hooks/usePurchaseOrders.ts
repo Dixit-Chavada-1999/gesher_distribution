@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { listPurchaseOrders } from '../actions';
 import type { POListItem, POListParams } from '../types';
 
@@ -32,19 +32,12 @@ export function usePurchaseOrders(params: POListParams = {}): UsePurchaseOrdersR
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const isFirstRender = useRef(true);
-  const paramsRef = useRef(params);
-
-  useEffect(() => {
-    paramsRef.current = params;
-  }, [params]);
-
   const fetchPurchaseOrders = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const result = await listPurchaseOrders(paramsRef.current);
+      const result = await listPurchaseOrders(params);
 
       if (result.success && result.data) {
         setData(result.data.data);
@@ -58,32 +51,11 @@ export function usePurchaseOrders(params: POListParams = {}): UsePurchaseOrdersR
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [params]);
 
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      fetchPurchaseOrders();
-      return;
-    }
-
-    const timeoutId = setTimeout(() => {
-      fetchPurchaseOrders();
-    }, 300);
-
-    return () => clearTimeout(timeoutId);
-  }, [
-    params.page,
-    params.limit,
-    params.search,
-    params.status,
-    params.salesOrderId,
-    params.dateFrom,
-    params.dateTo,
-    params.sortBy,
-    params.sortOrder,
-    fetchPurchaseOrders,
-  ]);
+    fetchPurchaseOrders();
+  }, [fetchPurchaseOrders]);
 
   return {
     data,

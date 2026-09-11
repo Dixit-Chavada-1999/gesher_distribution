@@ -6,7 +6,7 @@
  * Main page for managing invoices.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -58,17 +58,29 @@ export default function InvoicesPage() {
   // Filters
   const [statusFilter, setStatusFilter] = useState<InvoiceStatus | 'all'>('all');
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Reset to page 1 when status filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter]);
+
   // ----------------------------------------
   // DATA HOOKS
   // ----------------------------------------
 
   const {
     data: invoices,
+    meta,
     isLoading: isInvoicesLoading,
     refetch: refetchInvoices,
-  } = useInvoices(
-    statusFilter === 'all' ? {} : { status: statusFilter }
-  );
+  } = useInvoices({
+    ...(statusFilter !== 'all' && { status: statusFilter }),
+    page,
+    limit: pageSize,
+  });
 
   // ----------------------------------------
   // HANDLERS
@@ -204,6 +216,17 @@ export default function InvoicesPage() {
             </SelectContent>
           </Select>
         }
+        pagination={{
+          page: meta.page,
+          pageSize: meta.limit,
+          total: meta.total,
+          totalPages: meta.totalPages,
+          onPageChange: setPage,
+          onPageSizeChange: (newSize) => {
+            setPageSize(newSize);
+            setPage(1);
+          },
+        }}
       />
 
       {/* View Invoice Drawer */}

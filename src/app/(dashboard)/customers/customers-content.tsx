@@ -73,6 +73,15 @@ export function CustomersPageContent() {
   const [statusFilter, setStatusFilter] = useState<CustomerStatus | 'all'>('all');
   const [isSyncDialogOpen, setIsSyncDialogOpen] = useState(false);
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Reset to page 1 when status filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter]);
+
   // ----------------------------------------
   // DATA HOOKS
   // ----------------------------------------
@@ -80,11 +89,14 @@ export function CustomersPageContent() {
   // Customers list with status filter
   const {
     data: customers,
+    meta,
     isLoading: isCustomersLoading,
     refetch: refetchCustomers,
-  } = useCustomers(
-    statusFilter === 'all' ? {} : { status: statusFilter }
-  );
+  } = useCustomers({
+    ...(statusFilter !== 'all' && { status: statusFilter }),
+    page,
+    limit: pageSize,
+  });
 
   // ----------------------------------------
   // HANDLERS
@@ -203,6 +215,17 @@ export function CustomersPageContent() {
             </SelectContent>
           </Select>
         }
+        pagination={{
+          page: meta.page,
+          pageSize: meta.limit,
+          total: meta.total,
+          totalPages: meta.totalPages,
+          onPageChange: setPage,
+          onPageSizeChange: (newSize) => {
+            setPageSize(newSize);
+            setPage(1);
+          },
+        }}
       />
 
       {/* Create Customer Drawer */}

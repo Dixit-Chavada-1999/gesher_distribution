@@ -7,8 +7,8 @@
  */
 
 import { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { Building2, Plus } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Building2, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Button } from '@/shared/components/ui/button';
@@ -29,8 +29,14 @@ export function SuppliersPageContent({
   canEdit,
 }: SuppliersPageContentProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+
+  // Pagination
+  const pageSize = 20;
+  const currentPage = parseInt(searchParams.get('page') || '1', 10);
+  const totalPages = Math.ceil(total / pageSize);
 
   const handleCreate = useCallback(() => {
     setEditingSupplier(null);
@@ -45,6 +51,15 @@ export function SuppliersPageContent({
   const handleSuccess = useCallback(() => {
     router.refresh();
   }, [router]);
+
+  const handlePageChange = useCallback(
+    (newPage: number) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('page', newPage.toString());
+      router.push(`/suppliers?${params.toString()}`);
+    },
+    [router, searchParams]
+  );
 
   return (
     <div className="space-y-6">
@@ -77,6 +92,39 @@ export function SuppliersPageContent({
           />
         </CardContent>
       </Card>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-2">
+          <div className="flex-1 text-sm text-muted-foreground">
+            Showing {(currentPage - 1) * pageSize + 1} to{' '}
+            {Math.min(currentPage * pageSize, total)} of {total} results
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage <= 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Previous
+            </Button>
+            <div className="text-sm font-medium">
+              Page {currentPage} of {totalPages}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage >= totalPages}
+            >
+              Next
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Supplier Form Dialog */}
       <SupplierFormDialog

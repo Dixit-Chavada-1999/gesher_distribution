@@ -6,7 +6,7 @@
  * Main page for managing purchase orders.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { RefreshCw, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -63,17 +63,32 @@ export default function PurchaseOrdersPage() {
   // Filters
   const [statusFilter, setStatusFilter] = useState<POStatus | 'all'>('all');
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Reset to page 1 when status filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter]);
+
   // ----------------------------------------
   // DATA HOOKS
   // ----------------------------------------
 
+  // Memoized params to prevent unnecessary re-fetches
+  const poParams = useMemo(() => ({
+    ...(statusFilter !== 'all' && { status: statusFilter }),
+    page,
+    limit: pageSize,
+  }), [statusFilter, page, pageSize]);
+
   const {
     data: purchaseOrders,
+    meta,
     isLoading: isPOsLoading,
     refetch: refetchPOs,
-  } = usePurchaseOrders(
-    statusFilter === 'all' ? {} : { status: statusFilter }
-  );
+  } = usePurchaseOrders(poParams);
 
   // ----------------------------------------
   // HANDLERS
@@ -164,7 +179,7 @@ export default function PurchaseOrdersPage() {
   // ----------------------------------------
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 self-start w-full">
       {/* Page Header */}
       <PageHeader
         title="Purchase Orders"
@@ -210,6 +225,17 @@ export default function PurchaseOrdersPage() {
             </SelectContent>
           </Select>
         }
+        pagination={{
+          page: meta.page,
+          pageSize: meta.limit,
+          total: meta.total,
+          totalPages: meta.totalPages,
+          onPageChange: setPage,
+          onPageSizeChange: (newSize) => {
+            setPageSize(newSize);
+            setPage(1);
+          },
+        }}
       />
 
       {/* View Purchase Order Drawer */}

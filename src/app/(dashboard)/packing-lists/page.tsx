@@ -7,7 +7,7 @@
  * Part of the Pick -> Pack -> Ship fulfillment workflow.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -57,17 +57,29 @@ export default function PackingListsPage() {
   // Filters
   const [statusFilter, setStatusFilter] = useState<PackingListStatus | 'all'>('all');
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Reset to page 1 when status filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter]);
+
   // ----------------------------------------
   // DATA HOOKS
   // ----------------------------------------
 
   const {
     data: packingLists,
+    meta,
     isLoading: isPackingListsLoading,
     refetch: refetchPackingLists,
-  } = usePackingLists(
-    statusFilter === 'all' ? {} : { status: statusFilter }
-  );
+  } = usePackingLists({
+    ...(statusFilter !== 'all' && { status: statusFilter }),
+    page,
+    limit: pageSize,
+  });
 
   // ----------------------------------------
   // HANDLERS
@@ -193,6 +205,17 @@ export default function PackingListsPage() {
             </SelectContent>
           </Select>
         }
+        pagination={{
+          page: meta.page,
+          pageSize: meta.limit,
+          total: meta.total,
+          totalPages: meta.totalPages,
+          onPageChange: setPage,
+          onPageSizeChange: (newSize) => {
+            setPageSize(newSize);
+            setPage(1);
+          },
+        }}
       />
 
       {/* View Packing List Drawer */}
