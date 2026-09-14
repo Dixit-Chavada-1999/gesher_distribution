@@ -162,6 +162,7 @@ export function EditSalesOrderDrawer({
     warehouseId: order.warehouseId,
     currencyCode: order.currencyCode,
     customerPoNumber: order.customerPoNumber,
+    productSource: order.productSource,
     status: order.status,
     billingAddressStreet: order.billingAddressStreet,
     billingAddressCity: order.billingAddressCity,

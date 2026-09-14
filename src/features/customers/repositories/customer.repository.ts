@@ -431,6 +431,7 @@ class CustomerRepositoryImpl {
       .select('id, customer_code, name, email, phone')
       .eq('status', 'active')
       .is('deleted_at', null)
+      .neq('name', 'Company Legal Name') // Exclude placeholder record
       .order('name', { ascending: true });
 
     if (error) {

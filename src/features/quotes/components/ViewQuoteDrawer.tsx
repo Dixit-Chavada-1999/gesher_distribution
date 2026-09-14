@@ -495,6 +495,11 @@ export function ViewQuoteDrawer({
                       value={quote.salesRep ? `${quote.salesRep.firstName} ${quote.salesRep.lastName}` : null}
                       icon={<User className="h-4 w-4" />}
                     />
+                    <InfoItem
+                      label="Customer PO Number"
+                      value={quote.customerPoNumber || '-'}
+                      icon={<FileText className="h-4 w-4" />}
+                    />
                   </div>
                 </Section>
 

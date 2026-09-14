@@ -6,18 +6,27 @@
  * Column definitions for the sales orders data table.
  */
 
+import { useState } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
 import { CheckCircle, XCircle } from 'lucide-react';
 import { Badge } from '@/shared/components/ui/badge';
 import { Checkbox } from '@/shared/components/ui/checkbox';
 import { DataTableColumnHeader } from '@/shared/components/data-table/DataTableColumnHeader';
 import { DataTableRowActions, createCommonRowActions } from '@/shared/components/data-table/DataTableRowActions';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/components/ui/select';
 
-import type { SalesOrderListItem } from '../types';
+import type { SalesOrderListItem, ProductSource } from '../types';
 import {
   ORDER_STATUS_LABELS,
   ORDER_STATUS_COLORS,
   PRODUCT_SOURCE_LABELS,
+  PRODUCT_SOURCES,
   canEditOrder,
 } from '../types';
 import { formatDate } from '../lib/mock-data';
@@ -32,6 +41,80 @@ interface ColumnOptions {
   onDelete?: (order: SalesOrderListItem) => void;
   onConfirm?: (order: SalesOrderListItem) => void;
   onCancel?: (order: SalesOrderListItem) => void;
+  onProductSourceChange?: (orderId: string, newSource: ProductSource) => void;
+}
+
+// ============================================
+// INLINE EDIT COMPONENTS
+// ============================================
+
+/**
+ * Inline editable Product Source cell
+ */
+function ProductSourceCell({
+  order,
+  onProductSourceChange,
+}: {
+  order: SalesOrderListItem;
+  onProductSourceChange?: (orderId: string, newSource: ProductSource) => void;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const productSource = order.productSource;
+  const isEditable = canEditOrder(order.status);
+
+  const handleChange = (value: string) => {
+    if (onProductSourceChange) {
+      onProductSourceChange(order.id, value as ProductSource);
+    }
+    setIsEditing(false);
+  };
+
+  if (!isEditable || !onProductSourceChange) {
+    // Read-only badge for non-editable orders
+    return (
+      <Badge
+        variant={productSource === 'warehouse' ? 'default' : 'secondary'}
+        className="font-medium"
+      >
+        {PRODUCT_SOURCE_LABELS[productSource]}
+      </Badge>
+    );
+  }
+
+  if (isEditing) {
+    return (
+      <Select
+        value={productSource}
+        onValueChange={handleChange}
+        onOpenChange={(open) => !open && setIsEditing(false)}
+        open={isEditing}
+      >
+        <SelectTrigger className="h-7 w-[120px] text-xs">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {PRODUCT_SOURCES.map((source) => (
+            <SelectItem key={source} value={source}>
+              {PRODUCT_SOURCE_LABELS[source]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    );
+  }
+
+  return (
+    <Badge
+      variant={productSource === 'warehouse' ? 'default' : 'secondary'}
+      className="font-medium cursor-pointer hover:opacity-80 transition-opacity"
+      onClick={(e) => {
+        e.stopPropagation();
+        setIsEditing(true);
+      }}
+    >
+      {PRODUCT_SOURCE_LABELS[productSource]}
+    </Badge>
+  );
 }
 
 // ============================================
@@ -108,6 +191,22 @@ export function getSalesOrdersTableColumns(
       ),
     },
 
+    // Customer PO Number
+    {
+      accessorKey: 'customerPoNumber',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Customer PO" />
+      ),
+      cell: ({ row }) => {
+        const customerPo = row.getValue('customerPoNumber') as string | null;
+        return (
+          <div className="max-w-[150px] truncate text-sm font-medium">
+            {customerPo || '-'}
+          </div>
+        );
+      },
+    },
+
     // Order Date
     {
       accessorKey: 'orderDate',
@@ -144,14 +243,11 @@ export function getSalesOrdersTableColumns(
         <DataTableColumnHeader column={column} title="Product Source" />
       ),
       cell: ({ row }) => {
-        const productSource = row.getValue('productSource') as keyof typeof PRODUCT_SOURCE_LABELS;
         return (
-          <Badge
-            variant={productSource === 'warehouse' ? 'default' : 'secondary'}
-            className="font-medium"
-          >
-            {PRODUCT_SOURCE_LABELS[productSource]}
-          </Badge>
+          <ProductSourceCell
+            order={row.original}
+            onProductSourceChange={options.onProductSourceChange}
+          />
         );
       },
       filterFn: (row, id, value) => {

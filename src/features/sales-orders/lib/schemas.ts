@@ -151,7 +151,8 @@ export const salesOrderFormSchema = z.object({
   warehouseId: z.string().optional().default(''),
   currencyId: z.string().optional().default('USD'),
   customerPoNumber: z.string().optional().default(''),
-  orderSeries: z.string().min(1, 'Order series is required'), // GDC 1, GDC 2, GDC 3
+  productSource: productSourceSchema.optional().default('direct'),
+  orderSeries: z.string().optional().default(''), // GDC 1, GDC 2, GDC 3 - Required only when status is 'confirmed'
   status: orderStatusSchema.default('draft'),
   billingAddress: addressFormSchema,
   shippingAddress: addressFormSchema,
@@ -159,7 +160,19 @@ export const salesOrderFormSchema = z.object({
   items: z.array(orderItemFormSchema).min(1, 'At least one item is required'),
   customerNotes: z.string().optional().default(''),
   internalNotes: z.string().optional().default(''),
-});
+}).refine(
+  (data) => {
+    // Order series is required only when status is 'confirmed'
+    if (data.status === 'confirmed' && !data.orderSeries) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message: 'Order series is required when confirming order',
+    path: ['orderSeries'],
+  }
+);
 
 // ============================================
 // LIST PARAMS SCHEMA
@@ -266,6 +279,7 @@ export function orderToFormValues(order: {
   warehouseId: string | null;
   currencyCode: string;
   customerPoNumber: string | null;
+  productSource: 'direct' | 'warehouse';
   orderSeries: string | null;
   status: OrderStatus;
   billingAddressStreet: string | null;
@@ -311,6 +325,7 @@ export function orderToFormValues(order: {
     warehouseId: order.warehouseId || '',
     currencyId: order.currencyCode,
     customerPoNumber: order.customerPoNumber || '',
+    productSource: order.productSource || 'direct',
     orderSeries: order.orderSeries || '',
     status: order.status,
     billingAddress: {

@@ -378,6 +378,33 @@ export async function updateSalesOrderSeries(
 }
 
 /**
+ * Update product source only (allowed only for draft/pending status)
+ */
+export async function updateSalesOrderProductSource(
+  id: string,
+  productSource: 'direct' | 'warehouse'
+): Promise<ActionResult<SalesOrder>> {
+  const auth = await authorize('orders.edit');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  const result = await salesOrderService.update(
+    id,
+    { productSource },
+    auth.user.id
+  );
+
+  if (result.success) {
+    revalidatePath('/sales-orders');
+    revalidatePath(`/sales-orders/${id}`);
+    revalidatePath('/api/sales-orders');
+  }
+
+  return result;
+}
+
+/**
  * Update order header and items from DTO (for Edit drawer)
  */
 export async function updateSalesOrderFromDTO(

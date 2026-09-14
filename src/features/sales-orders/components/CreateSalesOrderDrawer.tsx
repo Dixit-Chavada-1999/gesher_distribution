@@ -97,6 +97,12 @@ export function CreateSalesOrderDrawer({
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleCreate = async (formData: any) => {
+    // Simple 1:1 creation - no splitting
+    await createSingleOrder(formData);
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const createSingleOrder = async (formData: any) => {
     setIsSubmitting(true);
     try {
       const result = await createSalesOrderFromData({
@@ -131,62 +137,64 @@ export function CreateSalesOrderDrawer({
   // ----------------------------------------
 
   return (
-    <Dialog open={open} onOpenChange={handleCancel}>
-      <DialogContent className="flex max-h-[90vh] h-[90vh] w-full max-w-[1400px] flex-col overflow-hidden p-0">
-        {/* Header */}
-        <DialogHeader className="flex-shrink-0 border-b px-6 py-4">
-          <DialogTitle className="text-xl font-semibold">
-            Create Sales Order
-          </DialogTitle>
-          <DialogDescription>
-            Fill in the details to create a new sales order.
-          </DialogDescription>
-        </DialogHeader>
-
-        {/* Scrollable Content */}
-        <ScrollArea className="flex-1 h-0 min-h-0">
-          <div className="px-6 py-6">
-            <SalesOrderForm
-              masterData={masterData}
-              onCancel={handleCancel}
-              onSaveDraft={handleSaveDraft}
-              onSubmit={handleCreate}
-            />
-          </div>
-        </ScrollArea>
-
-        {/* Footer */}
-        <Separator />
-        <DialogFooter className="flex-shrink-0 border-t px-6 py-4">
-          <div className="flex w-full items-center justify-end gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleCancel}
-              disabled={isLoading}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={handleSaveDraft}
-              disabled={isLoading}
-            >
-              {isSavingDraft && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Draft
-            </Button>
-            <Button
-              type="submit"
-              form="sales-order-form"
-              disabled={isLoading}
-            >
-              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+    <>
+      <Dialog open={open} onOpenChange={handleCancel}>
+        <DialogContent className="flex max-h-[90vh] h-[90vh] w-full max-w-[1400px] flex-col overflow-hidden p-0">
+          {/* Header */}
+          <DialogHeader className="flex-shrink-0 border-b px-6 py-4">
+            <DialogTitle className="text-xl font-semibold">
               Create Sales Order
-            </Button>
-          </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            </DialogTitle>
+            <DialogDescription>
+              Fill in the details to create a new sales order.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Scrollable Content */}
+          <ScrollArea className="flex-1 h-0 min-h-0">
+            <div className="px-6 py-6">
+              <SalesOrderForm
+                masterData={masterData}
+                onCancel={handleCancel}
+                onSaveDraft={handleSaveDraft}
+                onSubmit={handleCreate}
+              />
+            </div>
+          </ScrollArea>
+
+          {/* Footer */}
+          <Separator />
+          <DialogFooter className="flex-shrink-0 border-t px-6 py-4">
+            <div className="flex w-full items-center justify-end gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCancel}
+                disabled={isLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleSaveDraft}
+                disabled={isLoading}
+              >
+                {isSavingDraft && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Draft
+              </Button>
+              <Button
+                type="submit"
+                form="sales-order-form"
+                disabled={isLoading}
+              >
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Create Sales Order
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

@@ -335,6 +335,7 @@ export interface SalesOrderListItem {
   orderNumber: string;
   customerId: string;
   customerName: string;
+  customerPoNumber?: string | null; // Customer's PO number
   orderDate: string;
   requestedDeliveryDate: string | null;
   status: OrderStatus;
@@ -597,6 +598,7 @@ export interface SalesOrdersTableProps {
   onDelete?: (order: SalesOrderListItem) => void;
   onConfirm?: (order: SalesOrderListItem) => void;
   onCancel?: (order: SalesOrderListItem) => void;
+  onProductSourceChange?: (orderId: string, newSource: ProductSource) => void;
   toolbarContent?: React.ReactNode;
   // Server-side pagination
   pagination?: {

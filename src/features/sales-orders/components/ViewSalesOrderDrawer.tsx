@@ -51,7 +51,7 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 
-import { getSalesOrder, releaseSalesOrderHold, confirmSalesOrder, cancelSalesOrder, getSalesOrderMasterData, updateSalesOrderSeries, regeneratePurchaseOrder } from '../actions';
+import { getSalesOrder, releaseSalesOrderHold, confirmSalesOrder, cancelSalesOrder, getSalesOrderMasterData, updateSalesOrderSeries, updateSalesOrderProductSource, regeneratePurchaseOrder } from '../actions';
 import { ORDER_SERIES } from '@/shared/lib/global-data';
 import { createPickTicketFromSalesOrder } from '@/features/pick-tickets/actions';
 import { createInvoiceFromSalesOrder } from '@/features/invoices/actions';
@@ -78,6 +78,7 @@ import {
   ORDER_CREDIT_STATUS_LABELS,
   ORDER_CREDIT_STATUS_COLORS,
   PRODUCT_SOURCE_LABELS,
+  PRODUCT_SOURCES,
 } from '../types';
 import { toast } from 'sonner';
 
@@ -234,6 +235,10 @@ const [isReleasingHold, setIsReleasingHold] = useState(false);
   // Order Series inline edit
   const [isEditingOrderSeries, setIsEditingOrderSeries] = useState(false);
   const [isUpdatingOrderSeries, setIsUpdatingOrderSeries] = useState(false);
+
+  // Product Source inline edit
+  const [isEditingProductSource, setIsEditingProductSource] = useState(false);
+  const [isUpdatingProductSource, setIsUpdatingProductSource] = useState(false);
 
   // Purchase Order regeneration
   const [hasPurchaseOrder, setHasPurchaseOrder] = useState(false);
@@ -401,6 +406,27 @@ const [isReleasingHold, setIsReleasingHold] = useState(false);
       toast.error('Failed to update order series');
     } finally {
       setIsUpdatingOrderSeries(false);
+    }
+  };
+
+  const handleUpdateProductSource = async (newProductSource: string) => {
+    if (!order) { return; }
+
+    setIsUpdatingProductSource(true);
+    try {
+      const result = await updateSalesOrderProductSource(order.id, newProductSource as 'direct' | 'warehouse');
+      if (result.success) {
+        toast.success(`Product source updated to ${newProductSource === 'warehouse' ? 'Warehouse' : 'Direct'}`);
+        setIsEditingProductSource(false);
+        // Refresh order data
+        await fetchOrder();
+      } else {
+        toast.error(result.error || 'Failed to update product source');
+      }
+    } catch {
+      toast.error('Failed to update product source');
+    } finally {
+      setIsUpdatingProductSource(false);
     }
   };
 
@@ -734,10 +760,59 @@ const handleReleaseHold = async () => {
                       value={order.customerPoNumber || '-'}
                       icon={<FileText className="h-4 w-4" />}
                     />
-                    <InfoItem
-                      label="Product Source"
-                      value={order.productSource ? PRODUCT_SOURCE_LABELS[order.productSource] : '-'}
-                    />
+
+                    {/* Product Source - Inline Edit */}
+                    <div className="flex items-start gap-3">
+                      <Package className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-muted-foreground mb-0.5">Product Source</p>
+                        {isEditingProductSource ? (
+                          <div className="flex items-center gap-2">
+                            <Select
+                              defaultValue={order.productSource || 'direct'}
+                              onValueChange={handleUpdateProductSource}
+                              disabled={isUpdatingProductSource}
+                            >
+                              <SelectTrigger className="h-8 w-[140px]">
+                                <SelectValue placeholder="Select product source" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {PRODUCT_SOURCES.map((source) => (
+                                  <SelectItem key={source} value={source}>
+                                    {PRODUCT_SOURCE_LABELS[source]}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              onClick={() => setIsEditingProductSource(false)}
+                              disabled={isUpdatingProductSource}
+                            >
+                              <XCircle className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium text-foreground">
+                              {order.productSource ? PRODUCT_SOURCE_LABELS[order.productSource] : '-'}
+                            </p>
+                            {canEditPermission && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                                onClick={() => setIsEditingProductSource(true)}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
 
                     {/* Order Series - Inline Edit */}
                     <div className="flex items-start gap-3">

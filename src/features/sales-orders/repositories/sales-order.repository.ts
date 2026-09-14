@@ -151,6 +151,7 @@ class SalesOrderRepositoryImpl {
         id,
         order_number,
         customer_id,
+        customer_po_number,
         order_date,
         requested_delivery_date,
         status,
@@ -1025,6 +1026,7 @@ class SalesOrderRepositoryImpl {
       id: string;
       order_number: string;
       customer_id: string;
+      customer_po_number?: string | null;
       order_date: string;
       requested_delivery_date: string | null;
       status: OrderStatus;
@@ -1045,6 +1047,7 @@ class SalesOrderRepositoryImpl {
       orderNumber: data.order_number,
       customerId: data.customer_id,
       customerName: customer?.name || 'Unknown',
+      customerPoNumber: data.customer_po_number || null,
       orderDate: data.order_date,
       requestedDeliveryDate: data.requested_delivery_date,
       status: data.status,

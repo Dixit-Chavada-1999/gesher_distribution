@@ -510,16 +510,25 @@ export function QuotesPageContent() {
 
   const handleConvertConfirm = async () => {
     if (!quoteToConvert) {
+      console.log('[Quote Convert] No quote to convert');
       return;
     }
 
+    console.log('[Quote Convert] Starting conversion for quote:', quoteToConvert.id);
+    console.log('[Quote Convert] Converting quote to Sales Order:', quoteToConvert);
+
+    // Simple 1:1 conversion - no splitting
+    await convertSingleQuoteToSO(quoteToConvert.id);
+  };
+
+  const convertSingleQuoteToSO = async (quoteId: string) => {
     setIsConverting(true);
     try {
-      const result = await convertQuoteToSalesOrder(quoteToConvert.id);
+      const result = await convertQuoteToSalesOrder(quoteId);
       if (result.success && result.data) {
         toast.success(`Quote converted to Sales Order successfully`);
         refetchQuotes();
-        setIsViewDrawerOpen(false); // Close view drawer after successful conversion
+        setIsViewDrawerOpen(false);
       } else {
         toast.error(result.error || 'Failed to convert quote');
       }
@@ -527,7 +536,6 @@ export function QuotesPageContent() {
       toast.error('Failed to convert quote');
     } finally {
       setIsConverting(false);
-      setConvertDialogOpen(false);
       setQuoteToConvert(null);
     }
   };
