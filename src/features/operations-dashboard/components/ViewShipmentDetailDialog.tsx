@@ -37,10 +37,18 @@ import { getShipmentDetailById } from '../actions';
 
 // Status colors
 const STATUS_COLORS: Record<string, string> = {
+  // Shipment statuses
   pending: 'bg-stone-100 text-stone-700',
   in_transit: 'bg-sky-100 text-sky-800',
   delivered: 'bg-emerald-100 text-emerald-800',
   failed: 'bg-red-100 text-red-800',
+  // PO statuses
+  draft: 'bg-gray-100 text-gray-700',
+  sent: 'bg-blue-100 text-blue-700',
+  confirmed: 'bg-green-100 text-green-700',
+  partial: 'bg-yellow-100 text-yellow-700',
+  received: 'bg-emerald-100 text-emerald-700',
+  cancelled: 'bg-red-100 text-red-700',
 };
 
 interface ShipmentDetail {
@@ -147,36 +155,41 @@ export function ViewShipmentDetailDialog({
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <div className="flex items-start justify-between">
-            <div className="space-y-1">
-              {isLoading ? (
-                <DialogTitle className="text-xl text-muted-foreground">
-                  Loading...
+          <div className="space-y-1">
+            {isLoading ? (
+              <DialogTitle className="text-xl text-muted-foreground">
+                Loading...
+              </DialogTitle>
+            ) : shipment ? (
+              <>
+                <DialogTitle className="text-xl flex items-center gap-2">
+                  {shipment.shipmentNumber}
+                  {shipment.isDelayed && (
+                    <AlertTriangle className="h-5 w-5 text-amber-500" />
+                  )}
                 </DialogTitle>
-              ) : shipment ? (
-                <>
-                  <DialogTitle className="text-xl flex items-center gap-2">
-                    {shipment.shipmentNumber}
-                    {shipment.isDelayed && (
-                      <AlertTriangle className="h-5 w-5 text-amber-500" />
-                    )}
-                  </DialogTitle>
-                  <p className="text-sm text-muted-foreground">
-                    Ship Date: {formatDate(shipment.shipmentDate)}
-                  </p>
-                </>
-              ) : null}
-            </div>
-            {shipment && (
-              <Badge
-                variant="outline"
-                className={cn('text-xs font-medium', STATUS_COLORS[shipment.status])}
-              >
-                {shipment.status.replace('_', ' ').toUpperCase()}
-              </Badge>
-            )}
+                <p className="text-sm text-muted-foreground">
+                  Ship Date: {formatDate(shipment.shipmentDate)}
+                </p>
+              </>
+            ) : null}
           </div>
         </DialogHeader>
+
+        {/* Status Display */}
+        {shipment && !isLoading && (
+          <div className="flex items-center gap-3 px-1 py-2 border-b">
+            <label className="text-sm font-medium text-muted-foreground min-w-[80px]">
+              Status:
+            </label>
+            <Badge
+              variant="outline"
+              className={cn('text-xs font-medium', STATUS_COLORS[shipment.status])}
+            >
+              {shipment.status.replace('_', ' ').toUpperCase()}
+            </Badge>
+          </div>
+        )}
 
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-12">

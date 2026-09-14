@@ -5,7 +5,6 @@
  * Fetches data from shipments table with the new operations fields.
  */
 
-import { createClient } from '@/shared/lib/supabase/server';
 import { createAdminClient } from '@/shared/lib/supabase/admin';
 import type {
   OperationsStats,
@@ -76,7 +75,7 @@ function mapLoadStatus(dbStatus: string | null): ShipmentStatus {
 // ============================================
 
 export async function getOperationsStats(filters?: OperationsFilters): Promise<OperationsStats> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   const now = new Date();
   const next7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -318,7 +317,7 @@ export async function getOperationsStats(filters?: OperationsFilters): Promise<O
  * - Only includes inventory-type products (excludes non_inventory and service)
  */
 export async function getSKUBreakdown(filters?: OperationsFilters): Promise<SKUBreakdown[]> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   // Get sales order items with product_source info - only inventory products
   // Using left joins to avoid errors when no matching data exists
@@ -493,7 +492,7 @@ export async function getSKUBreakdown(filters?: OperationsFilters): Promise<SKUB
 // ============================================
 
 export async function getCustomerCommitments(productSource?: 'direct' | 'warehouse', filters?: OperationsFilters): Promise<CustomerCommitment[]> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   const now = new Date();
   const next7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -621,7 +620,7 @@ export async function getCustomerCommitments(productSource?: 'direct' | 'warehou
 // ============================================
 
 export async function getShipmentStatusMix(filters?: OperationsFilters): Promise<ShipmentStatusMix[]> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   // Get sales orders with items AND linked shipments for status breakdown
   // Using shipments.load_status when available for consistency
@@ -801,7 +800,7 @@ export async function getShipmentStatusMix(filters?: OperationsFilters): Promise
 // ============================================
 
 export async function getImmediateAttention(filters?: OperationsFilters): Promise<ImmediateAttentionItem[]> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   const now = new Date();
   const next7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -1128,7 +1127,7 @@ export async function getImmediateAttention(filters?: OperationsFilters): Promis
 // ============================================
 
 export async function getUniqueSKUs(): Promise<string[]> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   const { data: items, error } = await supabase
     .from('shipment_items')
@@ -1162,7 +1161,7 @@ export async function getUniqueSKUs(): Promise<string[]> {
  *   - cancelled → excluded
  */
 export async function getSupplierShipmentSchedule(filters?: OperationsFilters): Promise<{ data: ShipmentScheduleItem[]; uniqueSkus: SKUColumnInfo[] }> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   // Map ShipmentStatus to SO status for filtering
   const statusToSoStatus: Partial<Record<ShipmentStatus, string[]>> = {
@@ -1189,6 +1188,11 @@ export async function getSupplierShipmentSchedule(filters?: OperationsFilters): 
       shipping_address_city,
       shipping_address_state,
       shipping_address_postal_code,
+      eta_to_us_port,
+      confirmed_eta,
+      actual_delivery_date,
+      qty_delivered,
+      outstanding_qty,
       subtotal,
       grand_total,
       internal_notes,
@@ -1350,13 +1354,13 @@ export async function getSupplierShipmentSchedule(filters?: OperationsFilters): 
       totalQty: totalQty,
       customer: customerData?.name || 'Unknown',
       po: poNumber,
-      etaToUsPort: null,  // Will be updated when shipment info is available
+      etaToUsPort: so.eta_to_us_port || null,
       deliveryAddress: addressParts.join(', '),
-      confirmedEta: null, // Will be updated when shipment info is available
+      confirmedEta: so.confirmed_eta || null,
       customerExpectedDelivery: so.requested_delivery_date,
-      actualDeliveryDate: null, // Will be updated when delivered
-      qtyDelivered: 0,          // Will be updated when delivered
-      outstandingQtyForPO: totalQty, // All qty is outstanding until delivered
+      actualDeliveryDate: so.actual_delivery_date || null,
+      qtyDelivered: so.qty_delivered || 0,
+      outstandingQtyForPO: so.outstanding_qty || totalQty,
       invoiceNumber: null,  // Invoice #
       invoiceAmount: so.grand_total ? so.grand_total / 100 : 0,  // Invoice Amount (cents to dollars)
       // Prices are dynamic per product via items[].unitPrice
@@ -1400,7 +1404,7 @@ export async function getSupplierShipmentSchedule(filters?: OperationsFilters): 
  *   - cancelled → excluded
  */
 export async function getGDC1Inventory(filters?: OperationsFilters): Promise<{ data: GDC1InventoryItem[]; uniqueSkus: SKUColumnInfo[] }> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   // Map ShipmentStatus to SO status for filtering
   const statusToSoStatus: Partial<Record<ShipmentStatus, string[]>> = {
@@ -1426,6 +1430,11 @@ export async function getGDC1Inventory(filters?: OperationsFilters): Promise<{ d
       shipping_address_city,
       shipping_address_state,
       shipping_address_postal_code,
+      eta_to_us_port,
+      confirmed_eta,
+      actual_delivery_date,
+      qty_delivered,
+      outstanding_qty,
       subtotal,
       grand_total,
       internal_notes,
@@ -1605,13 +1614,13 @@ export async function getGDC1Inventory(filters?: OperationsFilters): Promise<{ d
       totalQty: totalQty,
       customer: customerData?.name || null,
       po: so.customer_po_number || null,
-      etaToUsPort: null,  // ETA to US Port (from shipping info)
+      etaToUsPort: so.eta_to_us_port || null,
       deliveryAddress: addressParts.join(', '),
-      confirmedEta: null,  // Confirmed ETA from shipping system
+      confirmedEta: so.confirmed_eta || null,
       customerExpectedDelivery: so.requested_delivery_date,  // Customer Expected Delivery
-      actualDelivery: null,  // Actual Delivery Date
-      qtyDelivered: 0,       // Qty Delivered
-      outstandingPoQty: totalQty,  // Outstanding Qty for PO
+      actualDelivery: so.actual_delivery_date || null,
+      qtyDelivered: so.qty_delivered || 0,
+      outstandingPoQty: so.outstanding_qty || totalQty,
       invoiceNumber: null,   // Invoice #
       invoiceAmount: so.grand_total ? so.grand_total / 100 : 0,  // Invoice Amount (cents to dollars)
       // Prices are dynamic per product via items[].unitPrice
@@ -1654,58 +1663,15 @@ export async function getGDCInventoryByOrderSeries(
   // Use admin client to bypass RLS policies (fixes infinite recursion error)
   const supabase = createAdminClient();
 
-  // ============================================
-  // QUERY 1: Get ALL Sales Orders with this order_series
-  // ============================================
-  let soQuery = supabase
-    .from('sales_orders')
-    .select(`
-      id,
-      order_number,
-      order_date,
-      order_series,
-      customer_id,
-      customer_po_number,
-      product_source,
-      status,
-      requested_delivery_date,
-      shipping_address_street,
-      shipping_address_city,
-      shipping_address_state,
-      shipping_address_postal_code,
-      created_at,
-      customers(id, name)
-    `)
-    .is('deleted_at', null)
-    .eq('order_series', orderSeries)
-    .neq('status', 'cancelled')
-    .order('created_at', { ascending: false });
-
-  // Apply filters
-  if (filters?.salesOrderId) {
-    soQuery = soQuery.eq('id', filters.salesOrderId);
-  }
-  if (filters?.customerId) {
-    soQuery = soQuery.eq('customer_id', filters.customerId);
-  }
-
-  const { data: salesOrders, error: soError } = await soQuery;
-
-  if (soError) {
-    console.error(`Error fetching sales orders for ${orderSeries}:`, soError);
-    throw soError;
-  }
-
-  if (!salesOrders || salesOrders.length === 0) {
-    return { orderSeries, items: [], uniqueSkus: [] };
-  }
-
-  const soIds = salesOrders.map(so => so.id);
+  console.log(`[GDC] ========== Fetching Purchase Orders for order_series: ${orderSeries} ==========`);
 
   // ============================================
-  // QUERY 2: Get POs linked to these Sales Orders
+  // NEW APPROACH (Aug 27, 2025): Query Purchase Orders DIRECTLY by order_series
+  // Then optionally join with Sales Orders if allocated
+  // This shows both allocated POs (with customer) and unallocated POs (customer="Gesher")
   // ============================================
-  const { data: purchaseOrders } = await supabase
+
+  let poQuery = supabase
     .from('purchase_orders')
     .select(`
       id,
@@ -1716,51 +1682,90 @@ export async function getGDCInventoryByOrderSeries(
       internal_notes,
       order_series,
       sales_order_id,
-      created_at
+      created_at,
+      sales_orders (
+        id,
+        order_number,
+        customer_id,
+        customer_po_number,
+        eta_to_us_port,
+        confirmed_eta,
+        requested_delivery_date,
+        actual_delivery_date,
+        qty_delivered,
+        outstanding_qty,
+        shipping_address_street,
+        shipping_address_city,
+        shipping_address_state,
+        shipping_address_postal_code,
+        grand_total,
+        customers (id, name)
+      )
     `)
     .is('deleted_at', null)
-    .in('sales_order_id', soIds)
-    .neq('status', 'cancelled');
+    .eq('order_series', orderSeries)
+    .neq('status', 'cancelled')
+    .order('created_at', { ascending: false });
 
-  // Create SO -> PO mapping
-  type POType = NonNullable<typeof purchaseOrders>[number];
-  const soToPOMap = new Map<string, POType>();
-  purchaseOrders?.forEach(po => {
-    if (po.sales_order_id) {
-      soToPOMap.set(po.sales_order_id, po);
-    }
-  });
+  // Apply filters
+  if (filters?.salesOrderId) {
+    poQuery = poQuery.eq('sales_order_id', filters.salesOrderId);
+  }
 
-  console.log(`[GDC] Found ${salesOrders.length} Sales Orders for '${orderSeries}', ${soToPOMap.size} have POs, ${salesOrders.length - soToPOMap.size} are warehouse orders`);
+  const { data: purchaseOrders, error: poError } = await poQuery;
+
+  if (poError) {
+    console.error(`[GDC] Error fetching purchase orders for ${orderSeries}:`, poError);
+    throw poError;
+  }
+
+  console.log(`[GDC] Found ${purchaseOrders?.length || 0} Purchase Orders for '${orderSeries}'`);
+
+  if (!purchaseOrders || purchaseOrders.length === 0) {
+    console.log(`[GDC] No Purchase Orders found for ${orderSeries}`);
+    return { orderSeries, items: [], uniqueSkus: [] };
+  }
+
+  console.log(`[GDC] Sample PO data:`, purchaseOrders.slice(0, 2).map(po => ({
+    id: po.id,
+    po_number: po.po_number,
+    status: po.status,
+    has_sales_order: !!po.sales_order_id,
+    sales_order_number: po.sales_orders ? toOne(po.sales_orders)?.order_number : null
+  })));
 
   // ============================================
-  // QUERY 3: Get Sales Order Items for SKU breakdown
+  // QUERY 2: Get Purchase Order Items for SKU breakdown
   // ============================================
-  let soItemsQuery = supabase
-    .from('sales_order_items')
+  const poIds = purchaseOrders.map(po => po.id);
+
+  let poItemsQuery = supabase
+    .from('purchase_order_items')
     .select(`
-      sales_order_id,
+      purchase_order_id,
       sku,
       description,
-      quantity,
+      quantity_ordered,
       unit_price,
       product_id,
       products(id, name, item_type)
     `)
-    .in('sales_order_id', soIds);
+    .in('purchase_order_id', poIds);
 
   // Apply product filter
   if (filters?.productId) {
-    soItemsQuery = soItemsQuery.eq('product_id', filters.productId);
+    poItemsQuery = poItemsQuery.eq('product_id', filters.productId);
   }
 
-  const { data: soItems } = await soItemsQuery;
+  const { data: poItems } = await poItemsQuery;
 
-  // Group items by sales order and build SKU info map
-  const itemsBySO = new Map<string, { sku: string; productName: string; qty: number; unitPrice: number }[]>();
+  console.log(`[GDC] Found ${poItems?.length || 0} Purchase Order Items`);
+
+  // Group items by purchase order and build SKU info map
+  const itemsByPO = new Map<string, { sku: string; productName: string; qty: number; unitPrice: number }[]>();
   const skuInfoMap = new Map<string, string>(); // sku -> productName
 
-  soItems?.forEach((item) => {
+  poItems?.forEach((item) => {
     const productData = toOne(item.products);
     const productName = productData?.name || item.description || item.sku;
     const unitPrice = item.unit_price ? item.unit_price / 100 : 0;
@@ -1770,59 +1775,88 @@ export async function getGDCInventoryByOrderSeries(
       skuInfoMap.set(item.sku, productName);
     }
 
-    if (!itemsBySO.has(item.sales_order_id)) {
-      itemsBySO.set(item.sales_order_id, []);
+    if (!itemsByPO.has(item.purchase_order_id)) {
+      itemsByPO.set(item.purchase_order_id, []);
     }
-    itemsBySO.get(item.sales_order_id)!.push({
+    itemsByPO.get(item.purchase_order_id)!.push({
       sku: item.sku || 'Unknown',
       productName,
-      qty: item.quantity || 0,
+      qty: item.quantity_ordered || 0,
       unitPrice,
     });
   });
 
+  // ============================================
+  // Build result items from Purchase Orders
+  // ============================================
   const result: GDCInventoryItem[] = [];
+  let allocatedCount = 0;
+  let unallocatedCount = 0;
 
-  salesOrders.forEach((so, index) => {
-    const customerData = toOne(so.customers);
-    const linkedPO = soToPOMap.get(so.id);
-    const hasPO = !!linkedPO;
+  purchaseOrders.forEach((po, index) => {
+    const linkedSO = po.sales_orders ? toOne(po.sales_orders) : null;
+    const customerData = linkedSO?.customers ? toOne(linkedSO.customers) : null;
+    const isAllocated = !!linkedSO;
 
-    const soItemsList = itemsBySO.get(so.id) || [];
-    const totalQty = soItemsList.reduce((sum, item) => sum + item.qty, 0);
+    const poItemsList = itemsByPO.get(po.id) || [];
+    const totalQty = poItemsList.reduce((sum, item) => sum + item.qty, 0);
 
-    // Build address
-    const addressParts = [
-      so.shipping_address_street,
-      so.shipping_address_city,
-      so.shipping_address_state,
-      so.shipping_address_postal_code,
-    ].filter(Boolean);
+    // Build address from SO if allocated
+    const addressParts = linkedSO ? [
+      linkedSO.shipping_address_street,
+      linkedSO.shipping_address_city,
+      linkedSO.shipping_address_state,
+      linkedSO.shipping_address_postal_code,
+    ].filter(Boolean) : [];
+
+    // Determine customer name
+    let customerName = 'Gesher'; // Default for unallocated inventory
+    if (isAllocated && customerData?.name) {
+      customerName = customerData.name;
+      allocatedCount++;
+    } else {
+      unallocatedCount++;
+    }
+
+    // Apply customer filter
+    if (filters?.customerId && (!linkedSO || linkedSO.customer_id !== filters.customerId)) {
+      return; // Skip this PO if it doesn't match customer filter
+    }
+
+    console.log(`[GDC] Row ${index + 1} - PO: ${po.po_number} (${po.id}), SO: ${linkedSO?.order_number || 'None'}, Customer: ${customerName}, Status: ${po.status}`);
 
     result.push({
-      id: so.id,
+      id: po.id, // Always use PO ID (not SO ID)
       no: index + 1,
-      poNumber: so.customer_po_number || null,  // Always show Customer PO Number (from Excel)
-      soNumber: so.order_number,
-      orderSeries: so.order_series,
-      items: soItemsList.map(item => ({
+      poNumber: po.po_number,
+      soNumber: linkedSO?.order_number || null,
+      customerPoNumber: linkedSO?.customer_po_number || null, // Customer PO Number
+      orderSeries: po.order_series,
+      items: poItemsList.map(item => ({
         sku: item.sku,
         productName: item.productName,
         qty: item.qty,
         unitPrice: item.unitPrice,
       })),
       totalQty,
-      customer: customerData?.name || 'Unknown',
-      supplierName: hasPO ? 'Galileo manufacturing' : null,
-      etaToUsPort: null, // Can be updated from shipment tracking
+      customer: customerName,
+      supplierName: 'Galileo Manufacturing',
+      etaToUsPort: linkedSO?.eta_to_us_port || null,
+      confirmedEta: linkedSO?.confirmed_eta || null,
+      actualDeliveryDate: linkedSO?.actual_delivery_date || null,
+      qtyDelivered: linkedSO?.qty_delivered || 0,
+      outstandingQty: linkedSO?.outstanding_qty || totalQty,
+      invoiceAmount: linkedSO?.grand_total ? linkedSO.grand_total / 100 : 0,
       deliveryAddress: addressParts.join(', '),
-      expectedDelivery: so.requested_delivery_date || (linkedPO?.expected_delivery_date || null),
-      status: linkedPO?.status || so.status,
-      actionRequired: linkedPO?.internal_notes || '',
+      expectedDelivery: po.expected_delivery_date || linkedSO?.requested_delivery_date || null,
+      status: po.status, // Always use PO status (draft, sent, confirmed, partial, received, cancelled)
+      actionRequired: po.internal_notes || '',
       notes: '',
-      isUnallocated: !hasPO, // Flag warehouse orders (no PO)
+      isUnallocated: !isAllocated,
     });
   });
+
+  console.log(`[GDC] Built ${result.length} items for display (Allocated: ${allocatedCount}, Unallocated: ${unallocatedCount})`);
 
   // Build unique SKUs with product names for column headers
   const uniqueSkus: SKUColumnInfo[] = [];
@@ -1830,6 +1864,8 @@ export async function getGDCInventoryByOrderSeries(
     uniqueSkus.push({ sku, productName });
   });
   uniqueSkus.sort((a, b) => a.sku.localeCompare(b.sku));
+
+  console.log(`[GDC] ========== Finished fetching ${orderSeries} (${result.length} POs, ${uniqueSkus.length} SKUs) ==========`);
 
   return { orderSeries, items: result, uniqueSkus };
 }
@@ -1866,7 +1902,7 @@ export async function getAllGDCInventories(filters?: OperationsFilters): Promise
 // ============================================
 
 export async function getRimInstallationRequired(filters?: OperationsFilters): Promise<{ data: RimInstallationItem[]; uniqueSkus: SKUColumnInfo[] }> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const result: RimInstallationItem[] = [];
   const skuInfoMap = new Map<string, string>(); // sku -> productName
   let gdc1Counter = 1;
@@ -2128,7 +2164,7 @@ export async function generateStoryInBrief(
 // ============================================
 
 export async function getFilterOptions(): Promise<FilterOptions> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   // Fetch customers, products, sales orders, and customer PO numbers in parallel
   const [customersResult, productsResult, salesOrdersResult] = await Promise.all([

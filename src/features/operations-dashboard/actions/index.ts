@@ -9,6 +9,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { db } from '@/shared/lib/supabase/database';
+import { createAdminClient } from '@/shared/lib/supabase/admin';
 import { getCurrentUser } from '@/shared/lib/auth';
 import {
   getOperationsData,
@@ -590,7 +591,7 @@ export async function updateShipment(
 
 export interface UpdateShipmentOrOrderInput {
   id: string;
-  status: ShipmentStatus;
+  status: string; // ShipmentStatus for shipments/SOs, or PO status for POs (confirmed, sent, draft, etc.)
   etaToPort?: string | null;
   customerExpectedDelivery?: string | null;
   actionRequired?: string | null;
@@ -604,10 +605,15 @@ export async function updateShipmentOrOrder(
   input: UpdateShipmentOrOrderInput
 ): Promise<ActionResult<{ id: string }>> {
   try {
+    console.log('[updateShipmentOrOrder] Starting update with input:', JSON.stringify(input, null, 2));
+
     const user = await getCurrentUser();
     if (!user) {
       return { success: false, error: 'Authentication required' };
     }
+
+    // Use admin client to bypass RLS policies
+    const supabase = createAdminClient();
 
     // Map ShipmentStatus to database values (based on Jenny's Master Sheet)
     const statusMap: Record<ShipmentStatus, { loadStatus: string; soStatus: string }> = {
@@ -631,16 +637,19 @@ export async function updateShipmentOrOrder(
       'PROCESSING': { loadStatus: 'processing', soStatus: 'processing' },
     };
 
-    const mapped = statusMap[input.status] || { loadStatus: 'open', soStatus: 'pending' };
+    const mapped = statusMap[input.status as ShipmentStatus] || { loadStatus: 'open', soStatus: 'pending' };
 
     // Try to update shipment first
-    const { data: shipment } = await db
+    const { data: shipment, error: shipmentError } = await supabase
       .from('shipments')
       .select('id')
       .eq('id', input.id)
       .single();
 
+    console.log('[updateShipmentOrOrder] Checked shipments table:', { found: !!shipment, error: shipmentError?.message });
+
     if (shipment) {
+      console.log('[updateShipmentOrOrder] UPDATING SHIPMENT');
       // Update shipment
       const updateData: Record<string, unknown> = {
         load_status: mapped.loadStatus,
@@ -658,7 +667,7 @@ export async function updateShipmentOrOrder(
         updateData.action_required = input.actionRequired || null;
       }
 
-      const { error } = await db
+      const { error } = await supabase
         .from('shipments')
         .update(updateData)
         .eq('id', input.id);
@@ -669,13 +678,16 @@ export async function updateShipmentOrOrder(
       }
     } else {
       // Try sales_orders
-      const { data: salesOrder } = await db
+      const { data: salesOrder, error: soError } = await supabase
         .from('sales_orders')
         .select('id')
         .eq('id', input.id)
         .single();
 
+      console.log('[updateShipmentOrOrder] Checked sales_orders table:', { found: !!salesOrder, error: soError?.message });
+
       if (salesOrder) {
+        console.log('[updateShipmentOrOrder] UPDATING SALES ORDER - status will be:', mapped.soStatus);
         // Update sales order
         const updateData: Record<string, unknown> = {
           status: mapped.soStatus,
@@ -689,7 +701,7 @@ export async function updateShipmentOrOrder(
           updateData.internal_notes = input.actionRequired || null;
         }
 
-        const { error } = await db
+        const { error } = await supabase
           .from('sales_orders')
           .update(updateData)
           .eq('id', input.id);
@@ -699,12 +711,61 @@ export async function updateShipmentOrOrder(
           return { success: false, error: error.message };
         }
       } else {
-        return { success: false, error: 'Record not found' };
+        // Try purchase_orders
+        const { data: purchaseOrder, error: poError } = await supabase
+          .from('purchase_orders')
+          .select('id')
+          .eq('id', input.id)
+          .single();
+
+        console.log('[updateShipmentOrOrder] Checked purchase_orders table:', { found: !!purchaseOrder, error: poError?.message });
+
+        if (purchaseOrder) {
+          console.log('[updateShipmentOrOrder] UPDATING PURCHASE ORDER');
+          // Update purchase order
+          const updateData: Record<string, unknown> = {
+            updated_at: new Date().toISOString(),
+          };
+
+          // Only update status if it's a valid PO status (lowercase)
+          const validPOStatuses = ['draft', 'sent', 'confirmed', 'partial', 'received', 'cancelled'];
+          const statusValue = input.status.toLowerCase();
+          if (validPOStatuses.includes(statusValue)) {
+            updateData.status = statusValue;
+          }
+
+          // Note: purchase_orders table doesn't have eta_to_us_port column
+          // Only has expected_delivery_date
+          if (input.customerExpectedDelivery !== undefined) {
+            updateData.expected_delivery_date = input.customerExpectedDelivery || null;
+          }
+          if (input.actionRequired !== undefined) {
+            updateData.internal_notes = input.actionRequired || null;
+          }
+
+          console.log('[PO Update] Updating PO:', input.id, 'with data:', updateData);
+
+          const { error } = await supabase
+            .from('purchase_orders')
+            .update(updateData)
+            .eq('id', input.id);
+
+          if (error) {
+            console.error('Error updating purchase order:', error);
+            return { success: false, error: error.message };
+          }
+
+          console.log('[PO Update] Successfully updated PO:', input.id);
+        } else {
+          return { success: false, error: 'Record not found' };
+        }
       }
     }
 
     // Revalidate operations dashboard
     revalidatePath('/operations');
+
+    console.log('[updateShipmentOrOrder] ✅ Update completed successfully for ID:', input.id);
 
     return { success: true, data: { id: input.id } };
   } catch (error) {
@@ -1040,9 +1101,112 @@ finalDestination: shipmentData.final_destination,
   }
 
   if (!salesOrderData) {
-    // Log the ID that wasn't found for debugging
-    console.error('Record not found for ID:', itemId);
-    throw new Error('Record not found - ID does not exist in shipments or sales_orders tables');
+    // Try purchase_orders table (for GDC inventory items)
+    console.log('[getShipmentDetailById] Not found in sales_orders, trying purchase_orders...');
+    const { data: purchaseOrderData, error: purchaseOrderError } = await db
+      .from('purchase_orders')
+      .select(`
+        id,
+        po_number,
+        po_date,
+        status,
+        expected_delivery_date,
+        order_series,
+        internal_notes,
+        sales_order_id,
+        sales_orders(
+          id,
+          order_number,
+          customer_po_number,
+          eta_to_us_port,
+          confirmed_eta,
+          requested_delivery_date,
+          actual_delivery_date,
+          shipping_address_street,
+          shipping_address_city,
+          shipping_address_state,
+          shipping_address_postal_code,
+          shipping_address_country,
+          customers(id, name)
+        ),
+        purchase_order_items(
+          id,
+          sku,
+          description,
+          quantity_ordered
+        )
+      `)
+      .eq('id', itemId)
+      .maybeSingle();
+
+    console.log('[getShipmentDetailById] Purchase order query result:', {
+      found: !!purchaseOrderData,
+      error: purchaseOrderError?.message,
+    });
+
+    if (purchaseOrderError) {
+      console.error('Purchase order query error:', purchaseOrderError);
+      throw new Error(`Record not found: ${purchaseOrderError.message}`);
+    }
+
+    if (!purchaseOrderData) {
+      // Log the ID that wasn't found for debugging
+      console.error('Record not found for ID:', itemId);
+      throw new Error('Record not found - ID does not exist in shipments, sales_orders, or purchase_orders tables');
+    }
+
+    // Extract sales order and customer data
+    const linkedSO = Array.isArray(purchaseOrderData.sales_orders)
+      ? purchaseOrderData.sales_orders[0]
+      : purchaseOrderData.sales_orders;
+    const customer = linkedSO?.customers
+      ? (Array.isArray(linkedSO.customers) ? linkedSO.customers[0] : linkedSO.customers)
+      : null;
+
+    // Map purchase order data to ShipmentDetailData format
+    return {
+      id: purchaseOrderData.id,
+      shipmentNumber: purchaseOrderData.po_number,
+      shipmentDate: purchaseOrderData.po_date,
+      status: purchaseOrderData.status,
+      containerNumber: null,
+      billOfLading: null,
+      vesselName: null,
+      portOfLoading: null,
+      portOfDischarge: null,
+      finalDestination: null,
+      etd: null,
+      etaPort: linkedSO?.eta_to_us_port || null,
+      etaCustomer: linkedSO?.requested_delivery_date || null,
+      estimatedArrival: null,
+      actualArrival: linkedSO?.actual_delivery_date || null,
+      lastFreeDay: null,
+      customerName: customer?.name || 'Gesher',
+      customerPo: linkedSO?.customer_po_number || null,
+      salesOrderNumber: linkedSO?.order_number || null,
+      shipToName: null,
+      shipToAddressStreet: linkedSO?.shipping_address_street || null,
+      shipToAddressCity: linkedSO?.shipping_address_city || null,
+      shipToAddressState: linkedSO?.shipping_address_state || null,
+      shipToAddressPostalCode: linkedSO?.shipping_address_postal_code || null,
+      shipToAddressCountry: linkedSO?.shipping_address_country || null,
+      carrier: null,
+      trackingNumber: null,
+      serviceType: null,
+      items: (purchaseOrderData.purchase_order_items || []).map((item: { id: string; sku: string; description: string | null; quantity_ordered: number }) => ({
+        id: item.id,
+        sku: item.sku,
+        description: item.description,
+        quantityShipped: item.quantity_ordered,
+      })),
+      totalWeight: null,
+      weightUnit: 'lbs',
+      totalPackages: 1,
+      notes: purchaseOrderData.internal_notes,
+      actionRequired: null,
+      deliveryInstructions: null,
+      isDelayed: false,
+    };
   }
 
   // Extract customer data

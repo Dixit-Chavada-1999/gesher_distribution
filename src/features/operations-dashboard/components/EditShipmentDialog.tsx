@@ -51,7 +51,7 @@ interface ShipmentData {
   totalQty?: number;
 }
 
-export type EditSource = 'supplier' | 'gdc1' | 'shipment';
+export type EditSource = 'supplier' | 'gdc1' | 'gdc' | 'shipment';
 
 interface EditShipmentDialogProps {
   open: boolean;
@@ -65,30 +65,40 @@ interface EditShipmentDialogProps {
 // STATUS OPTIONS (Based on Jenny's Master Sheet)
 // ============================================
 
-// Galileo/Supplier Orders statuses
+// GDC 0 / Galileo/Supplier Orders statuses (from Jenny's Excel)
 const SUPPLIER_STATUS_OPTIONS: { value: ShipmentStatus; label: string; color: string }[] = [
-  { value: 'OPEN', label: 'Open', color: 'bg-blue-100 text-blue-800' },
-  { value: 'IN_TRANSIT', label: 'In Transit', color: 'bg-yellow-100 text-yellow-800' },
-  { value: 'AVAILABLE', label: 'Available', color: 'bg-green-100 text-green-800' },
-  { value: 'HOLD', label: 'Hold', color: 'bg-orange-100 text-orange-800' },
   { value: 'INVOICED', label: 'Invoiced', color: 'bg-emerald-100 text-emerald-800' },
-  { value: 'NOT_INVOICED', label: 'Not Invoiced', color: 'bg-amber-100 text-amber-800' },
+  { value: 'OPEN', label: 'Open', color: 'bg-blue-100 text-blue-800' },
   { value: 'CLOSED', label: 'Closed', color: 'bg-gray-100 text-gray-800' },
+  { value: 'HOLD', label: 'Hold', color: 'bg-orange-100 text-orange-800' },
+  { value: 'IN_TRANSIT', label: 'In Transit', color: 'bg-yellow-100 text-yellow-800' },
+  { value: 'NOT_INVOICED', label: 'Not Invoiced', color: 'bg-amber-100 text-amber-800' },
+  { value: 'AVAILABLE', label: 'Available', color: 'bg-green-100 text-green-800' },
 ];
 
-// GDC1 Inventory statuses
+// GDC 1 Inventory statuses (from Jenny's Excel - order matters)
 const GDC1_STATUS_OPTIONS: { value: ShipmentStatus; label: string; color: string }[] = [
   { value: 'AVAILABLE', label: 'Available', color: 'bg-green-100 text-green-800' },
-  { value: 'OPEN', label: 'Open', color: 'bg-blue-100 text-blue-800' },
-  { value: 'IN_TRANSIT', label: 'In Transit', color: 'bg-yellow-100 text-yellow-800' },
-  { value: 'SOLD', label: 'Sold', color: 'bg-purple-100 text-purple-800' },
-  { value: 'HOLD', label: 'Hold', color: 'bg-orange-100 text-orange-800' },
   { value: 'NOT_INVOICED', label: 'Not Invoiced', color: 'bg-amber-100 text-amber-800' },
+  { value: 'OPEN', label: 'Open', color: 'bg-blue-100 text-blue-800' },
   { value: 'PARTIALLY_PAID', label: 'Partially Paid', color: 'bg-cyan-100 text-cyan-800' },
   { value: 'PAID', label: 'Paid', color: 'bg-teal-100 text-teal-800' },
   { value: 'DISPUTED', label: 'Disputed', color: 'bg-red-100 text-red-800' },
+  { value: 'IN_TRANSIT', label: 'In Transit', color: 'bg-yellow-100 text-yellow-800' },
   { value: 'PO_NEEDED', label: 'PO Needed', color: 'bg-pink-100 text-pink-800' },
+  { value: 'SOLD', label: 'Sold', color: 'bg-purple-100 text-purple-800' },
+  { value: 'HOLD', label: 'Hold', color: 'bg-orange-100 text-orange-800' },
   { value: 'CLOSED', label: 'Closed', color: 'bg-gray-100 text-gray-800' },
+];
+
+// GDC Inventory statuses (PO statuses)
+const GDC_STATUS_OPTIONS: { value: string; label: string; color: string }[] = [
+  { value: 'draft', label: 'Draft', color: 'bg-gray-100 text-gray-700' },
+  { value: 'sent', label: 'Sent', color: 'bg-blue-100 text-blue-700' },
+  { value: 'confirmed', label: 'Confirmed', color: 'bg-green-100 text-green-700' },
+  { value: 'partial', label: 'Partial', color: 'bg-yellow-100 text-yellow-700' },
+  { value: 'received', label: 'Received', color: 'bg-emerald-100 text-emerald-700' },
+  { value: 'cancelled', label: 'Cancelled', color: 'bg-red-100 text-red-700' },
 ];
 
 // Default statuses (for Immediate Attention / Shipments)
@@ -122,6 +132,8 @@ export function EditShipmentDialog({
         return SUPPLIER_STATUS_OPTIONS;
       case 'gdc1':
         return GDC1_STATUS_OPTIONS;
+      case 'gdc':
+        return GDC_STATUS_OPTIONS;
       default:
         return DEFAULT_STATUS_OPTIONS;
     }
@@ -130,7 +142,7 @@ export function EditShipmentDialog({
   const statusOptions = getStatusOptions();
 
   // Form state
-  const [status, setStatus] = useState<ShipmentStatus>(shipment?.status || 'OPEN');
+  const [status, setStatus] = useState<string>(shipment?.status || 'OPEN');
   const [actionRequired, setActionRequired] = useState(shipment?.actionRequired || '');
   const [confirmedEta, setConfirmedEta] = useState(shipment?.confirmedEta || '');
   const [actualDeliveryDate, setActualDeliveryDate] = useState(shipment?.actualDeliveryDate || '');
@@ -214,7 +226,7 @@ export function EditShipmentDialog({
                 New Status
               </span>
             </Label>
-            <Select value={status} onValueChange={(v) => setStatus(v as ShipmentStatus)}>
+            <Select value={status} onValueChange={setStatus}>
               <SelectTrigger>
                 <SelectValue placeholder="Select status" />
               </SelectTrigger>

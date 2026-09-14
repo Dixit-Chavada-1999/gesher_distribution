@@ -234,14 +234,20 @@ export interface OperationsData {
 export interface GDCInventoryItem {
   id: string;
   no: number;
-  poNumber: string;           // PO Number
+  poNumber: string | null;    // Purchase Order Number
   soNumber: string | null;    // Linked SO Number (if any)
+  customerPoNumber: string | null; // Customer PO Number (from sales_orders.customer_po_number)
   orderSeries: string;        // GDC 1, GDC 2, GDC 3
   items: ShipmentItemDetail[];
   totalQty: number;
   customer: string | null;    // Customer name (from linked SO) or "Gesher" for unallocated
   supplierName: string | null;
   etaToUsPort: string | null;
+  confirmedEta?: string | null;
+  actualDeliveryDate?: string | null;
+  qtyDelivered?: number;
+  outstandingQty?: number;
+  invoiceAmount?: number;
   deliveryAddress: string;
   expectedDelivery: string | null;
   status: string;             // PO status: draft, sent, confirmed, etc.

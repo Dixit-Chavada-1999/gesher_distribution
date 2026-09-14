@@ -8,7 +8,7 @@
  */
 
 import { useState } from 'react';
-import { Pencil } from 'lucide-react';
+import { Eye, Pencil } from 'lucide-react';
 
 import {
   Card,
@@ -33,6 +33,7 @@ interface GDCInventoryTableProps {
   orderSeries: string;          // e.g., "GDC 1"
   data: GDCInventoryItem[];
   uniqueSkus: SKUColumnInfo[];  // Dynamic SKU columns with product names
+  onView?: (item: GDCInventoryItem) => void;
   onEdit?: (item: GDCInventoryItem) => void;
 }
 
@@ -46,7 +47,7 @@ const PO_STATUS_COLORS: Record<string, string> = {
   cancelled: 'bg-red-100 text-red-700',
 };
 
-export function GDCInventoryTable({ orderSeries, data, uniqueSkus, onEdit }: GDCInventoryTableProps) {
+export function GDCInventoryTable({ orderSeries, data, uniqueSkus, onView, onEdit }: GDCInventoryTableProps) {
   // State for expanded addresses and notes
   const [expandedAddressId, setExpandedAddressId] = useState<string | null>(null);
   const [expandedNotesId, setExpandedNotesId] = useState<string | null>(null);
@@ -59,12 +60,25 @@ export function GDCInventoryTable({ orderSeries, data, uniqueSkus, onEdit }: GDC
     setExpandedNotesId(expandedNotesId === id ? null : id);
   };
 
-  const formatDate = (dateString: string | null) => {
+  const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) { return '-'; }
     return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
+      month: 'numeric',
       day: 'numeric',
+      year: 'numeric',
     });
+  };
+
+  // Helper to get sticky cell background class based on status
+  const getStickyBgClass = (status: string) => {
+    if (status === 'confirmed') {
+      return 'bg-green-50 dark:bg-green-950';
+    } else if (status === 'sent') {
+      return 'bg-blue-50 dark:bg-blue-950';
+    } else if (status === 'draft') {
+      return 'bg-gray-50 dark:bg-gray-950';
+    }
+    return 'bg-white dark:bg-gray-950';
   };
 
   // Get quantity for a specific SKU from items array
@@ -114,23 +128,29 @@ export function GDCInventoryTable({ orderSeries, data, uniqueSkus, onEdit }: GDC
             <Table className="min-w-[1200px]">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[50px]">No.</TableHead>
-                  <TableHead className="min-w-[120px] whitespace-nowrap">PO #</TableHead>
-                  <TableHead className="min-w-[100px] whitespace-nowrap">SO #</TableHead>
+                  <TableHead className="relative sticky left-0 z-20 w-[60px] bg-white dark:bg-gray-950 after:absolute after:inset-0 after:w-[60px] after:bg-white after:dark:bg-gray-950 after:-z-10">No.</TableHead>
+                  <TableHead className="relative sticky left-[60px] z-20 min-w-[120px] whitespace-nowrap bg-white dark:bg-gray-950 after:absolute after:inset-0 after:min-w-[120px] after:bg-white after:dark:bg-gray-950 after:-z-10">SO #</TableHead>
+                  <TableHead className="relative sticky left-[180px] z-20 min-w-[140px] whitespace-nowrap bg-white dark:bg-gray-950 border-r shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] after:absolute after:inset-0 after:min-w-[140px] after:bg-white after:dark:bg-gray-950 after:-z-10">Customer PO</TableHead>
                   {/* Dynamic SKU columns */}
                   {uniqueSkus.map((skuInfo) => (
-                    <TableHead key={skuInfo.sku} className="text-center text-xs whitespace-nowrap min-w-[80px]" title={skuInfo.sku}>
+                    <TableHead key={skuInfo.sku} className="text-center text-xs whitespace-nowrap min-w-[180px]" title={skuInfo.sku}>
                       {skuInfo.productName} Qty
                     </TableHead>
                   ))}
                   <TableHead className="text-right whitespace-nowrap">Total Qty</TableHead>
                   <TableHead className="whitespace-nowrap min-w-[130px]">Customer</TableHead>
                   <TableHead className="whitespace-nowrap min-w-[130px]">Supplier</TableHead>
+                  <TableHead className="whitespace-nowrap">ETA to US Port</TableHead>
+                  <TableHead className="whitespace-nowrap">Confirmed ETA</TableHead>
                   <TableHead className="whitespace-nowrap">Expected Delivery</TableHead>
+                  <TableHead className="whitespace-nowrap">Actual Delivery</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Qty Delivered</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Outstanding Qty</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Invoice Amt</TableHead>
                   <TableHead className="whitespace-nowrap min-w-[150px]">Delivery Address</TableHead>
                   <TableHead className="whitespace-nowrap">Status</TableHead>
                   <TableHead className="min-w-[150px]">Notes</TableHead>
-                  <TableHead className="w-[50px]">Edit</TableHead>
+                  <TableHead className="relative sticky right-0 z-20 w-[100px] bg-white dark:bg-gray-950 border-l shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)] after:absolute after:inset-0 after:w-[100px] after:bg-white after:dark:bg-gray-950 after:-z-10">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -139,17 +159,17 @@ export function GDCInventoryTable({ orderSeries, data, uniqueSkus, onEdit }: GDC
                     key={item.id}
                     className={
                       item.status === 'confirmed'
-                        ? 'bg-green-50 dark:bg-green-950/20'
+                        ? 'bg-green-50 dark:bg-green-950'
                         : item.status === 'sent'
-                        ? 'bg-blue-50 dark:bg-blue-950/20'
+                        ? 'bg-blue-50 dark:bg-blue-950'
                         : item.status === 'draft'
-                        ? 'bg-gray-50 dark:bg-gray-950/20'
+                        ? 'bg-gray-50 dark:bg-gray-950'
                         : ''
                     }
                   >
-                    <TableCell className="font-medium">{item.no}</TableCell>
-                    <TableCell className="font-mono text-sm whitespace-nowrap">{item.poNumber}</TableCell>
-                    <TableCell className="font-mono text-sm whitespace-nowrap">{item.soNumber || '-'}</TableCell>
+                    <TableCell className={`relative sticky left-0 z-20 w-[60px] font-medium ${getStickyBgClass(item.status)} after:absolute after:inset-0 after:w-[60px] after:bg-inherit after:-z-10`}>{item.no}</TableCell>
+                    <TableCell className={`relative sticky left-[60px] z-20 min-w-[120px] font-mono text-sm whitespace-nowrap ${getStickyBgClass(item.status)} after:absolute after:inset-0 after:min-w-[120px] after:bg-inherit after:-z-10`}>{item.soNumber || '-'}</TableCell>
+                    <TableCell className={`relative sticky left-[180px] z-20 min-w-[140px] font-mono text-sm whitespace-nowrap ${getStickyBgClass(item.status)} border-r shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] after:absolute after:inset-0 after:min-w-[140px] after:bg-inherit after:-z-10`}>{item.customerPoNumber || '-'}</TableCell>
                     {/* Dynamic SKU quantity columns */}
                     {uniqueSkus.map((skuInfo) => {
                       const qty = getSkuQty(item.items, skuInfo.sku);
@@ -162,7 +182,28 @@ export function GDCInventoryTable({ orderSeries, data, uniqueSkus, onEdit }: GDC
                     <TableCell className="text-right font-semibold">{item.totalQty}</TableCell>
                     <TableCell>{item.customer || 'Unallocated'}</TableCell>
                     <TableCell>{item.supplierName || '-'}</TableCell>
+                    <TableCell>{formatDate(item.etaToUsPort)}</TableCell>
+                    <TableCell>{formatDate(item.confirmedEta)}</TableCell>
                     <TableCell>{formatDate(item.expectedDelivery)}</TableCell>
+                    <TableCell>{formatDate(item.actualDeliveryDate)}</TableCell>
+                    <TableCell className="text-right">
+                      {(item.qtyDelivered && item.qtyDelivered > 0) ? item.qtyDelivered : '-'}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {(item.outstandingQty && item.outstandingQty > 0) ? (
+                        <span className="text-orange-600 font-semibold">{item.outstandingQty}</span>
+                      ) : (
+                        <span className="text-green-600">0</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {item.invoiceAmount ? new Intl.NumberFormat('en-US', {
+                        style: 'currency',
+                        currency: 'USD',
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0,
+                      }).format(item.invoiceAmount) : '-'}
+                    </TableCell>
                     <TableCell className="max-w-[200px]">
                       {item.deliveryAddress ? (
                         expandedAddressId === item.id ? (
@@ -212,24 +253,35 @@ export function GDCInventoryTable({ orderSeries, data, uniqueSkus, onEdit }: GDC
                         <span className="text-xs text-muted-foreground">-</span>
                       )}
                     </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => onEdit?.(item)}
-                        title="Edit"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
+                    <TableCell className={`relative sticky right-0 z-20 w-[100px] ${getStickyBgClass(item.status)} border-l shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)] after:absolute after:inset-0 after:w-[100px] after:bg-inherit after:-z-10`}>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => onView?.(item)}
+                          title="View Details"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => onEdit?.(item)}
+                          title="Edit"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
                 {/* Totals Row */}
                 <TableRow className="bg-muted/50 font-semibold border-t-2">
-                  <TableCell></TableCell>
-                  <TableCell>TOTAL</TableCell>
-                  <TableCell></TableCell>
+                  <TableCell className="relative sticky left-0 z-20 w-[60px] bg-muted after:absolute after:inset-0 after:w-[60px] after:bg-muted after:-z-10"></TableCell>
+                  <TableCell className="relative sticky left-[60px] z-20 min-w-[120px] bg-muted after:absolute after:inset-0 after:min-w-[120px] after:bg-muted after:-z-10">TOTAL</TableCell>
+                  <TableCell className="relative sticky left-[180px] z-20 min-w-[140px] bg-muted border-r shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] after:absolute after:inset-0 after:min-w-[140px] after:bg-muted after:-z-10"></TableCell>
                   {/* Dynamic SKU quantity totals */}
                   {uniqueSkus.map((skuInfo) => (
                     <TableCell key={skuInfo.sku} className="text-center">
@@ -237,7 +289,7 @@ export function GDCInventoryTable({ orderSeries, data, uniqueSkus, onEdit }: GDC
                     </TableCell>
                   ))}
                   <TableCell className="text-right">{totals.total}</TableCell>
-                  {/* Empty cells for remaining columns */}
+                  {/* Empty cells for remaining columns: Customer, Supplier, ETA to US Port, Confirmed ETA, Expected Delivery, Actual Delivery, Qty Delivered, Outstanding Qty, Invoice Amt, Delivery Address, Status, Notes, Edit */}
                   <TableCell></TableCell>
                   <TableCell></TableCell>
                   <TableCell></TableCell>
@@ -245,6 +297,12 @@ export function GDCInventoryTable({ orderSeries, data, uniqueSkus, onEdit }: GDC
                   <TableCell></TableCell>
                   <TableCell></TableCell>
                   <TableCell></TableCell>
+                  <TableCell></TableCell>
+                  <TableCell></TableCell>
+                  <TableCell></TableCell>
+                  <TableCell></TableCell>
+                  <TableCell></TableCell>
+                  <TableCell className="relative sticky right-0 z-20 w-[100px] bg-muted border-l shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)] after:absolute after:inset-0 after:w-[100px] after:bg-muted after:-z-10"></TableCell>
                 </TableRow>
               </TableBody>
             </Table>

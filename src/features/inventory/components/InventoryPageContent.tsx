@@ -7,7 +7,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { Search, Filter, AlertTriangle, RefreshCw, Plus, Package, Truck } from 'lucide-react';
+import { Search, Filter, AlertTriangle, RefreshCw, Plus, Package, Truck, LayoutGrid, Table as TableIcon } from 'lucide-react';
 
 import { Input } from '@/shared/components/ui/input';
 import { Button } from '@/shared/components/ui/button';
@@ -22,6 +22,7 @@ import {
 import { Card, CardContent } from '@/shared/components/ui/card';
 
 import { InventoryTable } from './InventoryTable';
+import { LocationInventoryGrid } from './LocationInventoryGrid';
 import { ViewInventoryDrawer } from './ViewInventoryDrawer';
 import { AddInventoryDrawer } from './AddInventoryDrawer';
 import { AdjustInventoryDialog } from './AdjustInventoryDialog';
@@ -37,6 +38,7 @@ export function InventoryPageContent() {
     search: '',
     lowStockOnly: false,
   });
+  const [viewMode, setViewMode] = useState<'table' | 'grid'>('grid'); // Default to grid view
   const [selectedInventoryId, setSelectedInventoryId] = useState<string | null>(null);
   const [isViewDrawerOpen, setIsViewDrawerOpen] = useState(false);
   const [isAddDrawerOpen, setIsAddDrawerOpen] = useState(false);
@@ -223,6 +225,28 @@ export function InventoryPageContent() {
         </div>
 
         <div className="flex gap-2 w-full sm:w-auto">
+          {/* View Toggle */}
+          <div className="flex border rounded-md">
+            <Button
+              variant={viewMode === 'grid' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('grid')}
+              className="rounded-r-none"
+            >
+              <LayoutGrid className="h-4 w-4 mr-2" />
+              Grid
+            </Button>
+            <Button
+              variant={viewMode === 'table' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('table')}
+              className="rounded-l-none"
+            >
+              <TableIcon className="h-4 w-4 mr-2" />
+              Table
+            </Button>
+          </div>
+
           <Button variant="outline" size="sm" onClick={refetch} disabled={isLoading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
@@ -241,17 +265,24 @@ export function InventoryPageContent() {
         </div>
       )}
 
-      {/* Inventory Table */}
-      <InventoryTable
-        data={data}
-        isLoading={isLoading}
-        onView={handleView}
-        onAdjust={handleAdjust}
-        onRowClick={handleView}
-      />
+      {/* Inventory View - Table or Grid */}
+      {viewMode === 'grid' ? (
+        <LocationInventoryGrid
+          data={data}
+          isLoading={isLoading}
+        />
+      ) : (
+        <InventoryTable
+          data={data}
+          isLoading={isLoading}
+          onView={handleView}
+          onAdjust={handleAdjust}
+          onRowClick={handleView}
+        />
+      )}
 
-      {/* Pagination Info */}
-      {!isLoading && data.length > 0 && (
+      {/* Pagination Info - Only show for table view */}
+      {viewMode === 'table' && !isLoading && data.length > 0 && (
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <p>
             Showing {((meta.page - 1) * meta.limit) + 1} to{' '}

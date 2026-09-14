@@ -46,8 +46,9 @@ export function SupplierShipmentScheduleTable({
   const formatDate = (dateString: string | null) => {
     if (!dateString) { return '-'; }
     return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
+      month: 'numeric',
       day: 'numeric',
+      year: 'numeric',
     });
   };
 
