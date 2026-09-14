@@ -263,12 +263,29 @@ export default function OperationsPage() {
   //   setEditDialogOpen(true);
   // };
 
-  // Handle edit from dynamic GDC Inventory table (Purchase Orders)
+  // Handle view from dynamic GDC Inventory table (Purchase Orders)
+  const handleViewGDCItem = (item: GDCInventoryItem) => {
+    setViewShipmentId(item.id);
+  };
+
+  // Handle edit from dynamic GDC Inventory table (Sales Orders)
   const handleEditGDCItem = (item: GDCInventoryItem) => {
-    // For PO-based GDC items, we navigate to PO edit or show a simple dialog
-    // For now, just log - future: open PO edit drawer
-    console.log('Edit GDC PO item:', item);
-    // TODO: Could open a PO edit modal here if needed
+    // Convert GDCInventoryItem to EditableShipment format
+    // Note: Dialog's confirmedEta = ETA to Port (item.etaToUsPort)
+    //       Dialog's actualDeliveryDate = Customer Expected Delivery (item.expectedDelivery)
+    setEditingShipment({
+      id: item.id,
+      loadNumber: item.soNumber || item.poNumber || 'N/A',
+      customer: item.customer || 'Unknown',
+      status: item.status as ShipmentStatus,
+      actionRequired: item.actionRequired || '',
+      confirmedEta: item.etaToUsPort || '', // ETA to US Port maps to dialog's "ETA to Port"
+      actualDeliveryDate: item.expectedDelivery || '', // Expected Delivery maps to dialog's "Customer Expected Delivery"
+      qtyDelivered: item.qtyDelivered,
+      totalQty: item.totalQty,
+    });
+    setEditSource('gdc');
+    setEditDialogOpen(true);
   };
 
   // Handle successful edit - refresh data
@@ -399,6 +416,7 @@ export default function OperationsPage() {
                 orderSeries={series.name}
                 data={gdcData?.items || []}
                 uniqueSkus={gdcData?.uniqueSkus || []}
+                onView={handleViewGDCItem}
                 onEdit={handleEditGDCItem}
               />
             </TabsContent>
