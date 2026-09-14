@@ -1,24 +1,30 @@
 /**
- * Container Capacity Configuration
- * Defines standard container capacities for different tire sizes
+ * Container Capacity Utilities
+ *
+ * Handles container capacity calculations for product orders.
+ * Used for determining when orders need to be split across multiple containers.
  */
 
-export const CONTAINER_CAPACITIES = {
-  '290-85R38': 72,   // 38" tire - standard container holds 72 units
-  '380-85R24': 96,   // 24" tire - standard container holds 96 units
-} as const;
+// Standard container capacities by SKU
+const CONTAINER_CAPACITIES: Record<string, number> = {
+  '290/85R38': 72, // 38" tires - 72 per container
+  '380/85R24': 72, // 24" tires - 72 per container
+  'BEAD-LOCK': 100, // Bead locks - 100 per container
+};
 
-export type TireSKU = keyof typeof CONTAINER_CAPACITIES;
+// Default capacity if SKU not found
+const DEFAULT_CAPACITY = 72;
 
 /**
  * Get container capacity for a given SKU
  */
 export function getContainerCapacity(sku: string): number {
-  return CONTAINER_CAPACITIES[sku as TireSKU] || 72; // Default to 72
+  return CONTAINER_CAPACITIES[sku] || DEFAULT_CAPACITY;
 }
 
 /**
- * Check if a quantity needs to be split across multiple containers
+ * Check if an order quantity requires container split
+ * Returns true if quantity exceeds single container capacity
  */
 export function needsContainerSplit(sku: string, quantity: number): boolean {
   const capacity = getContainerCapacity(sku);
@@ -26,7 +32,7 @@ export function needsContainerSplit(sku: string, quantity: number): boolean {
 }
 
 /**
- * Calculate how many containers are needed for a quantity
+ * Calculate number of containers needed for a quantity
  */
 export function calculateContainersNeeded(sku: string, quantity: number): number {
   const capacity = getContainerCapacity(sku);
@@ -36,39 +42,57 @@ export function calculateContainersNeeded(sku: string, quantity: number): number
 /**
  * Calculate optimal split of quantity across containers
  * Returns array of quantities per container
- *
- * Example: 100 tires with capacity 72 → [72, 28]
  */
-export function calculateOptimalSplit(quantity: number, capacity: number): number[] {
-  const containers = Math.ceil(quantity / capacity);
-  const splits: number[] = [];
-  let remaining = quantity;
+export function calculateOptimalSplit(
+  totalQuantity: number,
+  containerCapacity: number
+): number[] {
+  const containers = Math.ceil(totalQuantity / containerCapacity);
+  const baseQuantity = Math.floor(totalQuantity / containers);
+  const remainder = totalQuantity % containers;
 
+  const splits: number[] = [];
   for (let i = 0; i < containers; i++) {
-    const thisQty = Math.min(remaining, capacity);
-    splits.push(thisQty);
-    remaining -= thisQty;
+    // Distribute remainder across first containers
+    splits.push(baseQuantity + (i < remainder ? 1 : 0));
   }
 
   return splits;
 }
 
 /**
- * Format split suggestion for display
- *
- * Example: [72, 28] → "72 + 28"
+ * Get container split suggestions for an order item
  */
-export function formatSplitSuggestion(splits: number[]): string {
-  return splits.join(' + ');
+export function getContainerSplitSuggestions(
+  sku: string,
+  quantity: number
+): {
+  needsSplit: boolean;
+  containersNeeded: number;
+  capacity: number;
+  splits: number[];
+} {
+  const capacity = getContainerCapacity(sku);
+  const needsSplit = needsContainerSplit(sku, quantity);
+  const containersNeeded = calculateContainersNeeded(sku, quantity);
+  const splits = calculateOptimalSplit(quantity, capacity);
+
+  return {
+    needsSplit,
+    containersNeeded,
+    capacity,
+    splits,
+  };
 }
 
 /**
- * Get split message for user
+ * Format split suggestion as human-readable text
  */
-export function getSplitMessage(sku: string, quantity: number): string {
-  const capacity = getContainerCapacity(sku);
-  const containers = calculateContainersNeeded(sku, quantity);
-  const splits = calculateOptimalSplit(quantity, capacity);
+export function formatSplitSuggestion(splits: number[]): string {
+  if (splits.length === 0) return '';
+  if (splits.length === 1) return `${splits[0]} units (1 container)`;
 
-  return `${quantity} tires need ${containers} container${containers > 1 ? 's' : ''}. Suggested split: ${formatSplitSuggestion(splits)} tires`;
+  return splits
+    .map((qty, index) => `Container ${index + 1}: ${qty} units`)
+    .join(', ');
 }
