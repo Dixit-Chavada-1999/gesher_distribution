@@ -428,6 +428,22 @@ const handleReleaseHold = async () => {
     }
   };
 
+  // Check Order Series before opening confirm dialog
+  const handleConfirmClick = () => {
+    if (!order) {
+      return;
+    }
+
+    // Validate Order Series is set BEFORE opening modal
+    if (!order.orderSeries || order.orderSeries.trim() === '') {
+      toast.error('Order Series is required. Please set the Order Series before confirming.');
+      return;
+    }
+
+    // Validation passed - open confirm dialog
+    setShowConfirmDialog(true);
+  };
+
   const handleConfirm = () => {
     if (!order) {
       return;
@@ -736,7 +752,9 @@ const handleReleaseHold = async () => {
                     <div className="flex items-start gap-3">
                       <Layers className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs text-muted-foreground mb-0.5">Order Series</p>
+                        <p className="text-xs text-muted-foreground mb-0.5">
+                          Order Series <span className="text-destructive">*</span>
+                        </p>
                         {isEditingOrderSeries ? (
                           <div className="flex items-center gap-2">
                             <Select
@@ -1062,7 +1080,7 @@ const handleReleaseHold = async () => {
                   </Button>
                 )}
                 {canConfirm && (
-                  <Button size="sm" onClick={() => setShowConfirmDialog(true)} disabled={isPending}>
+                  <Button size="sm" onClick={handleConfirmClick} disabled={isPending}>
                     <CheckCircle className="mr-2 h-4 w-4" />
                     Confirm Order
                   </Button>
