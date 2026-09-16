@@ -40,7 +40,6 @@ interface DbSalesOrder {
   customer_po_number: string | null;
   status: OrderStatus;
   credit_status?: OrderCreditStatus;
-  product_source?: 'direct' | 'warehouse';
   order_series?: string | null;
   billing_address_street: string | null;
   billing_address_city: string | null;
@@ -77,6 +76,7 @@ interface DbSalesOrderItem {
   sku: string;
   description: string | null;
   quantity: number;
+  customer_qty: number;
   unit_code: string;
   unit_price: number;
   discount_percent: number;
@@ -156,7 +156,6 @@ class SalesOrderRepositoryImpl {
         requested_delivery_date,
         status,
         credit_status,
-        product_source,
         order_series,
         grand_total,
         currency_code,
@@ -457,7 +456,6 @@ class SalesOrderRepositoryImpl {
         currency_code: data.currencyCode || 'USD',
         customer_po_number: data.customerPoNumber || null,
         status: data.status || 'draft',
-        product_source: data.productSource || 'direct',
         order_series: data.orderSeries || null,
         billing_address_street: data.billingAddress.street,
         billing_address_city: data.billingAddress.city,
@@ -494,6 +492,7 @@ class SalesOrderRepositoryImpl {
       sku: item.sku,
       description: item.description,
       quantity: item.quantity,
+      customer_qty: item.customerQty || item.quantity, // Default to quantity if not provided
       unit_code: item.unitCode,
       unit_price: item.unitPrice,
       discount_percent: item.discountPercent,
@@ -544,7 +543,6 @@ class SalesOrderRepositoryImpl {
     if (data.warehouseId !== undefined) {updateData.warehouse_id = data.warehouseId;}
     if (data.currencyCode !== undefined) {updateData.currency_code = data.currencyCode;}
     if (data.customerPoNumber !== undefined) {updateData.customer_po_number = data.customerPoNumber;}
-    if (data.productSource !== undefined) {updateData.product_source = data.productSource;}
     if (data.orderSeries !== undefined) {updateData.order_series = data.orderSeries;}
     if (data.billingAddress !== undefined) {
       updateData.billing_address_street = data.billingAddress.street;
@@ -962,7 +960,6 @@ class SalesOrderRepositoryImpl {
       customerPoNumber: data.customer_po_number,
       status: data.status,
       creditStatus: data.credit_status || 'ok',
-      productSource: data.product_source || 'direct',
       orderSeries: data.order_series || null,
       billingAddressStreet: data.billing_address_street,
       billingAddressCity: data.billing_address_city,
@@ -1004,6 +1001,7 @@ class SalesOrderRepositoryImpl {
       sku: data.sku,
       description: data.description,
       quantity: data.quantity,
+      customerQty: data.customer_qty,
       unitCode: data.unit_code,
       unitPrice: data.unit_price,
       discountPercent: Number(data.discount_percent),
@@ -1031,7 +1029,6 @@ class SalesOrderRepositoryImpl {
       requested_delivery_date: string | null;
       status: OrderStatus;
       credit_status?: OrderCreditStatus;
-      product_source?: 'direct' | 'warehouse';
       order_series?: string | null;
       grand_total: number;
       currency_code: string;
@@ -1052,7 +1049,6 @@ class SalesOrderRepositoryImpl {
       requestedDeliveryDate: data.requested_delivery_date,
       status: data.status,
       creditStatus: data.credit_status || 'ok',
-      productSource: data.product_source || 'direct',
       orderSeries: data.order_series || null,
       grandTotal: data.grand_total,
       currencyCode: data.currency_code,

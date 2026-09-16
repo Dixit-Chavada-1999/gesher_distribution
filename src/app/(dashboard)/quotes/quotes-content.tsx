@@ -295,7 +295,6 @@ export function QuotesPageContent() {
         salesRepId: null,
         currencyCode: 'USD',
         status: 'draft' as const,
-        productSource: null,
         billingAddress: {
           street: data.extraction.customer?.address || null,
           city: data.extraction.customer?.city || null,

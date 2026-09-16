@@ -51,7 +51,7 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 
-import { getSalesOrder, releaseSalesOrderHold, confirmSalesOrder, cancelSalesOrder, getSalesOrderMasterData, updateSalesOrderSeries, updateSalesOrderProductSource, regeneratePurchaseOrder } from '../actions';
+import { getSalesOrder, releaseSalesOrderHold, confirmSalesOrder, cancelSalesOrder, getSalesOrderMasterData, updateSalesOrderSeries, regeneratePurchaseOrder } from '../actions';
 import { ORDER_SERIES } from '@/shared/lib/global-data';
 import { createPickTicketFromSalesOrder } from '@/features/pick-tickets/actions';
 import { createInvoiceFromSalesOrder } from '@/features/invoices/actions';
@@ -77,10 +77,10 @@ import {
   ORDER_STATUS_COLORS,
   ORDER_CREDIT_STATUS_LABELS,
   ORDER_CREDIT_STATUS_COLORS,
-  PRODUCT_SOURCE_LABELS,
-  PRODUCT_SOURCES,
 } from '../types';
 import { toast } from 'sonner';
+import { AllocationManager } from './AllocationManager';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
 
 // ============================================
 // TYPES
@@ -236,10 +236,6 @@ const [isReleasingHold, setIsReleasingHold] = useState(false);
   const [isEditingOrderSeries, setIsEditingOrderSeries] = useState(false);
   const [isUpdatingOrderSeries, setIsUpdatingOrderSeries] = useState(false);
 
-  // Product Source inline edit
-  const [isEditingProductSource, setIsEditingProductSource] = useState(false);
-  const [isUpdatingProductSource, setIsUpdatingProductSource] = useState(false);
-
   // Purchase Order regeneration
   const [hasPurchaseOrder, setHasPurchaseOrder] = useState(false);
   const [showCreatePODialog, setShowCreatePODialog] = useState(false);
@@ -346,10 +342,8 @@ const [isReleasingHold, setIsReleasingHold] = useState(false);
       const result = await getSalesOrder(orderId);
       if (result.success && result.data) {
         setOrder(result.data);
-        // Check if PO exists for this SO (for direct orders)
-        if (result.data.productSource === 'direct') {
-          checkPurchaseOrderExists(orderId);
-        }
+        // Check if PO exists for this SO
+        checkPurchaseOrderExists(orderId);
       } else {
         setError(result.error || 'Failed to load order');
       }
@@ -406,27 +400,6 @@ const [isReleasingHold, setIsReleasingHold] = useState(false);
       toast.error('Failed to update order series');
     } finally {
       setIsUpdatingOrderSeries(false);
-    }
-  };
-
-  const handleUpdateProductSource = async (newProductSource: string) => {
-    if (!order) { return; }
-
-    setIsUpdatingProductSource(true);
-    try {
-      const result = await updateSalesOrderProductSource(order.id, newProductSource as 'direct' | 'warehouse');
-      if (result.success) {
-        toast.success(`Product source updated to ${newProductSource === 'warehouse' ? 'Warehouse' : 'Direct'}`);
-        setIsEditingProductSource(false);
-        // Refresh order data
-        await fetchOrder();
-      } else {
-        toast.error(result.error || 'Failed to update product source');
-      }
-    } catch {
-      toast.error('Failed to update product source');
-    } finally {
-      setIsUpdatingProductSource(false);
     }
   };
 
@@ -629,10 +602,9 @@ const handleReleaseHold = async () => {
   // Check if pick ticket already exists
   const hasPickTicket = order?.pickTickets && order.pickTickets.length > 0;
 
-  // Can create pick ticket for confirmed or processing orders (only for warehouse, not direct, and no existing pick ticket)
+  // Can create pick ticket for confirmed or processing orders (no existing pick ticket)
   const canCreatePickTicket = order &&
     ['confirmed', 'processing'].includes(order.status) &&
-    order.productSource === 'warehouse' &&
     !hasPickTicket &&
     canEditPermission;
 
@@ -641,10 +613,9 @@ const handleReleaseHold = async () => {
     ['confirmed', 'processing', 'shipped', 'delivered'].includes(order.status) &&
     canEditPermission;
 
-  // Can create PO for confirmed/processing direct orders that don't have a PO
+  // Can create PO for confirmed/processing orders that don't have a PO
   const canCreatePO = order &&
     ['confirmed', 'processing'].includes(order.status) &&
-    order.productSource === 'direct' &&
     !hasPurchaseOrder &&
     canEditPermission;
 
@@ -659,7 +630,7 @@ const handleReleaseHold = async () => {
     <Sheet open={open} onOpenChange={onClose}>
       <SheetContent
         side="right"
-        className="flex w-full flex-col p-0 sm:max-w-[600px] md:max-w-[700px]"
+        className="flex w-full flex-col p-0 sm:max-w-[800px] md:max-w-[900px] lg:max-w-[1000px]"
       >
         {/* Header */}
         <SheetHeader className="flex-shrink-0 border-b px-6 py-4">
@@ -760,59 +731,6 @@ const handleReleaseHold = async () => {
                       value={order.customerPoNumber || '-'}
                       icon={<FileText className="h-4 w-4" />}
                     />
-
-                    {/* Product Source - Inline Edit */}
-                    <div className="flex items-start gap-3">
-                      <Package className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-muted-foreground mb-0.5">Product Source</p>
-                        {isEditingProductSource ? (
-                          <div className="flex items-center gap-2">
-                            <Select
-                              defaultValue={order.productSource || 'direct'}
-                              onValueChange={handleUpdateProductSource}
-                              disabled={isUpdatingProductSource}
-                            >
-                              <SelectTrigger className="h-8 w-[140px]">
-                                <SelectValue placeholder="Select product source" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {PRODUCT_SOURCES.map((source) => (
-                                  <SelectItem key={source} value={source}>
-                                    {PRODUCT_SOURCE_LABELS[source]}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                              onClick={() => setIsEditingProductSource(false)}
-                              disabled={isUpdatingProductSource}
-                            >
-                              <XCircle className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium text-foreground">
-                              {order.productSource ? PRODUCT_SOURCE_LABELS[order.productSource] : '-'}
-                            </p>
-                            {canEditPermission && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0"
-                                onClick={() => setIsEditingProductSource(true)}
-                              >
-                                <Pencil className="h-3 w-3" />
-                              </Button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
 
                     {/* Order Series - Inline Edit */}
                     <div className="flex items-start gap-3">
@@ -974,6 +892,36 @@ const handleReleaseHold = async () => {
                     </Table>
                   </div>
                 </Section>
+
+                {/* Fulfillment Allocations */}
+                {order.status !== 'draft' && order.status !== 'cancelled' && order.items.length > 0 && (
+                  <Section title="Fulfillment Allocations">
+                    <Tabs defaultValue={order.items[0]?.id || 'none'} className="w-full">
+                      <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${order.items.filter(item => item.itemType !== 'service' && item.itemType !== 'non_inventory').length}, 1fr)` }}>
+                        {order.items
+                          .filter(item => item.itemType !== 'service' && item.itemType !== 'non_inventory')
+                          .map((item) => (
+                            <TabsTrigger key={item.id} value={item.id}>
+                              {item.sku}
+                            </TabsTrigger>
+                          ))}
+                      </TabsList>
+                      {order.items
+                        .filter(item => item.itemType !== 'service' && item.itemType !== 'non_inventory')
+                        .map((item) => (
+                          <TabsContent key={item.id} value={item.id} className="mt-4">
+                            <AllocationManager
+                              salesOrderItemId={item.id}
+                              productId={item.productId}
+                              productName={`${item.sku} - ${item.description}`}
+                              customerQty={item.quantity}
+                              onAllocationsChange={fetchOrder}
+                            />
+                          </TabsContent>
+                        ))}
+                    </Tabs>
+                  </Section>
+                )}
 
                 {/* Order Totals */}
                 <Section title="Order Summary">

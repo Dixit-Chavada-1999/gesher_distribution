@@ -352,7 +352,7 @@ export async function updateQuoteFromData(
 
   const result = await quoteService.update(id, validation.data, auth.user.id);
 
-  console.log('[updateQuoteFromData] Update result:', result.success, result.data?.productSource);
+  console.log('[updateQuoteFromData] Update result:', result.success);
 
   if (result.success) {
     revalidatePath('/quotes');
@@ -1362,74 +1362,6 @@ export async function linkExtractionToQuote(
     return {
       success: false,
       error: 'Failed to link extraction to quote',
-    };
-  }
-}
-
-// ============================================
-// PRODUCT SOURCE
-// ============================================
-
-/**
- * Update quote product source
- * Allows inline editing of product source field
- */
-export async function updateQuoteProductSource(
-  quoteId: string,
-  productSource: 'direct' | 'warehouse' | null
-): Promise<ActionResult<Quote>> {
-  const auth = await authorize('quotes.edit');
-  if (!auth.ok) {
-    return auth.result;
-  }
-
-  try {
-    // Check if quote exists and is editable
-    const existing = await db
-      .from('quotes')
-      .select('id, status, product_source')
-      .eq('id', quoteId)
-      .is('deleted_at', null)
-      .single();
-
-    if (!existing.data) {
-      return { success: false, error: 'Quote not found' };
-    }
-
-    // Only allow editing if not converted
-    if (existing.data.status === 'converted') {
-      return { success: false, error: 'Cannot edit converted quote' };
-    }
-
-    // Update product source
-    const { data: updated, error: updateError } = await db
-      .from('quotes')
-      .update({
-        product_source: productSource,
-        updated_by: auth.user.id,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', quoteId)
-      .select()
-      .single();
-
-    if (updateError) {
-      console.error('Update product source error:', updateError);
-      return { success: false, error: 'Failed to update product source' };
-    }
-
-    revalidatePath('/quotes');
-    revalidatePath(`/quotes/${quoteId}`);
-
-    return {
-      success: true,
-      data: updated as unknown as Quote,
-    };
-  } catch (error) {
-    console.error('updateQuoteProductSource error:', error);
-    return {
-      success: false,
-      error: 'Failed to update product source',
     };
   }
 }

@@ -40,6 +40,8 @@ import {
   UserPlus, // Leads
   Link2, // Pipedrive
   Handshake, // Deals
+  Boxes, // Master Inventory
+  Award, // Platinum Dealers
 } from 'lucide-react';
 
 import { cn } from '@/shared/lib/utils';
@@ -120,6 +122,13 @@ const NAV_SECTIONS = [
         href: '/suppliers',
         icon: Factory,
         permission: 'suppliers.view_module',
+      },
+      {
+        id: 'platinum-dealers',
+        label: 'Platinum Dealers',
+        href: '/platinum-dealers',
+        icon: Award,
+        permission: 'suppliers.view_module', // Using suppliers permission for now
       },
     ],
   },
@@ -215,6 +224,13 @@ const NAV_SECTIONS = [
         href: '/products',
         icon: Package,
         permission: 'products.view_module',
+      },
+      {
+        id: 'master-inventory',
+        label: 'Master Inventory',
+        href: '/master-inventory',
+        icon: Boxes,
+        permission: 'inventory.view_module',
       },
       {
         id: 'inventory',

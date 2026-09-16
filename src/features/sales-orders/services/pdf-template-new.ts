@@ -13,7 +13,6 @@ export interface SalesOrderPdfData {
   requestedDeliveryDate: string | null;
   customerPoNumber: string | null;
   status: string;
-  productSource: string | null;
 
   // Customer Information
   customerName: string;

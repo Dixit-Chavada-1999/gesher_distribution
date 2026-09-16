@@ -151,7 +151,6 @@ export const salesOrderFormSchema = z.object({
   warehouseId: z.string().optional().default(''),
   currencyId: z.string().optional().default('USD'),
   customerPoNumber: z.string().optional().default(''),
-  productSource: productSourceSchema.optional().default('direct'),
   orderSeries: z.string().optional().default(''), // GDC 1, GDC 2, GDC 3 - Required only when status is 'confirmed'
   status: orderStatusSchema.default('draft'),
   billingAddress: addressFormSchema,
@@ -279,7 +278,6 @@ export function orderToFormValues(order: {
   warehouseId: string | null;
   currencyCode: string;
   customerPoNumber: string | null;
-  productSource: 'direct' | 'warehouse';
   orderSeries: string | null;
   status: OrderStatus;
   billingAddressStreet: string | null;
@@ -325,7 +323,6 @@ export function orderToFormValues(order: {
     warehouseId: order.warehouseId || '',
     currencyId: order.currencyCode,
     customerPoNumber: order.customerPoNumber || '',
-    productSource: order.productSource || 'direct',
     orderSeries: order.orderSeries || '',
     status: order.status,
     billingAddress: {

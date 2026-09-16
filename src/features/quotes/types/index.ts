@@ -26,24 +26,6 @@ export const QUOTE_STATUSES: QuoteStatus[] = [
   'converted',
 ];
 
-// ============================================
-// PRODUCT SOURCE (Where product is sourced from)
-// ============================================
-
-export type ProductSource = 'direct' | 'warehouse';
-
-export const PRODUCT_SOURCES: ProductSource[] = ['direct', 'warehouse'];
-
-export const PRODUCT_SOURCE_LABELS: Record<ProductSource, string> = {
-  direct: 'Direct',
-  warehouse: 'Warehouse',
-};
-
-export const PRODUCT_SOURCE_DESCRIPTIONS: Record<ProductSource, string> = {
-  direct: 'Ships from Galileo to customer',
-  warehouse: 'Ships from US warehouse',
-};
-
 export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
   draft: 'Draft',
   pending_approval: 'Pending Approval',
@@ -88,7 +70,6 @@ export interface Quote {
   salesRepId: string | null;
   currencyCode: string;
   status: QuoteStatus;
-  productSource: ProductSource;
 
   // Billing Address
   billingAddressStreet: string | null;
@@ -230,8 +211,6 @@ export interface CreateQuoteDTO {
   salesRepId?: string | null;
   currencyCode?: string;
   status?: QuoteStatus;
-  // Nullable per migration 078: a quote may be created before a source is picked.
-  productSource?: ProductSource | null;
   billingAddress: AddressDTO;
   shippingAddress: AddressDTO;
   items: CreateQuoteItemDTO[];
@@ -248,8 +227,6 @@ export interface UpdateQuoteDTO {
   customerId?: string;
   salesRepId?: string | null;
   currencyCode?: string;
-  // Nullable per migration 078: a quote may be created before a source is picked.
-  productSource?: ProductSource | null;
   billingAddress?: AddressDTO;
   shippingAddress?: AddressDTO;
   customerNotes?: string | null;
@@ -282,7 +259,6 @@ export interface QuoteListItem {
   quoteDate: string;
   validUntil: string | null;
   status: QuoteStatus;
-  productSource: ProductSource;
   grandTotal: number; // cents
   currencyCode: string;
   itemCount: number;
@@ -433,7 +409,6 @@ export interface QuoteFormData {
   salesRepId?: string;
   currencyId?: string;
   status?: QuoteStatus;
-  productSource?: ProductSource;
 
   billingAddress: Address;
   shippingAddress: Address;

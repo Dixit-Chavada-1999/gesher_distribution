@@ -35,7 +35,6 @@ export async function GET(
       requestedDeliveryDate: order.requestedDeliveryDate?.toISOString() || null,
       customerPoNumber: order.customerPoNumber,
       status: order.status,
-      productSource: order.productSource,
 
       customerName: order.customer?.name || 'Unknown Customer',
       customerCode: order.customer?.customerCode || '-',

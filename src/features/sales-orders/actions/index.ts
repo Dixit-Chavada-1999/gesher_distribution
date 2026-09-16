@@ -544,7 +544,7 @@ export async function confirmSalesOrder(id: string): Promise<ActionResult<SalesO
   // Check if Order Series is selected before confirming
   const { data: soCheck } = await db
     .from('sales_orders')
-    .select('order_series, product_source')
+    .select('order_series')
     .eq('id', id)
     .single();
 
@@ -558,11 +558,19 @@ export async function confirmSalesOrder(id: string): Promise<ActionResult<SalesO
   const result = await salesOrderService.confirm(id, auth.user.id);
 
   if (result.success) {
+    // Check if any items have direct fulfillment source
     // Only direct orders need a supplier PO. Warehouse orders ship from our
     // own stock, so raising a PO would put a phantom order in front of the
     // supplier — and their confirmation would create a second shipment for an
     // order the warehouse is already fulfilling.
-    if (result.data?.productSource === 'direct') {
+    const { data: items } = await db
+      .from('sales_order_items')
+      .select('fulfillment_source')
+      .eq('sales_order_id', id);
+
+    const hasDirectItems = items?.some(item => item.fulfillment_source === 'direct');
+
+    if (hasDirectItems) {
       try {
         await createPurchaseOrderFromSalesOrder(id, auth.user.id);
       } catch (error) {

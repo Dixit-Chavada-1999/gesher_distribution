@@ -86,6 +86,36 @@ export async function getActiveLocations(): Promise<ActionResult<Location[]>> {
 }
 
 /**
+ * Get all locations with optional type filter (for allocation dialogs)
+ */
+export async function getAllLocationsAction(params?: { type?: 'warehouse' | 'drop_ship' | 'virtual' }): Promise<ActionResult<Location[]>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Authentication required' };
+  }
+
+  // Get all active locations
+  const result = await locationService.getActiveLocations();
+
+  if (result.success && result.data) {
+    // Filter by type if specified
+    let locations = result.data;
+    if (params?.type) {
+      locations = locations.filter(loc => loc.locationType === params.type);
+    }
+
+    return {
+      success: true,
+      data: locations,
+    };
+  }
+
+  return result;
+}
+
+/**
  * Get the default location
  */
 export async function getDefaultLocation(): Promise<ActionResult<Location | null>> {

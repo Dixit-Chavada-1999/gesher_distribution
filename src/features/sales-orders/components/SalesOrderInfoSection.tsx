@@ -31,7 +31,7 @@ import { Separator } from '@/shared/components/ui/separator';
 import { getNextOrderNumber } from '../actions';
 
 import type { SalesOrderInfoSectionProps } from '../types';
-import { ORDER_STATUS_LABELS, PRODUCT_SOURCE_LABELS, PRODUCT_SOURCES, type OrderStatus } from '../types';
+import { ORDER_STATUS_LABELS, type OrderStatus } from '../types';
 import type { SalesOrderFormInput } from '../lib/schemas';
 import { ORDER_SERIES } from '@/shared/lib/global-data';
 
@@ -249,29 +249,6 @@ function SalesOrderInfoSectionComponent({
             id="customerPoNumber"
             placeholder="Enter PO number"
             {...register('customerPoNumber')}
-          />
-        </div>
-
-        {/* Product Source */}
-        <div className="space-y-2">
-          <Label htmlFor="productSource">Product Source</Label>
-          <Controller
-            name="productSource"
-            control={control}
-            render={({ field }) => (
-              <Select value={field.value || 'direct'} onValueChange={field.onChange}>
-                <SelectTrigger id="productSource">
-                  <SelectValue placeholder="Select product source" />
-                </SelectTrigger>
-                <SelectContent>
-                  {PRODUCT_SOURCES.map((source) => (
-                    <SelectItem key={source} value={source}>
-                      {PRODUCT_SOURCE_LABELS[source]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
           />
         </div>
 

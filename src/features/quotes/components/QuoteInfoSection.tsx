@@ -29,7 +29,6 @@ import { Separator } from '@/shared/components/ui/separator';
 
 import type { QuoteFormInput } from '../lib/schemas';
 import { getNextQuoteNumber } from '../actions';
-import { PRODUCT_SOURCE_LABELS } from '../types';
 
 // ============================================
 // TYPES
@@ -240,30 +239,6 @@ function QuoteInfoSectionComponent({
           />
           {errors.currencyId && (
             <p className="text-sm text-destructive">{errors.currencyId.message}</p>
-          )}
-        </div>
-
-        {/* Product Source */}
-        <div className="space-y-2">
-          <Label htmlFor="productSource">Product Source *</Label>
-          <Controller
-            name="productSource"
-            control={control}
-            render={({ field }) => (
-              <Select value={field.value || ''} onValueChange={(value) => field.onChange(value === '' ? null : value)}>
-                <SelectTrigger id="productSource" className={errors.productSource ? 'border-destructive' : ''}>
-                  <SelectValue placeholder="Select product source" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Select product source</SelectItem>
-                  <SelectItem value="direct">{PRODUCT_SOURCE_LABELS.direct}</SelectItem>
-                  <SelectItem value="warehouse">{PRODUCT_SOURCE_LABELS.warehouse}</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-          />
-          {errors.productSource && (
-            <p className="text-sm text-destructive">{errors.productSource.message}</p>
           )}
         </div>
 

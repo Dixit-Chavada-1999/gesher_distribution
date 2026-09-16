@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Loader2, MapPin, FileText, Calendar, User, Building2, ArrowRight, ExternalLink, Package, Pencil, X, Warehouse, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Loader2, MapPin, FileText, Calendar, User, Building2, ArrowRight, ExternalLink, Warehouse, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { useAuthStore } from '@/shared/stores';
@@ -30,20 +30,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/shared/components/ui/table';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/shared/components/ui/select';
-import { toast } from 'sonner';
 
-import { getQuote, getPODocumentSignedUrl, updateQuoteProductSource } from '../actions';
+import { getQuote, getPODocumentSignedUrl } from '../actions';
 import { getInventoryByProductIds } from '@/features/inventory/actions';
 import type { InventoryListItem } from '@/features/inventory/types';
 import type { QuoteWithItems } from '../types';
-import { QUOTE_STATUS_LABELS, QUOTE_STATUS_COLORS, PRODUCT_SOURCE_LABELS } from '../types';
+import { QUOTE_STATUS_LABELS, QUOTE_STATUS_COLORS } from '../types';
 
 // ============================================
 // TYPES
@@ -196,8 +188,6 @@ export function ViewQuoteDrawer({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [poDocumentUrl, setPoDocumentUrl] = useState<string | null>(null);
-  const [isEditingProductSource, setIsEditingProductSource] = useState(false);
-  const [isUpdatingProductSource, setIsUpdatingProductSource] = useState(false);
 
   // Inventory status
   const [inventoryData, setInventoryData] = useState<InventoryListItem[]>([]);
@@ -323,30 +313,6 @@ export function ViewQuoteDrawer({
     }
   };
 
-  const handleUpdateProductSource = async (value: 'direct' | 'warehouse' | 'none') => {
-    if (!quote) { return; }
-
-    setIsUpdatingProductSource(true);
-    try {
-      // Convert 'none' to null
-      const productSource = value === 'none' ? null : value;
-      const result = await updateQuoteProductSource(quote.id, productSource);
-      if (result.success) {
-        // Update local state. The repository maps a null product_source back to
-        // 'direct' on read, so mirror that here to match a refetch.
-        setQuote({ ...quote, productSource: productSource ?? 'direct' });
-        setIsEditingProductSource(false);
-        toast.success('Product source updated');
-      } else {
-        toast.error(result.error || 'Failed to update product source');
-      }
-    } catch {
-      toast.error('Failed to update product source');
-    } finally {
-      setIsUpdatingProductSource(false);
-    }
-  };
-
   // Can only edit draft quotes (and must have permission)
   const canEdit = quote && quote.status === 'draft' && canEditPermission;
   // Can submit draft quotes for approval (and must have submit_for_approval permission)
@@ -423,62 +389,6 @@ export function ViewQuoteDrawer({
                       value={formatDate(quote.validUntil)}
                       icon={<Calendar className="h-4 w-4" />}
                     />
-                    {/* Product Source - Editable */}
-                    <div className="flex items-start gap-3">
-                      <div className="text-muted-foreground mt-0.5 flex-shrink-0">
-                        <Package className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-muted-foreground mb-0.5">Product Source</p>
-                        {isEditingProductSource ? (
-                          <div className="flex items-center gap-2">
-                            <Select
-                              defaultValue={quote.productSource || 'none'}
-                              onValueChange={(value) => handleUpdateProductSource(value as 'direct' | 'warehouse' | 'none')}
-                              disabled={isUpdatingProductSource}
-                            >
-                              <SelectTrigger className="h-8 w-[180px]">
-                                <SelectValue placeholder="Select source" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">Select product source</SelectItem>
-                                <SelectItem value="direct">{PRODUCT_SOURCE_LABELS.direct}</SelectItem>
-                                <SelectItem value="warehouse">{PRODUCT_SOURCE_LABELS.warehouse}</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            {isUpdatingProductSource ? (
-                              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6"
-                                onClick={() => setIsEditingProductSource(false)}
-                              >
-                                <X className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium text-foreground">
-                              {quote.productSource ? PRODUCT_SOURCE_LABELS[quote.productSource] : '-'}
-                            </p>
-                            {quote.status !== 'converted' && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                                onClick={() => setIsEditingProductSource(true)}
-                                title="Edit product source"
-                              >
-                                <Pencil className="h-3 w-3" />
-                              </Button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
                   </div>
                 </Section>
 
@@ -604,7 +514,7 @@ export function ViewQuoteDrawer({
                               <AlertTriangle className="h-8 w-8 text-amber-500 mb-2" />
                               <p className="text-sm text-muted-foreground">No inventory records found</p>
                               <p className="text-xs text-muted-foreground mt-1">
-                                Consider using {PRODUCT_SOURCE_LABELS.direct} for this order
+                                Consider ordering directly from supplier
                               </p>
                             </div>
                           ) : (
@@ -642,7 +552,7 @@ export function ViewQuoteDrawer({
                                         </TableCell>
                                         <TableCell className="text-center">
                                           <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-                                            {PRODUCT_SOURCE_LABELS.direct}
+                                            Direct Order
                                           </Badge>
                                         </TableCell>
                                       </TableRow>

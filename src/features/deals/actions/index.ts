@@ -21,7 +21,6 @@ import type {
   CreateDealDTO,
   UpdateDealDTO,
 } from '../types';
-import type { ProductSource } from '@/features/quotes/types';
 import type { CreateQuoteInput } from '@/features/quotes/lib/schemas';
 
 // ============================================
@@ -381,7 +380,6 @@ interface ConvertDealToCustomerData {
   quoteNumber?: string;
   quoteDate?: Date;
   customerPoNumber?: string | null;
-  productSource: ProductSource;
   products: Array<{
     productId?: string;
     sku: string;
@@ -496,7 +494,6 @@ export async function convertDealToCustomer(
         salesRepId: user.id,
         currencyCode: 'USD',
         status: 'draft',
-        productSource: data.productSource,
         customerPoNumber: data.customerPoNumber || null,
 
         // Billing Address (always from billingAddress)

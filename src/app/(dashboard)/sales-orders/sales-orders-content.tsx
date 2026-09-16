@@ -50,8 +50,8 @@ import {
   useSalesOrderMasterData,
   useSalesOrders,
 } from '@/features/sales-orders';
-import { deleteSalesOrder, confirmSalesOrder, cancelSalesOrder, updateSalesOrderProductSource } from '@/features/sales-orders/actions';
-import type { SalesOrderListItem, OrderStatus, SalesOrderWithItems, ProductSource } from '@/features/sales-orders/types';
+import { deleteSalesOrder, confirmSalesOrder, cancelSalesOrder } from '@/features/sales-orders/actions';
+import type { SalesOrderListItem, OrderStatus, SalesOrderWithItems } from '@/features/sales-orders/types';
 import { ORDER_STATUS_LABELS } from '@/features/sales-orders/types';
 import { ORDER_SERIES } from '@/shared/lib/global-data';
 
@@ -300,20 +300,6 @@ export function SalesOrdersPageContent() {
     refetchOrders();
   };
 
-  const handleProductSourceChange = useCallback(async (orderId: string, newSource: ProductSource) => {
-    try {
-      const result = await updateSalesOrderProductSource(orderId, newSource);
-      if (result.success) {
-        toast.success(`Product source updated to ${newSource === 'warehouse' ? 'Warehouse' : 'Direct'}`);
-        refetchOrders();
-      } else {
-        toast.error(result.error || 'Failed to update product source');
-      }
-    } catch {
-      toast.error('Failed to update product source');
-    }
-  }, [refetchOrders]);
-
   const handleStatusFilterChange = (value: string) => {
     setStatusFilter(value as OrderStatus | 'all');
   };
@@ -362,7 +348,6 @@ export function SalesOrdersPageContent() {
         onDelete={canDelete ? handleDeleteClick : undefined}
         onConfirm={canEdit ? handleConfirmClick : undefined}
         onCancel={canEdit ? handleCancelClick : undefined}
-        onProductSourceChange={canEdit ? handleProductSourceChange : undefined}
         pagination={{
           page: meta.page,
           pageSize: meta.limit,

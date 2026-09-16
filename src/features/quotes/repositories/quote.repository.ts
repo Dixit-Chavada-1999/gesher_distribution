@@ -36,7 +36,6 @@ interface DbQuote {
   sales_rep_id: string | null;
   currency_code: string;
   status: QuoteStatus;
-  product_source: 'direct' | 'warehouse';
   billing_address_street: string | null;
   billing_address_city: string | null;
   billing_address_state: string | null;
@@ -145,7 +144,6 @@ class QuoteRepositoryImpl {
         quote_date,
         valid_until,
         status,
-        product_source,
         grand_total,
         currency_code,
         created_at,
@@ -442,7 +440,6 @@ class QuoteRepositoryImpl {
         sales_rep_id: data.salesRepId || null,
         currency_code: data.currencyCode || 'USD',
         status: data.status || 'draft',
-        product_source: data.productSource,
         billing_address_street: data.billingAddress.street,
         billing_address_city: data.billingAddress.city,
         billing_address_state: data.billingAddress.state,
@@ -524,10 +521,6 @@ class QuoteRepositoryImpl {
     if (data.customerId !== undefined) {updateData.customer_id = data.customerId;}
     if (data.salesRepId !== undefined) {updateData.sales_rep_id = data.salesRepId;}
     if (data.currencyCode !== undefined) {updateData.currency_code = data.currencyCode;}
-    if (data.productSource !== undefined) {
-      console.log('[QuoteRepository.update] Saving productSource:', data.productSource);
-      updateData.product_source = data.productSource;
-    }
     if (data.billingAddress !== undefined) {
       updateData.billing_address_street = data.billingAddress.street;
       updateData.billing_address_city = data.billingAddress.city;
@@ -853,7 +846,6 @@ class QuoteRepositoryImpl {
       salesRepId: data.sales_rep_id,
       currencyCode: data.currency_code,
       status: data.status,
-      productSource: data.product_source || 'direct',
       billingAddressStreet: data.billing_address_street,
       billingAddressCity: data.billing_address_city,
       billingAddressState: data.billing_address_state,
@@ -914,7 +906,6 @@ class QuoteRepositoryImpl {
       quote_date: string;
       valid_until: string | null;
       status: QuoteStatus;
-      product_source?: 'direct' | 'warehouse';
       grand_total: number;
       currency_code: string;
       created_at: string;
@@ -932,7 +923,6 @@ class QuoteRepositoryImpl {
       quoteDate: data.quote_date,
       validUntil: data.valid_until,
       status: data.status,
-      productSource: data.product_source || 'direct',
       grandTotal: data.grand_total,
       currencyCode: data.currency_code,
       itemCount: itemCounts[data.id] || 0,

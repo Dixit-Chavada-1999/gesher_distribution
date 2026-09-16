@@ -38,8 +38,6 @@ import { Textarea } from '@/shared/components/ui/textarea';
 import { Separator } from '@/shared/components/ui/separator';
 
 import type { Deal } from '../types';
-import type { ProductSource } from '@/features/quotes/types';
-import { PRODUCT_SOURCE_LABELS } from '@/features/quotes/types';
 import { convertDealToCustomer } from '../actions';
 
 // ============================================
@@ -97,9 +95,6 @@ const formSchema = z.object({
   quoteNumber: z.string().optional(),
   quoteDate: z.date().optional(),
   customerPoNumber: z.string().nullable(),
-
-  // Product Source
-  productSource: z.enum(['direct', 'warehouse'] as const),
 
   // Notes & Terms
   customerNotes: z.string().nullable(),
@@ -172,7 +167,6 @@ export function ConvertDealToCustomerDialog({
       quoteNumber: undefined,
       quoteDate: undefined,
       customerPoNumber: null,
-      productSource: 'warehouse' as const,
       customerNotes: null,
       internalNotes: null,
       termsAndConditions: null,
@@ -210,7 +204,6 @@ export function ConvertDealToCustomerDialog({
         quoteNumber: '',
         quoteDate: new Date(),
         customerPoNumber: null,
-        productSource: 'warehouse',
         customerNotes: null,
         internalNotes: null,
         termsAndConditions: null,
@@ -361,7 +354,6 @@ export function ConvertDealToCustomerDialog({
         quoteNumber: values.quoteNumber,
         quoteDate: values.quoteDate,
         customerPoNumber: values.customerPoNumber,
-        productSource: values.productSource,
         products: validProducts,
         customerNotes: values.customerNotes,
         internalNotes: values.internalNotes,
@@ -789,21 +781,6 @@ export function ConvertDealToCustomerDialog({
                     />
                   </div>
 
-                  <div>
-                    <Label htmlFor="productSource">Product Source</Label>
-                    <Select
-                      value={form.watch('productSource')}
-                      onValueChange={(value) => form.setValue('productSource', value as ProductSource)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="warehouse">{PRODUCT_SOURCE_LABELS.warehouse}</SelectItem>
-                        <SelectItem value="direct">{PRODUCT_SOURCE_LABELS.direct}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
                 </div>
               </div>
 

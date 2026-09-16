@@ -60,21 +60,58 @@ export const ORDER_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 };
 
 // ============================================
-// PRODUCT SOURCE (Where product is sourced from)
+// FULFILLMENT SOURCE (Where product is sourced from)
 // ============================================
 
-export type ProductSource = 'direct' | 'warehouse';
+export type FulfillmentSource =
+  | 'direct'                          // Manufacturer/Supplier (Galileo)
+  | 'gdc_inventory'                   // GDC Warehouse Inventory
+  | 'platinum_dealer_inventory'       // Platinum Dealer Existing Stock
+  | 'platinum_dealer_fulfillment';    // Platinum Dealer Procures & Ships
 
-export const PRODUCT_SOURCES: ProductSource[] = ['direct', 'warehouse'];
+export const FULFILLMENT_SOURCES: FulfillmentSource[] = [
+  'direct',
+  'gdc_inventory',
+  'platinum_dealer_inventory',
+  'platinum_dealer_fulfillment',
+];
 
-export const PRODUCT_SOURCE_LABELS: Record<ProductSource, string> = {
-  direct: 'Direct',
-  warehouse: 'Warehouse',
+export const FULFILLMENT_SOURCE_LABELS: Record<FulfillmentSource, string> = {
+  direct: 'Manufacturer/Supplier',
+  gdc_inventory: 'GDC Inventory',
+  platinum_dealer_inventory: 'Dealer Inventory',
+  platinum_dealer_fulfillment: 'Dealer Fulfillment',
 };
 
+export const FULFILLMENT_SOURCE_DESCRIPTIONS: Record<
+  FulfillmentSource,
+  string
+> = {
+  direct: 'Ships directly from manufacturer (Galileo) to customer',
+  gdc_inventory: 'Ships from GDC warehouse inventory (Nebraska, Kansas, etc.)',
+  platinum_dealer_inventory:
+    'Fulfilled from platinum dealer existing stock',
+  platinum_dealer_fulfillment:
+    'Platinum dealer procures and ships on our behalf',
+};
+
+// Legacy type for backward compatibility (will be removed in future)
+/** @deprecated Use FulfillmentSource instead */
+export type ProductSource = 'direct' | 'gdc_inventory';
+
+/** @deprecated Use FULFILLMENT_SOURCES instead */
+export const PRODUCT_SOURCES: ProductSource[] = ['direct', 'gdc_inventory'];
+
+/** @deprecated Use FULFILLMENT_SOURCE_LABELS instead */
+export const PRODUCT_SOURCE_LABELS: Record<ProductSource, string> = {
+  direct: 'Direct',
+  gdc_inventory: 'GDC Inventory',
+};
+
+/** @deprecated Use FULFILLMENT_SOURCE_DESCRIPTIONS instead */
 export const PRODUCT_SOURCE_DESCRIPTIONS: Record<ProductSource, string> = {
-  direct: 'Ships from Galileo to customer',
-  warehouse: 'Ships from US warehouse',
+  direct: 'Ships from manufacturer to customer',
+  gdc_inventory: 'Ships from GDC warehouse',
 };
 
 // Statuses that allow editing
@@ -124,7 +161,6 @@ export interface SalesOrder {
   customerPoNumber: string | null;
   status: OrderStatus;
   creditStatus: OrderCreditStatus;
-  productSource: ProductSource;
   orderSeries: string | null; // GDC 1, GDC 2, GDC 3 - time-based order cycles
 
   // Billing Address
@@ -175,7 +211,8 @@ export interface SalesOrderItem {
   productId: string;
   sku: string;
   description: string | null;
-  quantity: number;
+  quantity: number; // Legacy field (kept for backward compatibility)
+  customerQty: number; // Customer's actual order quantity (NEVER changes)
   unitCode: string;
   unitPrice: number; // cents
   discountPercent: number;
@@ -190,6 +227,106 @@ export interface SalesOrderItem {
   updatedAt: Date;
   createdBy: string | null;
   updatedBy: string | null;
+}
+
+// ============================================
+// FULFILLMENT ALLOCATION TYPES
+// ============================================
+
+export type AllocationStatus =
+  | 'pending'
+  | 'allocated'
+  | 'partially_fulfilled'
+  | 'fulfilled'
+  | 'cancelled';
+
+export const ALLOCATION_STATUSES: AllocationStatus[] = [
+  'pending',
+  'allocated',
+  'partially_fulfilled',
+  'fulfilled',
+  'cancelled',
+];
+
+export const ALLOCATION_STATUS_LABELS: Record<AllocationStatus, string> = {
+  pending: 'Pending',
+  allocated: 'Allocated',
+  partially_fulfilled: 'Partially Fulfilled',
+  fulfilled: 'Fulfilled',
+  cancelled: 'Cancelled',
+};
+
+export const ALLOCATION_STATUS_COLORS: Record<AllocationStatus, string> = {
+  pending: 'bg-amber-100 text-amber-800 border border-amber-200',
+  allocated: 'bg-blue-100 text-blue-800 border border-blue-200',
+  partially_fulfilled: 'bg-cyan-100 text-cyan-800 border border-cyan-200',
+  fulfilled: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
+  cancelled: 'bg-red-100 text-red-800 border border-red-200',
+};
+
+/**
+ * Fulfillment Allocation entity from database
+ *
+ * Tracks how each sales order item is fulfilled across multiple sources.
+ * One sales_order_item can have multiple allocations (multi-source fulfillment).
+ *
+ * Example: Customer orders 150 tires
+ *   - Allocation 1: 72 from manufacturer (direct)
+ *   - Allocation 2: 30 from GDC warehouse (gdc_inventory)
+ *   - Allocation 3: 20 from dealer stock (platinum_dealer_inventory)
+ *   - Allocation 4: 28 from dealer fulfillment (platinum_dealer_fulfillment)
+ */
+export interface FulfillmentAllocation {
+  id: string;
+  salesOrderItemId: string;
+
+  // Fulfillment Source
+  fulfillmentSource: FulfillmentSource;
+
+  // Allocation Quantity
+  quantity: number;
+
+  // Status
+  status: AllocationStatus;
+
+  // Location (conditional - required for gdc_inventory)
+  locationId: string | null;
+
+  // Platinum Dealer (conditional - required for dealer sources)
+  platinumDealerId: string | null;
+  dealerLocationId: string | null;
+
+  // Container/Procurement (only for manufacturer/supplier - direct)
+  purchaseOrderId: string | null;
+  containerId: string | null;
+  containerQty: number; // Full container quantity (e.g., 72 tires)
+  containerRemaining: number; // Remaining after this allocation
+
+  // Metadata
+  notes: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string | null;
+}
+
+/**
+ * Fulfillment Allocation with related data
+ */
+export interface FulfillmentAllocationWithDetails
+  extends FulfillmentAllocation {
+  location?: LocationSummary;
+  platinumDealer?: PlatinumDealerSummary;
+  dealerLocation?: PlatinumDealerLocationSummary;
+  purchaseOrder?: PurchaseOrderSummary;
+}
+
+/**
+ * Sales Order Item with allocations
+ */
+export interface SalesOrderItemWithAllocations extends SalesOrderItem {
+  allocations: FulfillmentAllocationWithDetails[];
+  totalAllocated: number; // Sum of all allocation quantities
+  remainingToAllocate: number; // customerQty - totalAllocated
 }
 
 /**
@@ -237,6 +374,27 @@ export interface LocationSummary {
   name: string;
 }
 
+export interface PlatinumDealerSummary {
+  id: string;
+  dealerName: string;
+  code: string | null;
+}
+
+export interface PlatinumDealerLocationSummary {
+  id: string;
+  dealerId: string;
+  locationName: string;
+  locationCode: string | null;
+  addressCity: string | null;
+  addressState: string | null;
+}
+
+export interface PurchaseOrderSummary {
+  id: string;
+  poNumber: string;
+  status: string;
+}
+
 // ============================================
 // DTOs (Data Transfer Objects)
 // ============================================
@@ -254,6 +412,7 @@ export interface CreateSalesOrderItemDTO {
   sku: string;
   description: string | null;
   quantity: number;
+  customerQty?: number; // Customer's actual order quantity (defaults to quantity if not provided)
   unitCode: string;
   unitPrice: number; // cents
   discountPercent: number;
@@ -284,7 +443,6 @@ export interface CreateSalesOrderDTO {
   currencyCode?: string;
   customerPoNumber?: string | null;
   status?: OrderStatus;
-  productSource?: ProductSource;
   orderSeries?: string | null; // GDC 1, GDC 2, GDC 3
   billingAddress: AddressDTO;
   shippingAddress: AddressDTO;
@@ -302,7 +460,6 @@ export interface UpdateSalesOrderDTO {
   warehouseId?: string | null;
   currencyCode?: string;
   customerPoNumber?: string | null;
-  productSource?: ProductSource;
   orderSeries?: string | null; // GDC 1, GDC 2, GDC 3
   billingAddress?: AddressDTO;
   shippingAddress?: AddressDTO;
@@ -340,7 +497,6 @@ export interface SalesOrderListItem {
   requestedDeliveryDate: string | null;
   status: OrderStatus;
   creditStatus: OrderCreditStatus;
-  productSource: ProductSource;
   orderSeries?: string | null; // GDC 1, GDC 2, GDC 3 (optional)
   grandTotal: number; // cents
   currencyCode: string;
@@ -525,7 +681,6 @@ export interface SalesOrderFormData {
   currencyId?: string;
   customerPoNumber?: string;
   status?: OrderStatus;
-  productSource?: ProductSource;
   orderSeries?: string; // GDC 1, GDC 2, GDC 3
 
   billingAddress: Address;
@@ -598,7 +753,6 @@ export interface SalesOrdersTableProps {
   onDelete?: (order: SalesOrderListItem) => void;
   onConfirm?: (order: SalesOrderListItem) => void;
   onCancel?: (order: SalesOrderListItem) => void;
-  onProductSourceChange?: (orderId: string, newSource: ProductSource) => void;
   toolbarContent?: React.ReactNode;
   // Server-side pagination
   pagination?: {

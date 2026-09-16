@@ -36,7 +36,6 @@ function salesOrderToAuditData(order: SalesOrder | SalesOrderWithItems): Record<
     discountTotal: order.discountTotal,
     taxTotal: order.taxTotal,
     grandTotal: order.grandTotal,
-    productSource: order.productSource,
     requestedDeliveryDate: order.requestedDeliveryDate,
   };
 }

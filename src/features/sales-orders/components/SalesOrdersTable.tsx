@@ -29,7 +29,6 @@ export function SalesOrdersTable({
   onDelete,
   onConfirm,
   onCancel,
-  onProductSourceChange,
   toolbarContent,
   pagination,
 }: SalesOrdersTableProps) {
@@ -45,9 +44,8 @@ export function SalesOrdersTable({
         onDelete,
         onConfirm,
         onCancel,
-        onProductSourceChange,
       }),
-    [onView, onEdit, onDelete, onConfirm, onCancel, onProductSourceChange, onRowClick]
+    [onView, onEdit, onDelete, onConfirm, onCancel, onRowClick]
   );
 
   // ----------------------------------------
