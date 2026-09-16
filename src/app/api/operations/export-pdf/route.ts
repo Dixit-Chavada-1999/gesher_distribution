@@ -310,19 +310,25 @@ async function generatePDF(data: OperationsData): Promise<ArrayBuffer> {
   // SKU Table - inside the box
   autoTable(doc, {
     startY: currentY + 16,
-    head: [['Product/SKU', 'Supplier', 'GDC 1', 'Combined', 'Share']],
+    head: [['Product/SKU', 'Supplier', 'GDC Inv', 'Combined', 'Share']],
     body: [
-      ...data.skuBreakdown.map(sku => [
-        (sku.skuName || sku.sku).substring(0, 22),
-        formatNumber(sku.supplierOutstandingQty),
-        formatNumber(sku.gdc1AvailableInventory),
-        formatNumber(sku.combinedQty),
-        formatPercent(sku.shareOfCombined),
-      ]),
+      ...data.skuBreakdown.map(sku => {
+        // Calculate total GDC inventory across all series
+        const gdcTotal = Object.values(sku.gdcInventory).reduce((sum, qty) => sum + qty, 0);
+        return [
+          (sku.skuName || sku.sku).substring(0, 22),
+          formatNumber(sku.supplierOutstandingQty),
+          formatNumber(gdcTotal),
+          formatNumber(sku.combinedQty),
+          formatPercent(sku.shareOfCombined),
+        ];
+      }),
       [
         'Total',
         formatNumber(data.skuBreakdown.reduce((sum, s) => sum + s.supplierOutstandingQty, 0)),
-        formatNumber(data.skuBreakdown.reduce((sum, s) => sum + s.gdc1AvailableInventory, 0)),
+        formatNumber(data.skuBreakdown.reduce((sum, s) => {
+          return sum + Object.values(s.gdcInventory).reduce((gdcSum, qty) => gdcSum + qty, 0);
+        }, 0)),
         formatNumber(skuTotal),
         '100%',
       ],

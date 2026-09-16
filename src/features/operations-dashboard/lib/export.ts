@@ -189,15 +189,24 @@ export function exportImmediateAttention(data: ImmediateAttentionItem[]): void {
  * Export SKU Breakdown to CSV
  */
 export function exportSKUBreakdown(data: SKUBreakdown[]): void {
-  const headers: { key: keyof SKUBreakdown; label: string }[] = [
+  // Transform data to include calculated GDC total
+  const transformedData = data.map((sku) => ({
+    skuName: sku.skuName,
+    supplierOutstandingQty: sku.supplierOutstandingQty,
+    gdcTotal: Object.values(sku.gdcInventory).reduce((sum, qty) => sum + qty, 0),
+    combinedQty: sku.combinedQty,
+    shareOfCombined: sku.shareOfCombined,
+  }));
+
+  const headers: { key: keyof typeof transformedData[0]; label: string }[] = [
     { key: 'skuName', label: 'SKU' },
     { key: 'supplierOutstandingQty', label: 'Supplier Outstanding' },
-    { key: 'gdc1AvailableInventory', label: 'GDC 1 Available' },
+    { key: 'gdcTotal', label: 'GDC Total Available' },
     { key: 'combinedQty', label: 'Combined Qty' },
     { key: 'shareOfCombined', label: 'Share %' },
   ];
 
-  const csv = toCSV(data as unknown as Record<string, unknown>[], headers as { key: string; label: string }[]);
+  const csv = toCSV(transformedData as unknown as Record<string, unknown>[], headers as { key: string; label: string }[]);
   const date = new Date().toISOString().split('T')[0];
   downloadCSV(csv, `sku-breakdown-${date}.csv`);
 }

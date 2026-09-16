@@ -23,6 +23,10 @@ import {
   type MultiSourceAllocationRequest,
 } from './allocation-validation.service';
 import { db } from '@/shared/lib/supabase/database';
+import {
+  logInventoryMovement,
+  logDealerInventoryMovement,
+} from '@/features/inventory/services/inventory-movement.service';
 
 // ============================================
 // TYPE DEFINITIONS
@@ -605,6 +609,16 @@ async function allocateInventoryForAllocation(params: {
         return { success: false, error: updateError.message };
       }
 
+      // Log inventory movement
+      await logInventoryMovement({
+        productId: params.productId,
+        locationId: params.locationId,
+        movementType: 'allocate',
+        quantity: -params.quantity, // Negative = outbound/reserved
+        referenceType: 'fulfillment_allocation',
+        notes: `Reserved ${params.quantity} units for allocation`,
+      });
+
       return { success: true };
     } else if (params.fulfillmentSource === 'platinum_dealer_inventory') {
       if (!params.dealerLocationId) {
@@ -623,6 +637,16 @@ async function allocateInventoryForAllocation(params: {
       if (!success) {
         return { success: false, error: error?.message };
       }
+
+      // Log dealer inventory movement
+      await logDealerInventoryMovement({
+        productId: params.productId,
+        dealerLocationId: params.dealerLocationId,
+        movementType: 'allocate',
+        quantity: -params.quantity, // Negative = reserved
+        referenceType: 'fulfillment_allocation',
+        notes: `Reserved ${params.quantity} units from dealer inventory`,
+      });
 
       return { success: true };
     }
@@ -676,6 +700,16 @@ async function deallocateInventoryForAllocation(params: {
         return { success: false, error: updateError.message };
       }
 
+      // Log inventory movement
+      await logInventoryMovement({
+        productId: params.productId,
+        locationId: params.locationId,
+        movementType: 'deallocate',
+        quantity: +params.quantity, // Positive = incoming/released
+        referenceType: 'fulfillment_allocation',
+        notes: `Released ${params.quantity} units - allocation cancelled/updated`,
+      });
+
       return { success: true };
     } else if (params.fulfillmentSource === 'platinum_dealer_inventory') {
       if (!params.dealerLocationId) {
@@ -694,6 +728,16 @@ async function deallocateInventoryForAllocation(params: {
       if (!success) {
         return { success: false, error: error?.message };
       }
+
+      // Log dealer inventory movement
+      await logDealerInventoryMovement({
+        productId: params.productId,
+        dealerLocationId: params.dealerLocationId,
+        movementType: 'deallocate',
+        quantity: +params.quantity, // Positive = released
+        referenceType: 'fulfillment_allocation',
+        notes: `Released ${params.quantity} units from dealer - allocation cancelled/updated`,
+      });
 
       return { success: true };
     }
@@ -750,6 +794,16 @@ async function shipInventoryForAllocation(params: {
         return { success: false, error: updateError.message };
       }
 
+      // Log inventory movement
+      await logInventoryMovement({
+        productId: params.productId,
+        locationId: params.locationId,
+        movementType: 'ship',
+        quantity: -params.quantity, // Negative = shipped out
+        referenceType: 'fulfillment_allocation',
+        notes: `Shipped ${params.quantity} units from warehouse`,
+      });
+
       return { success: true };
     } else if (params.fulfillmentSource === 'platinum_dealer_inventory') {
       if (!params.dealerLocationId) {
@@ -783,6 +837,16 @@ async function shipInventoryForAllocation(params: {
       if (updateError) {
         return { success: false, error: updateError.message };
       }
+
+      // Log dealer inventory movement
+      await logDealerInventoryMovement({
+        productId: params.productId,
+        dealerLocationId: params.dealerLocationId,
+        movementType: 'ship',
+        quantity: -params.quantity, // Negative = shipped out
+        referenceType: 'fulfillment_allocation',
+        notes: `Shipped ${params.quantity} units from dealer inventory`,
+      });
 
       return { success: true };
     }

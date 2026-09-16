@@ -28,7 +28,7 @@ export interface SKUBreakdown {
   sku: string;
   skuName: string;
   supplierOutstandingQty: number;
-  gdc1AvailableInventory: number;
+  gdcInventory: Record<string, number>; // { 'GDC 0': 100, 'GDC 1': 200, ... }
   combinedQty: number;
   shareOfCombined: number; // percentage
 }

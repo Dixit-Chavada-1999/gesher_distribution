@@ -193,14 +193,14 @@ function createExecutiveSummarySheet(
   // Section header
   mergeAndStyle(
     ws, currentRow, 1, currentRow, 5,
-    'SKU QUANTITY BREAKDOWN - GALILEO + GDC 1 INVENTORY',
+    'SKU QUANTITY BREAKDOWN - SUPPLIER + GDC INVENTORY',
     FONTS.sectionHeader,
     COLORS.green
   );
   ws.getRow(currentRow).height = 22;
   currentRow++;
 
-  const skuHeaders = ['SKU', 'Galileo Outstanding Qty', 'GDC 1 Available Inventory', 'Combined Qty', 'Share of Combined'];
+  const skuHeaders = ['SKU', 'Supplier Outstanding Qty', 'GDC Available Inventory', 'Combined Qty', 'Share of Combined'];
   skuHeaders.forEach((header, index) => {
     const cell = ws.getCell(currentRow, index + 1);
     cell.value = header;
@@ -215,10 +215,12 @@ function createExecutiveSummarySheet(
   const skuDataStartRow = currentRow;
   data.skuBreakdown.forEach((sku, index) => {
     const rowColor = index % 2 === 0 ? COLORS.white : COLORS.lightGray;
+    // Calculate total GDC inventory across all series
+    const gdcTotal = Object.values(sku.gdcInventory).reduce((sum, qty) => sum + qty, 0);
     const row = [
       sku.skuName || sku.sku,
       sku.supplierOutstandingQty,
-      sku.gdc1AvailableInventory,
+      gdcTotal,
       sku.combinedQty,
       formatPercent(sku.shareOfCombined),
     ];

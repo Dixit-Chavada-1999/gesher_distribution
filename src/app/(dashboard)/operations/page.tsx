@@ -306,7 +306,7 @@ export default function OperationsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 p-6 max-w-[1920px] mx-auto">
       {/* Error Message */}
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
@@ -374,11 +374,11 @@ export default function OperationsPage() {
           />
 
           {/* Two column layout for breakdown and status */}
-          <div className="grid gap-6 lg:grid-cols-2">
-            {/* SKU Breakdown */}
+          <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
+            {/* SKU Breakdown - Wider column for better spacing */}
             <SKUBreakdown data={data.skuBreakdown} />
 
-            {/* Shipment Status Mix */}
+            {/* Shipment Status Mix - Narrower column */}
             <ShipmentStatusMix data={data.shipmentStatusMix} />
           </div>
 

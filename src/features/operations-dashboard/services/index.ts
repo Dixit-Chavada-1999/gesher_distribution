@@ -46,7 +46,7 @@ export async function getOperationsData(filters?: OperationsFilters): Promise<Op
   const results = await Promise.allSettled([
     getOperationsStats(filters),           // 0
     getSKUBreakdown(filters),              // 1
-    getCustomerCommitments(undefined, filters), // 2
+    getCustomerCommitments(filters),       // 2
     getShipmentStatusMix(filters),         // 3
     getImmediateAttention(filters),        // 4
     getGDC1Inventory(filters),             // 5
