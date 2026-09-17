@@ -186,7 +186,7 @@ export function SalesOrdersPageContent() {
     setIsEditDrawerOpen(false);
     setSelectedOrderId(null);
     refetchOrders();
-    toast.success('Order updated successfully');
+    // Note: Toast is shown by EditSalesOrderDrawer, not here (avoid duplicate)
   }, [refetchOrders]);
 
   // Delete

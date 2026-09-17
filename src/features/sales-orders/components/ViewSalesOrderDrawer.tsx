@@ -220,6 +220,7 @@ const [isReleasingHold, setIsReleasingHold] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showPickTicketDialog, setShowPickTicketDialog] = useState(false);
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
   const [warehouses, setWarehouses] = useState<Array<{ id: string; code: string; name: string }>>([]);
@@ -429,19 +430,45 @@ const handleReleaseHold = async () => {
   };
 
   // Check Order Series before opening confirm dialog
-  const handleConfirmClick = () => {
+  const handleConfirmClick = async () => {
     if (!order) {
       return;
     }
 
-    // Validate Order Series is set BEFORE opening modal
-    if (!order.orderSeries || order.orderSeries.trim() === '') {
-      toast.error('Order Series is required. Please set the Order Series before confirming.');
-      return;
-    }
+    setIsValidating(true);
 
-    // Validation passed - open confirm dialog
-    setShowConfirmDialog(true);
+    try {
+      // Validation 1: Check Order Series is set
+      if (!order.orderSeries || order.orderSeries.trim() === '') {
+        toast.error('Order Series is required. Please set the Order Series before confirming.');
+        return;
+      }
+
+      // Validation 2: Check all items are fully allocated
+      const { validateOrderFullyAllocatedAction } = await import('@/features/sales-orders/actions/fulfillment-allocation.actions');
+      const validationResult = await validateOrderFullyAllocatedAction(order.id);
+
+      if (!validationResult.success) {
+        toast.error(validationResult.error || 'Failed to validate allocations');
+        return;
+      }
+
+      if (!validationResult.data?.fullyAllocated) {
+        const unallocatedItems = validationResult.data?.unallocatedItems || [];
+
+        // Simple error message
+        toast.error(
+          `Cannot confirm order. ${unallocatedItems.length} item(s) need allocation. Please allocate fulfillment sources before confirming.`,
+          { duration: 5000 }
+        );
+        return;
+      }
+
+      // All validations passed - open confirm dialog
+      setShowConfirmDialog(true);
+    } finally {
+      setIsValidating(false);
+    }
   };
 
   const handleConfirm = () => {
@@ -912,7 +939,7 @@ const handleReleaseHold = async () => {
                 </Section>
 
                 {/* Fulfillment Allocations */}
-                {order.status !== 'draft' && order.status !== 'cancelled' && order.items.length > 0 && (
+                {order.status !== 'cancelled' && order.items.length > 0 && (
                   <Section title="Fulfillment Allocations">
                     <Tabs defaultValue={order.items[0]?.id || 'none'} className="w-full">
                       <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${order.items.filter(item => item.itemType !== 'service' && item.itemType !== 'non_inventory').length}, 1fr)` }}>
@@ -976,7 +1003,7 @@ const handleReleaseHold = async () => {
                 {/* Notes */}
                 {(order.customerNotes || order.internalNotes) && (
                   <Section title="Notes">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-4">
                       {order.customerNotes && (
                         <div className="space-y-1.5">
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Customer Notes</p>
@@ -1080,9 +1107,10 @@ const handleReleaseHold = async () => {
                   </Button>
                 )}
                 {canConfirm && (
-                  <Button size="sm" onClick={handleConfirmClick} disabled={isPending}>
-                    <CheckCircle className="mr-2 h-4 w-4" />
-                    Confirm Order
+                  <Button size="sm" onClick={handleConfirmClick} disabled={isPending || isValidating}>
+                    {isValidating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {!isValidating && <CheckCircle className="mr-2 h-4 w-4" />}
+                    {isValidating ? 'Validating...' : 'Confirm Order'}
                   </Button>
                 )}
               </div>

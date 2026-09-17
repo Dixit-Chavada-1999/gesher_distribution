@@ -249,19 +249,31 @@ export function formToCreateDTO(form: SalesOrderFormInput) {
       country: form.shippingAddress.country || null,
     },
     shippingMethod: form.shippingMethodId || null,
-    items: form.items.map((item) => ({
-      productId: item.productId,
-      sku: item.sku,
-      description: item.description || null,
-      quantity: Number(item.quantity),
-      unitCode: item.unitId || 'EA',
-      unitPrice: Math.round(Number(item.unitPrice) * 100), // dollars to cents
-      discountPercent: Number(item.discountPercent),
-      taxRate: getTaxRateFromId(item.taxRateId),
-      warehouseId: item.warehouseId || null,
-      batchNumber: item.batchNumber || null,
-      serialNumber: item.serialNumber || null,
-    })),
+    items: (() => {
+      const allItems = form.items || [];
+      const validItems = allItems.filter((item) => item.productId && item.productId.trim() !== '');
+
+      console.log('[formToCreateDTO] Items filtering:', {
+        totalItems: allItems.length,
+        validItems: validItems.length,
+        removedEmptyItems: allItems.length - validItems.length,
+      });
+
+      return validItems.map((item) => ({
+        id: item.id, // Include ID for existing items (undefined for new items)
+        productId: item.productId,
+        sku: item.sku,
+        description: item.description || null,
+        quantity: Number(item.quantity),
+        unitCode: item.unitId || 'EA',
+        unitPrice: Math.round(Number(item.unitPrice) * 100), // dollars to cents
+        discountPercent: Number(item.discountPercent),
+        taxRate: getTaxRateFromId(item.taxRateId),
+        warehouseId: item.warehouseId || null,
+        batchNumber: item.batchNumber || null,
+        serialNumber: item.serialNumber || null,
+      }));
+    })(),
     customerNotes: form.customerNotes || null,
     internalNotes: form.internalNotes || null,
   };

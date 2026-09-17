@@ -838,49 +838,143 @@ class SalesOrderRepositoryImpl {
     items: CreateSalesOrderItemDTO[],
     userId?: string
   ): Promise<SalesOrderItem[]> {
-    // Delete existing items
-    const { error: deleteError } = await db
-      .from('sales_order_items')
-      .delete()
-      .eq('sales_order_id', orderId);
+    // SMART UPDATE STRATEGY (not delete-all)
+    // This prevents foreign key violations when pick tickets exist
 
-    if (deleteError) {
-      throw new Error(`Failed to delete existing items: ${deleteError.message}`);
+    console.log('[replaceItems] Starting smart update. Items received:', {
+      count: items.length,
+      itemsWithId: items.filter((i: any) => i.id).length,
+      itemsWithoutId: items.filter((i: any) => !i.id).length,
+    });
+
+    // Step 1: Get existing items
+    const { data: existingItems, error: fetchError } = await db
+      .from('sales_order_items')
+      .select('*')
+      .eq('sales_order_id', orderId)
+      .order('sort_order');
+
+    if (fetchError) {
+      throw new Error(`Failed to fetch existing items: ${fetchError.message}`);
     }
 
-    // Insert new items
-    const itemsToInsert = items.map((item, index) => ({
-      sales_order_id: orderId,
-      product_id: item.productId,
-      sku: item.sku,
-      description: item.description,
-      quantity: item.quantity,
-      unit_code: item.unitCode,
-      unit_price: item.unitPrice,
-      discount_percent: item.discountPercent,
-      tax_rate: item.taxRate,
-      line_total: calculateLineTotal(item.quantity, item.unitPrice, item.discountPercent),
-      warehouse_id: item.warehouseId || null,
-      batch_number: item.batchNumber || null,
-      serial_number: item.serialNumber || null,
-      sort_order: index,
-      created_by: userId || null,
-      updated_by: userId || null,
-    }));
+    console.log('[replaceItems] Existing items in DB:', existingItems?.length || 0);
 
-    const { data, error } = await db
-      .from('sales_order_items')
-      .insert(itemsToInsert)
-      .select();
+    const existingItemsMap = new Map(
+      (existingItems || []).map((item) => [item.id, item])
+    );
 
-    if (error) {
-      throw new Error(`Failed to insert order items: ${error.message}`);
+    // Step 2: Delete items that are no longer in the list
+    const newItemIds = items
+      .map((item: any) => item.id)
+      .filter((id: string | undefined) => id);
+
+    const itemsToDelete = (existingItems || []).filter(
+      (item) => !newItemIds.includes(item.id)
+    );
+
+    if (itemsToDelete.length > 0) {
+      console.log(`[replaceItems] Attempting to delete ${itemsToDelete.length} items`);
+
+      for (const existingItem of itemsToDelete) {
+        const { error: deleteError } = await db
+          .from('sales_order_items')
+          .delete()
+          .eq('id', existingItem.id);
+
+        if (deleteError) {
+          // Check if it's a foreign key constraint error (pick ticket exists)
+          if (deleteError.message.includes('pick_ticket_items')) {
+            throw new Error(
+              `Cannot delete item "${existingItem.sku}" - Pick ticket already created for this item. ` +
+              `Please cancel the pick ticket first before removing this item.`
+            );
+          } else {
+            throw new Error(`Failed to delete item: ${deleteError.message}`);
+          }
+        }
+
+        console.log(`[replaceItems] ✅ Deleted item ${existingItem.id}`);
+      }
     }
+
+    // Step 3: Update existing items and insert new ones
+    const updatedItems: any[] = [];
+
+    for (let index = 0; index < items.length; index++) {
+      const item: any = items[index];
+      const itemData = {
+        product_id: item.productId,
+        sku: item.sku,
+        description: item.description,
+        quantity: item.quantity,
+        customer_qty: item.customerQty || item.quantity,
+        unit_code: item.unitCode,
+        unit_price: item.unitPrice,
+        discount_percent: item.discountPercent,
+        tax_rate: item.taxRate,
+        line_total: calculateLineTotal(item.quantity, item.unitPrice, item.discountPercent),
+        warehouse_id: item.warehouseId || null,
+        batch_number: item.batchNumber || null,
+        serial_number: item.serialNumber || null,
+        sort_order: index,
+        updated_by: userId || null,
+      };
+
+      // CRITICAL: Check if item exists in DB, not just if it has an ID
+      // Form might assign temporary IDs (like "item-123...") to new items
+      // Only treat as existing if: 1) has ID, 2) ID is a valid UUID, 3) exists in DB
+      const isValidUUID = item.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id);
+      const existsInDB = isValidUUID && existingItemsMap.has(item.id);
+
+      if (existsInDB) {
+        // UPDATE existing item
+        console.log(`[replaceItems] Updating existing item ${item.id}`);
+
+        const { data: updated, error: updateError } = await db
+          .from('sales_order_items')
+          .update(itemData)
+          .eq('id', item.id)
+          .select()
+          .single();
+
+        if (updateError) {
+          throw new Error(`Failed to update item ${item.id}: ${updateError.message}`);
+        }
+
+        updatedItems.push(updated);
+      } else {
+        // INSERT new item
+        console.log(`[replaceItems] Inserting new item (product: ${item.productId})`);
+
+        const { data: inserted, error: insertError } = await db
+          .from('sales_order_items')
+          .insert({
+            ...itemData,
+            sales_order_id: orderId,
+            created_by: userId || null,
+          })
+          .select()
+          .single();
+
+        if (insertError) {
+          throw new Error(`Failed to insert new item: ${insertError.message}`);
+        }
+
+        updatedItems.push(inserted);
+      }
+    }
+
+    console.log('[replaceItems] ✅ Smart update complete:', {
+      totalItems: updatedItems.length,
+      updated: items.filter((i: any) => i.id).length,
+      inserted: items.filter((i: any) => !i.id).length,
+    });
 
     // Recalculate order totals
     await this.recalculateTotals(orderId, userId);
 
-    return (data || []).map((row) => this.mapToSalesOrderItem(row as DbSalesOrderItem));
+    return updatedItems.map((row) => this.mapToSalesOrderItem(row as DbSalesOrderItem));
   }
 
   // ==========================================

@@ -301,11 +301,11 @@ export const salesOrderService = {
         };
       }
 
-      // Check if order can be edited (only draft and pending)
-      if (!['draft', 'pending'].includes(existing.status)) {
+      // Check if order can be edited (draft, pending, confirmed, processing)
+      if (['cancelled', 'shipped', 'delivered'].includes(existing.status)) {
         return {
           success: false,
-          error: `Cannot edit order in ${existing.status} status`,
+          error: `Cannot edit order in ${existing.status} status. Order has been ${existing.status}.`,
         };
       }
 
@@ -405,11 +405,11 @@ export const salesOrderService = {
         };
       }
 
-      // Check if order can be edited
-      if (!['draft', 'pending'].includes(existing.status)) {
+      // Check if order can be edited (draft, pending, confirmed, processing)
+      if (['cancelled', 'shipped', 'delivered'].includes(existing.status)) {
         return {
           success: false,
-          error: `Cannot edit items for order in ${existing.status} status`,
+          error: `Cannot edit items for order in ${existing.status} status. Order has been ${existing.status}.`,
         };
       }
 

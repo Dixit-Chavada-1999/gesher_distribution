@@ -63,6 +63,7 @@ interface OrderItemRowProps {
   taxRates: OrderItemsTableProps['taxRates'];
   onItemChange: (itemId: string, field: string, value: string | number) => void;
   onRemove: (itemId: string) => void;
+  mode?: 'create' | 'edit';
 }
 
 // ============================================
@@ -76,6 +77,7 @@ const OrderItemRow = memo(function OrderItemRow({
   taxRates,
   onItemChange,
   onRemove,
+  mode = 'create',
 }: OrderItemRowProps) {
   // Item ID is required for all handlers
   const itemId = item.id || '';
@@ -202,7 +204,7 @@ const OrderItemRow = memo(function OrderItemRow({
               onChange={handleQuantityChange}
               className="h-9 text-right w-full"
             />
-            {containerWarning && (
+            {containerWarning && mode === 'create' && (
               <Alert variant="destructive" className="p-2">
                 <AlertTriangle className="h-3 w-3" />
                 <AlertDescription className="text-xs ml-1">
@@ -314,6 +316,7 @@ function OrderItemsTableComponent({
   onItemsChange,
   onProductSelect,
   columnConfig: _columnConfig = {},
+  mode = 'create',
 }: OrderItemsTableProps) {
   // ----------------------------------------
   // MEMOIZED HANDLERS
@@ -452,6 +455,7 @@ function OrderItemsTableComponent({
                   taxRates={taxRates}
                   onItemChange={handleItemChange}
                   onRemove={handleRemoveLine}
+                  mode={mode}
                 />
               ))
             )}

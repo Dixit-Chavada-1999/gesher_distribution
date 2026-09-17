@@ -88,9 +88,9 @@ export function EditSalesOrderDrawer({
     try {
       const result = await getSalesOrder(orderId);
       if (result.success && result.data) {
-        // Check if order can be edited
-        if (!['draft', 'pending'].includes(result.data.status)) {
-          setError(`Cannot edit order in "${result.data.status}" status. Only draft and pending orders can be edited.`);
+        // Check if order can be edited - allow draft, pending, confirmed, and processing
+        if (['cancelled', 'shipped', 'delivered'].includes(result.data.status)) {
+          setError(`Cannot edit order in "${result.data.status}" status. Order has been ${result.data.status}.`);
           setOrder(null);
         } else {
           setOrder(result.data);
@@ -121,6 +121,11 @@ export function EditSalesOrderDrawer({
     setIsSubmitting(true);
 
     try {
+      console.log('[EditSalesOrderDrawer] Form data received:', {
+        itemsCount: formData.items?.length || 0,
+        items: formData.items,
+      });
+
       // Convert form data to DTO
       const dto = formToCreateDTO(formData);
 
@@ -129,16 +134,35 @@ export function EditSalesOrderDrawer({
         requestedDeliveryDate: dto.requestedDeliveryDate,
         orderSeries: dto.orderSeries,
         itemsCount: dto.items.length,
+        items: dto.items,
       });
 
       // Update order header AND items
       const result = await updateSalesOrderFromDTO(orderId, dto);
 
       if (result.success && result.data) {
-        toast.success(`Order ${result.data.orderNumber} updated successfully`);
-        onSuccess?.(result.data);
+        console.log('[EditSalesOrderDrawer] ✅ Update successful. Returned data:', {
+          orderNumber: result.data.orderNumber,
+          itemsCount: result.data.items?.length || 0,
+          items: result.data.items,
+        });
+
+        // CRITICAL: Close drawer IMMEDIATELY (synchronous, no waiting)
+        console.log('[EditSalesOrderDrawer] Closing drawer immediately...');
         onClose();
+
+        // Run background tasks AFTER drawer close (async, non-blocking)
+        // Use setTimeout to ensure drawer close animation starts first
+        setTimeout(() => {
+          console.log('[EditSalesOrderDrawer] Running background tasks...');
+          if (result.data) {
+            toast.success(`Order ${result.data.orderNumber} updated successfully`);
+            onSuccess?.(result.data);
+          }
+          console.log('[EditSalesOrderDrawer] ✅ Background tasks complete');
+        }, 0);
       } else {
+        console.error('[EditSalesOrderDrawer] ❌ Update failed:', result.error);
         toast.error(result.error || 'Failed to update order');
       }
     } catch (error) {
@@ -256,6 +280,7 @@ export function EditSalesOrderDrawer({
                 initialData={initialFormData}
                 onSubmit={handleUpdate}
                 onCancel={handleCancel}
+                mode="edit"
               />
             ) : null}
           </div>

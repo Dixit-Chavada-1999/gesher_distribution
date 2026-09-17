@@ -524,3 +524,94 @@ export async function suggestAllocationsAction(params: {
     };
   }
 }
+
+// ============================================
+// VALIDATION
+// ============================================
+
+/**
+ * Validate if all items in a sales order are fully allocated
+ *
+ * Checks each item to ensure:
+ * - Total allocated quantity >= Customer quantity
+ * - No remaining quantity (fully allocated)
+ *
+ * Returns list of items with remaining quantities if any exist.
+ *
+ * @param salesOrderId - ID of the sales order to validate
+ * @returns Validation result with list of unallocated items
+ */
+export async function validateOrderFullyAllocatedAction(
+  salesOrderId: string
+): Promise<
+  ActionResult<{
+    fullyAllocated: boolean;
+    unallocatedItems: Array<{
+      itemId: string;
+      sku: string;
+      productName: string;
+      customerQty: number;
+      totalAllocated: number;
+      remainingQty: number;
+    }>;
+  }>
+> {
+  try {
+    // Get order with items
+    const { getSalesOrder } = await import('@/features/sales-orders/actions');
+    const orderResult = await getSalesOrder(salesOrderId);
+
+    if (!orderResult.success || !orderResult.data) {
+      return {
+        success: false,
+        error: 'Failed to load sales order',
+      };
+    }
+
+    const order = orderResult.data;
+    const unallocatedItems: Array<{
+      itemId: string;
+      sku: string;
+      productName: string;
+      customerQty: number;
+      totalAllocated: number;
+      remainingQty: number;
+    }> = [];
+
+    // Check each item
+    for (const item of order.items) {
+      // Skip service and non-inventory items (they don't need allocation)
+      if (item.itemType === 'service' || item.itemType === 'non_inventory') {
+        continue;
+      }
+
+      const allocationResult = await getAllocationsForItem(item.id);
+
+      if (!allocationResult.fullyAllocated) {
+        unallocatedItems.push({
+          itemId: item.id,
+          sku: item.sku,
+          productName: item.description || item.sku,
+          customerQty: allocationResult.customerQty,
+          totalAllocated: allocationResult.totalAllocated,
+          remainingQty: allocationResult.remainingToAllocate,
+        });
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        fullyAllocated: unallocatedItems.length === 0,
+        unallocatedItems,
+      },
+    };
+  } catch (error) {
+    console.error('Error in validateOrderFullyAllocatedAction:', error);
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : 'An unexpected error occurred',
+    };
+  }
+}

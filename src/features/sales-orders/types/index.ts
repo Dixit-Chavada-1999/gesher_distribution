@@ -408,6 +408,7 @@ export interface AddressDTO {
 }
 
 export interface CreateSalesOrderItemDTO {
+  id?: string; // Optional: for updating existing items (undefined for new items)
   productId: string;
   sku: string;
   description: string | null;
@@ -717,6 +718,7 @@ export interface OrderItemsTableProps {
   onItemsChange: (items: OrderItem[]) => void;
   onProductSelect?: (itemIndex: number, productId: string) => void;
   columnConfig?: OrderItemColumnConfig;
+  mode?: 'create' | 'edit';
 }
 
 export interface OrderSummaryCardsProps {
@@ -736,6 +738,7 @@ export interface SalesOrderFormProps {
   onSubmit?: (data: SalesOrderFormData) => void;
   onCancel?: () => void;
   onSaveDraft?: (data: SalesOrderFormData) => void;
+  mode?: 'create' | 'edit';
 }
 
 export interface CreateSalesOrderDrawerProps {
