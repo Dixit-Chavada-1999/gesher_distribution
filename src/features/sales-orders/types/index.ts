@@ -291,6 +291,8 @@ export interface FulfillmentAllocation {
 
   // Location (conditional - required for gdc_inventory)
   locationId: string | null;
+  assignedContactId: string | null; // Location contact for email/phone notifications
+  assignedUserId: string | null; // Warehouse worker (user) for pick ticket assignment
 
   // Platinum Dealer (conditional - required for dealer sources)
   platinumDealerId: string | null;
@@ -315,6 +317,7 @@ export interface FulfillmentAllocation {
 export interface FulfillmentAllocationWithDetails
   extends FulfillmentAllocation {
   location?: LocationSummary;
+  assignedContact?: LocationContactSummary;
   platinumDealer?: PlatinumDealerSummary;
   dealerLocation?: PlatinumDealerLocationSummary;
   purchaseOrder?: PurchaseOrderSummary;
@@ -372,6 +375,13 @@ export interface LocationSummary {
   id: string;
   locationCode: string;
   name: string;
+}
+
+export interface LocationContactSummary {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
 }
 
 export interface PlatinumDealerSummary {

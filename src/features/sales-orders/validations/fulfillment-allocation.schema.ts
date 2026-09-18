@@ -44,7 +44,8 @@ export const createFulfillmentAllocationBaseSchema = z.object({
 
 /**
  * Schema for GDC Inventory allocation
- * Requires: location_id
+ * Requires: location_id, assigned_contact_id
+ * Optional: assigned_user_id (warehouse worker for pick ticket assignment)
  */
 export const createGdcInventoryAllocationSchema =
   createFulfillmentAllocationBaseSchema.extend({
@@ -53,6 +54,15 @@ export const createGdcInventoryAllocationSchema =
       .string()
       .uuid('Invalid location ID')
       .describe('Required for GDC inventory source'),
+    assignedContactId: z
+      .string()
+      .uuid('Invalid contact ID')
+      .describe('Required - warehouse contact to receive email notification'),
+    assignedUserId: z
+      .string()
+      .uuid('Invalid user ID')
+      .optional()
+      .describe('Optional - warehouse worker for pick ticket assignment'),
   });
 
 /**
@@ -137,6 +147,8 @@ export const updateFulfillmentAllocationSchema = z.object({
     .optional(),
   status: allocationStatusSchema.optional(),
   locationId: z.string().uuid('Invalid location ID').optional(),
+  assignedContactId: z.string().uuid('Invalid contact ID').optional(),
+  assignedUserId: z.string().uuid('Invalid user ID').optional(),
   platinumDealerId: z.string().uuid('Invalid platinum dealer ID').optional(),
   dealerLocationId: z.string().uuid('Invalid dealer location ID').optional(),
   purchaseOrderId: z.string().uuid('Invalid purchase order ID').optional(),

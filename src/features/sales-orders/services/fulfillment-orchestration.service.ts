@@ -40,6 +40,7 @@ export interface CreateAllocationParams {
 
   // Conditional fields
   locationId?: string;
+  assignedContactId?: string;
   platinumDealerId?: string;
   dealerLocationId?: string;
   containerQty?: number;
@@ -122,6 +123,7 @@ export async function createSingleAllocation(
       fulfillmentSource: params.fulfillmentSource,
       quantity: params.quantity,
       locationId: params.locationId || null,
+      assignedContactId: params.assignedContactId || null,
       platinumDealerId: params.platinumDealerId || null,
       dealerLocationId: params.dealerLocationId || null,
       purchaseOrderId: params.purchaseOrderId || null,
@@ -913,6 +915,8 @@ export async function getAllocationsForItem(salesOrderItemId: string): Promise<{
       quantity: a.quantity,
       status: a.status,
       locationId: a.location_id,
+      assignedContactId: a.assigned_contact_id,
+      assignedUserId: a.assigned_user_id || null,
       locationName: a.location?.name || null,
       platinumDealerId: a.platinum_dealer_id,
       platinumDealerName: a.dealer?.dealer_name || null,

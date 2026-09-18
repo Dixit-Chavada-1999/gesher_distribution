@@ -7,7 +7,7 @@
  * In create mode, optionally creates a user account for portal access.
  */
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import { Building2, User, MapPin, Settings, Loader2, KeyRound } from 'lucide-react';
 
 import {
@@ -37,7 +37,7 @@ interface SupplierFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   supplier?: Supplier | null;
-  onSuccess?: () => void;
+  onSuccess?: (updatedSupplier?: Supplier) => void;
 }
 
 const initialFormData: CreateSupplierInput = {
@@ -73,9 +73,9 @@ export function SupplierFormDialog({
 
   const [formData, setFormData] = useState<CreateSupplierInput>(initialFormData);
 
-  // Reset form when dialog opens
-  const handleOpenChange = (isOpen: boolean) => {
-    if (isOpen && supplier) {
+  // Update form data when supplier changes or dialog opens
+  useEffect(() => {
+    if (open && supplier) {
       setFormData({
         name: supplier.name || '',
         legalName: supplier.legalName || '',
@@ -97,7 +97,16 @@ export function SupplierFormDialog({
         sendInviteEmail: true,
       });
       setErrors({});
-    } else if (isOpen && !supplier) {
+    } else if (open && !supplier) {
+      setFormData(initialFormData);
+      setErrors({});
+    }
+  }, [open, supplier]);
+
+  // Handle dialog close
+  const handleOpenChange = (isOpen: boolean) => {
+    if (!isOpen) {
+      // Reset form when closing
       setFormData(initialFormData);
       setErrors({});
     }
@@ -181,7 +190,8 @@ export function SupplierFormDialog({
           : `${formData.name} has been updated.`;
         toast.success(message);
         onOpenChange(false);
-        onSuccess?.();
+        // Pass the updated supplier data to the parent
+        onSuccess?.(result.data || undefined);
       }
     });
   };

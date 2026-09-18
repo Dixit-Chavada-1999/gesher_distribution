@@ -20,6 +20,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/shared/components/ui/table';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/shared/components/ui/tooltip';
 import { Plus, Edit2, Trash2, AlertCircle, CheckCircle, Info, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { FulfillmentAllocation, FulfillmentAllocationWithDetails, FulfillmentSource } from '@/features/sales-orders/types';
@@ -349,10 +355,78 @@ export function AllocationManager({
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {allocation.location?.name ||
-                          allocation.platinumDealer?.dealerName ||
-                          allocation.dealerLocation?.locationName ||
-                          '-'}
+                        <div className="flex items-center gap-2">
+                          <span>
+                            {allocation.location?.name ||
+                              allocation.platinumDealer?.dealerName ||
+                              allocation.dealerLocation?.locationName ||
+                              '-'}
+                          </span>
+                          {(allocation.location || allocation.platinumDealer || allocation.assignedContact || allocation.dealerLocation) && (
+                            <TooltipProvider>
+                              <Tooltip delayDuration={200}>
+                                <TooltipTrigger asChild>
+                                  <Info className="h-4 w-4 text-muted-foreground hover:text-foreground cursor-help" />
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-sm p-3" align="start">
+                                  <div className="space-y-2">
+                                    {/* GDC Inventory - Location & Contact */}
+                                    {allocation.location && (
+                                      <div className="space-y-1">
+                                        <div className="text-xs font-semibold text-primary">
+                                          📍 Warehouse Location
+                                        </div>
+                                        <div className="text-sm font-medium">{allocation.location.name}</div>
+                                        {allocation.location.locationCode && (
+                                          <div className="text-xs opacity-80">Code: {allocation.location.locationCode}</div>
+                                        )}
+
+                                        {allocation.assignedContact && (
+                                          <div className="mt-2 pt-2 border-t border-border/50">
+                                            <div className="text-xs font-semibold text-primary">👤 Assigned Contact</div>
+                                            <div className="text-sm font-medium mt-1">{allocation.assignedContact.name}</div>
+                                            <div className="text-xs opacity-80">{allocation.assignedContact.email}</div>
+                                            {allocation.assignedContact.phone && (
+                                              <div className="text-xs opacity-80">{allocation.assignedContact.phone}</div>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    {/* Platinum Dealer */}
+                                    {allocation.platinumDealer && (
+                                      <div className="space-y-1">
+                                        <div className="text-xs font-semibold text-primary">🏢 Dealer</div>
+                                        <div className="text-sm font-medium">{allocation.platinumDealer.dealerName}</div>
+                                        {allocation.platinumDealer.code && (
+                                          <div className="text-xs opacity-80">Code: {allocation.platinumDealer.code}</div>
+                                        )}
+
+                                        {allocation.dealerLocation && (
+                                          <div className="mt-2 pt-2 border-t border-border/50">
+                                            <div className="text-xs font-semibold text-primary">📍 Dealer Location</div>
+                                            <div className="text-sm font-medium mt-1">{allocation.dealerLocation.locationName}</div>
+                                            {allocation.dealerLocation.locationCode && (
+                                              <div className="text-xs opacity-80">Code: {allocation.dealerLocation.locationCode}</div>
+                                            )}
+                                            {(allocation.dealerLocation.addressCity || allocation.dealerLocation.addressState) && (
+                                              <div className="text-xs opacity-80">
+                                                {allocation.dealerLocation.addressCity}
+                                                {allocation.dealerLocation.addressCity && allocation.dealerLocation.addressState && ', '}
+                                                {allocation.dealerLocation.addressState}
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {allocation.containerQty ? (

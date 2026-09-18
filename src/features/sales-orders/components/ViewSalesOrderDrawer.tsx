@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useState, useTransition } from 'react';
-import { Loader2, MapPin, Package, FileText, Calendar, User, Building2, Truck, AlertTriangle, ShieldCheck, CheckCircle, XCircle, ClipboardList, Check, ChevronsUpDown, Receipt, Pencil, Layers } from 'lucide-react';
+import { Loader2, MapPin, Package, FileText, Calendar, User, Building2, Truck, AlertTriangle, ShieldCheck, CheckCircle, XCircle, ClipboardList, Receipt, Pencil, Layers } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { useAuthStore } from '@/shared/stores';
@@ -51,33 +51,17 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 
-import { getSalesOrder, releaseSalesOrderHold, confirmSalesOrder, cancelSalesOrder, getSalesOrderMasterData, updateSalesOrderSeries, regeneratePurchaseOrder } from '../actions';
+import { getSalesOrder, releaseSalesOrderHold, confirmSalesOrder, cancelSalesOrder, updateSalesOrderSeries } from '../actions';
 import { ORDER_SERIES } from '@/shared/lib/global-data';
-import { createPickTicketFromSalesOrder } from '@/features/pick-tickets/actions';
 import { createInvoiceFromSalesOrder } from '@/features/invoices/actions';
-import { getActiveLocationContacts } from '@/features/locations/actions/location-contacts';
-import { getUsers } from '@/features/users/actions';
-import type { LocationContact } from '@/features/locations/repositories/location-contacts.repository';
-import type { UserListItem } from '@/features/users/types';
 import type { SalesOrderWithItems } from '../types';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/shared/components/ui/popover';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandItem,
-  CommandList,
-} from '@/shared/components/ui/command';
 import {
   ORDER_STATUS_LABELS,
   ORDER_STATUS_COLORS,
   ORDER_CREDIT_STATUS_LABELS,
   ORDER_CREDIT_STATUS_COLORS,
 } from '../types';
+import { ConfirmAllocationsModal } from './ConfirmAllocationsModal';
 import { toast } from 'sonner';
 import { AllocationManager } from './AllocationManager';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
@@ -217,30 +201,16 @@ export function ViewSalesOrderDrawer({
 const [isReleasingHold, setIsReleasingHold] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showConfirmAllocationsModal, setShowConfirmAllocationsModal] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
-  const [showPickTicketDialog, setShowPickTicketDialog] = useState(false);
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
-  const [warehouses, setWarehouses] = useState<Array<{ id: string; code: string; name: string }>>([]);
-  const [locationContacts, setLocationContacts] = useState<LocationContact[]>([]);
-  const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
-  const [isLoadingContacts, setIsLoadingContacts] = useState(false);
-  const [contactsPopoverOpen, setContactsPopoverOpen] = useState(false);
-  const [specialInstructions, setSpecialInstructions] = useState('');
-  const [warehouseUsers, setWarehouseUsers] = useState<UserListItem[]>([]);
-  const [selectedAssignedTo, setSelectedAssignedTo] = useState<string>('');
   const [showPdfModal, setShowPdfModal] = useState(false);
 
   // Order Series inline edit
   const [isEditingOrderSeries, setIsEditingOrderSeries] = useState(false);
   const [isUpdatingOrderSeries, setIsUpdatingOrderSeries] = useState(false);
-
-  // Purchase Order regeneration
-  const [hasPurchaseOrder, setHasPurchaseOrder] = useState(false);
-  const [showCreatePODialog, setShowCreatePODialog] = useState(false);
-  const [isCreatingPO, setIsCreatingPO] = useState(false);
 
   // ----------------------------------------
   // EFFECTS
@@ -249,85 +219,12 @@ const [isReleasingHold, setIsReleasingHold] = useState(false);
   useEffect(() => {
     if (open && orderId) {
       fetchOrder();
-      fetchWarehouses();
     } else {
       setOrder(null);
       setError(null);
     }
   }, [open, orderId]);
 
-  // Fetch warehouses for pick ticket dialog
-  const fetchWarehouses = async () => {
-    try {
-      const result = await getSalesOrderMasterData();
-      if (result.success && result.data) {
-        setWarehouses(result.data.warehouses);
-      }
-    } catch {
-      console.error('Failed to fetch warehouses');
-    }
-  };
-
-  // Fetch location contacts and users when warehouse changes
-  useEffect(() => {
-    const fetchLocationContacts = async () => {
-      if (!selectedWarehouseId) {
-        setLocationContacts([]);
-        setSelectedContactIds([]);
-        return;
-      }
-
-      setIsLoadingContacts(true);
-      try {
-        const result = await getActiveLocationContacts(selectedWarehouseId);
-        if (result.success && result.data) {
-          setLocationContacts(result.data);
-          // No auto-select - user must select contacts manually
-          setSelectedContactIds([]);
-        } else {
-          setLocationContacts([]);
-          setSelectedContactIds([]);
-        }
-      } catch {
-        console.error('Failed to fetch location contacts');
-        setLocationContacts([]);
-        setSelectedContactIds([]);
-      } finally {
-        setIsLoadingContacts(false);
-      }
-    };
-
-    if (showPickTicketDialog) {
-      fetchLocationContacts();
-    }
-  }, [selectedWarehouseId, showPickTicketDialog]);
-
-  // Fetch users for assignment when dialog opens
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const result = await getUsers({ status: 'active', limit: 100 });
-        if (result.success && result.data) {
-          const usersData = result.data as { data: Array<{ id: string; fullName: string; email: string }> };
-          if (usersData.data) {
-            setWarehouseUsers(
-              usersData.data.map((user) => ({
-                id: user.id,
-                fullName: user.fullName,
-                email: user.email,
-              }))
-            );
-          }
-        }
-      } catch {
-        console.error('Failed to fetch users');
-      }
-    };
-
-    if (showPickTicketDialog) {
-      fetchUsers();
-    }
-  }, [showPickTicketDialog]);
 
   // ----------------------------------------
   // DATA FETCHING
@@ -343,8 +240,6 @@ const [isReleasingHold, setIsReleasingHold] = useState(false);
       const result = await getSalesOrder(orderId);
       if (result.success && result.data) {
         setOrder(result.data);
-        // Check if PO exists for this SO
-        checkPurchaseOrderExists(orderId);
       } else {
         setError(result.error || 'Failed to load order');
       }
@@ -352,23 +247,6 @@ const [isReleasingHold, setIsReleasingHold] = useState(false);
       setError('Failed to load order');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const checkPurchaseOrderExists = async (salesOrderId: string) => {
-    try {
-      // Import db directly for this check
-      const { createClient } = await import('@/shared/lib/supabase/client');
-      const supabase = createClient();
-      const { data } = await supabase
-        .from('purchase_orders')
-        .select('id')
-        .eq('sales_order_id', salesOrderId)
-        .is('deleted_at', null)
-        .limit(1);
-      setHasPurchaseOrder((data?.length ?? 0) > 0);
-    } catch {
-      setHasPurchaseOrder(false);
     }
   };
 
@@ -464,8 +342,8 @@ const handleReleaseHold = async () => {
         return;
       }
 
-      // All validations passed - open confirm dialog
-      setShowConfirmDialog(true);
+      // All validations passed - open confirm allocations modal
+      setShowConfirmAllocationsModal(true);
     } finally {
       setIsValidating(false);
     }
@@ -516,53 +394,6 @@ const handleReleaseHold = async () => {
     });
   };
 
-  const handleCreatePickTicket = () => {
-    if (!order) {
-      return;
-    }
-
-    // Use selected warehouse or order's warehouse
-    const warehouseId = selectedWarehouseId || order.warehouseId || '';
-
-    if (!warehouseId) {
-      toast.error('Please select a warehouse');
-      return;
-    }
-
-    if (selectedContactIds.length === 0) {
-      toast.error('Please select at least one contact');
-      return;
-    }
-
-    startTransition(async () => {
-      try {
-        const result = await createPickTicketFromSalesOrder(
-          order.id,
-          warehouseId,
-          selectedContactIds,
-          specialInstructions || undefined,
-          selectedAssignedTo || undefined
-        );
-        if (result.success) {
-          toast.success(`Pick ticket created for ${order.orderNumber}`);
-          setShowPickTicketDialog(false);
-          setSelectedWarehouseId('');
-          setLocationContacts([]);
-          setSelectedContactIds([]);
-          setContactsPopoverOpen(false);
-          setSpecialInstructions('');
-          setSelectedAssignedTo('');
-          fetchOrder(); // Refresh order data
-        } else {
-          toast.error(result.error || 'Failed to create pick ticket');
-        }
-      } catch (error) {
-        console.error('Error creating pick ticket:', error);
-        toast.error('Failed to create pick ticket');
-      }
-    });
-  };
-
   const handleCreateInvoice = () => {
     if (!order) {
       return;
@@ -584,82 +415,15 @@ const handleReleaseHold = async () => {
     });
   };
 
-  const handleCreatePO = async () => {
-    if (!order) {
-      return;
-    }
-
-    setIsCreatingPO(true);
-    try {
-      const result = await regeneratePurchaseOrder(order.id);
-      if (result.success && result.data) {
-        toast.success(`Purchase Order ${result.data.poNumber} created`);
-        setShowCreatePODialog(false);
-        setHasPurchaseOrder(true);
-      } else {
-        toast.error(result.error || 'Failed to create Purchase Order');
-      }
-    } catch (error) {
-      console.error('Error creating PO:', error);
-      toast.error('Failed to create Purchase Order');
-    } finally {
-      setIsCreatingPO(false);
-    }
-  };
-
-  // Toggle contact selection
-  const handleContactToggle = (contactId: string) => {
-    setSelectedContactIds(prev =>
-      prev.includes(contactId)
-        ? prev.filter(id => id !== contactId)
-        : [...prev, contactId]
-    );
-  };
-
-  // Toggle all contacts
-  const handleToggleAllContacts = () => {
-    if (selectedContactIds.length === locationContacts.length) {
-      setSelectedContactIds([]);
-    } else {
-      setSelectedContactIds(locationContacts.map(c => c.id));
-    }
-  };
-
-  // Initialize selected warehouse when dialog opens
-  const handleOpenPickTicketDialog = () => {
-    setSelectedWarehouseId(order?.warehouseId || '');
-    setLocationContacts([]);
-    setSelectedContactIds([]);
-    setContactsPopoverOpen(false);
-    setSpecialInstructions('');
-    setSelectedAssignedTo('');
-    setShowPickTicketDialog(true);
-  };
-
   // Can only edit draft or pending orders (and must have permission)
   const canEdit = order && ['draft', 'pending'].includes(order.status) && canEditPermission;
   // Can confirm draft or pending orders
   const canConfirm = order && ['draft', 'pending'].includes(order.status) && canEditPermission;
   // Can cancel any order except delivered/cancelled
   const canCancel = order && !['delivered', 'cancelled'].includes(order.status) && canEditPermission;
-  // Check if pick ticket already exists
-  const hasPickTicket = order?.pickTickets && order.pickTickets.length > 0;
-
-  // Can create pick ticket for confirmed or processing orders (no existing pick ticket)
-  const canCreatePickTicket = order &&
-    ['confirmed', 'processing'].includes(order.status) &&
-    !hasPickTicket &&
-    canEditPermission;
-
   // Can create invoice for confirmed, processing, shipped, or delivered orders
   const canCreateInvoice = order &&
     ['confirmed', 'processing', 'shipped', 'delivered'].includes(order.status) &&
-    canEditPermission;
-
-  // Can create PO for confirmed/processing orders that don't have a PO
-  const canCreatePO = order &&
-    ['confirmed', 'processing'].includes(order.status) &&
-    !hasPurchaseOrder &&
     canEditPermission;
 
   // Check if order is on credit hold
@@ -1073,28 +837,6 @@ const handleReleaseHold = async () => {
                     Edit Order
                   </Button>
                 )}
-                {canCreatePickTicket && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleOpenPickTicketDialog}
-                    disabled={isPending}
-                  >
-                    <ClipboardList className="mr-2 h-4 w-4" />
-                    Create Pick Ticket
-                  </Button>
-                )}
-                {canCreatePO && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowCreatePODialog(true)}
-                    disabled={isPending || isCreatingPO}
-                  >
-                    <ClipboardList className="mr-2 h-4 w-4" />
-                    Create PO
-                  </Button>
-                )}
                 {canCreateInvoice && (
                   <Button
                     variant="outline"
@@ -1116,6 +858,19 @@ const handleReleaseHold = async () => {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Confirm Allocations Modal */}
+        {order && (
+          <ConfirmAllocationsModal
+            open={showConfirmAllocationsModal}
+            onOpenChange={setShowConfirmAllocationsModal}
+            salesOrderId={order.id}
+            salesOrderNumber={order.orderNumber}
+            onConfirmComplete={() => {
+              fetchOrder(); // Refresh order data
+            }}
+          />
         )}
 
         {/* Confirm Order Dialog */}
@@ -1174,196 +929,6 @@ const handleReleaseHold = async () => {
         </AlertDialog>
 
         {/* Create Pick Ticket Dialog */}
-        <AlertDialog open={showPickTicketDialog} onOpenChange={setShowPickTicketDialog}>
-          <AlertDialogContent className="max-w-md">
-            <AlertDialogHeader>
-              <AlertDialogTitle>Create Pick Ticket</AlertDialogTitle>
-              <AlertDialogDescription>
-                Create a pick ticket for order <span className="font-semibold">{order?.orderNumber}</span>.
-                Select the warehouse and contacts to notify.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <div className="space-y-4 py-4">
-              {/* Warehouse Selection */}
-              <div>
-                <Label htmlFor="warehouse">Warehouse *</Label>
-                <Select
-                  value={selectedWarehouseId}
-                  onValueChange={setSelectedWarehouseId}
-                >
-                  <SelectTrigger className="mt-2">
-                    <SelectValue placeholder="Select warehouse..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {warehouses.map((warehouse) => (
-                      <SelectItem key={warehouse.id} value={warehouse.id}>
-                        {warehouse.name} ({warehouse.code})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Assigned To Selection */}
-              {selectedWarehouseId && (
-                <div>
-                  <Label htmlFor="assignedTo">Assign To (Warehouse Worker)</Label>
-                  <Select
-                    value={selectedAssignedTo}
-                    onValueChange={setSelectedAssignedTo}
-                  >
-                    <SelectTrigger className="mt-2">
-                      <SelectValue placeholder="Select worker (optional)..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">Unassigned</SelectItem>
-                      {warehouseUsers.map((user) => (
-                        <SelectItem key={user.id} value={user.id}>
-                          {user.fullName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {/* Contacts Selection */}
-              {selectedWarehouseId && (
-                <div>
-                  <Label>Send Pick Ticket Email To *</Label>
-                  {isLoadingContacts ? (
-                    <div className="flex items-center justify-center py-4">
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                      <span className="ml-2 text-sm text-muted-foreground">Loading contacts...</span>
-                    </div>
-                  ) : locationContacts.length === 0 ? (
-                    <div className="rounded-lg border border-dashed p-4 text-center mt-2">
-                      <p className="text-sm text-muted-foreground">
-                        No contacts found for this warehouse.
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Add contacts in the Locations section.
-                      </p>
-                    </div>
-                  ) : (
-                    <Popover open={contactsPopoverOpen} onOpenChange={setContactsPopoverOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          role="combobox"
-                          aria-expanded={contactsPopoverOpen}
-                          className="w-full justify-between mt-2"
-                        >
-                          <span className="truncate">
-                            {selectedContactIds.length === 0
-                              ? 'Select contacts...'
-                              : selectedContactIds.length === 1
-                                ? locationContacts.find(c => c.id === selectedContactIds[0])?.name
-                                : `${selectedContactIds.length} contacts selected`}
-                          </span>
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[300px] p-0" align="start">
-                        <Command>
-                          <CommandList>
-                            <CommandEmpty>No contacts found.</CommandEmpty>
-                            <CommandGroup>
-                              {/* Select All Option */}
-                              <CommandItem
-                                onSelect={() => {
-                                  handleToggleAllContacts();
-                                  setContactsPopoverOpen(false);
-                                }}
-                                className="cursor-pointer"
-                              >
-                                <Check
-                                  className={`mr-2 h-4 w-4 ${
-                                    selectedContactIds.length === locationContacts.length && locationContacts.length > 0
-                                      ? 'opacity-100'
-                                      : 'opacity-0'
-                                  }`}
-                                />
-                                Select All
-                              </CommandItem>
-                              {/* Individual Contacts */}
-                              {locationContacts.map((contact) => (
-                                <CommandItem
-                                  key={contact.id}
-                                  onSelect={() => {
-                                    handleContactToggle(contact.id);
-                                    setContactsPopoverOpen(false);
-                                  }}
-                                  className="cursor-pointer"
-                                >
-                                  <Check
-                                    className={`mr-2 h-4 w-4 ${
-                                      selectedContactIds.includes(contact.id)
-                                        ? 'opacity-100'
-                                        : 'opacity-0'
-                                    }`}
-                                  />
-                                  {contact.name}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                  )}
-                </div>
-              )}
-
-              {/* Special Instructions */}
-              {selectedWarehouseId && (
-                <div className="mt-4">
-                  <Label>Special Instructions (Optional)</Label>
-                  <textarea
-                    className="mt-2 w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    placeholder="Enter any special instructions for this pick ticket..."
-                    value={specialInstructions}
-                    onChange={(e) => setSpecialInstructions(e.target.value)}
-                  />
-                </div>
-              )}
-            </div>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleCreatePickTicket}
-                disabled={isPending || !selectedWarehouseId || selectedContactIds.length === 0}
-              >
-                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                <ClipboardList className="mr-2 h-4 w-4" />
-                Create Pick Ticket
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-        {/* Create PO Dialog */}
-        <AlertDialog open={showCreatePODialog} onOpenChange={setShowCreatePODialog}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Create Purchase Order</AlertDialogTitle>
-              <AlertDialogDescription>
-                Create a Purchase Order for <span className="font-semibold">{order?.orderNumber}</span>.
-                <br /><br />
-                This will create a PO with all items from this sales order and send it to the supplier.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={isCreatingPO}>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleCreatePO} disabled={isCreatingPO}>
-                {isCreatingPO && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                <ClipboardList className="mr-2 h-4 w-4" />
-                Create PO
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
         {/* Create Invoice Dialog */}
         <AlertDialog open={showInvoiceDialog} onOpenChange={setShowInvoiceDialog}>
           <AlertDialogContent>

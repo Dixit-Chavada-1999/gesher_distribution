@@ -350,12 +350,28 @@ class SalesOrderRepositoryImpl {
       throw new Error(`Failed to fetch order items: ${error.message}`);
     }
 
-    return (data || []).map((row) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rowData = row as any;
-      const itemType = rowData.products?.item_type as 'inventory' | 'non_inventory' | 'service' | undefined;
-      return this.mapToSalesOrderItem(rowData as DbSalesOrderItem, itemType);
-    });
+    // Load allocations for each item
+    const items = await Promise.all(
+      (data || []).map(async (row) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rowData = row as any;
+        const itemType = rowData.products?.item_type as 'inventory' | 'non_inventory' | 'service' | undefined;
+        const item = this.mapToSalesOrderItem(rowData as DbSalesOrderItem, itemType);
+
+        // Load allocations for this item
+        const { getAllocationsByItemId } = await import('./fulfillment-allocations.repository');
+        const allocationsResult = await getAllocationsByItemId(item.id);
+
+        if (allocationsResult.data) {
+          // Dynamically add allocations to item (type will be SalesOrderItemWithAllocations at runtime)
+          (item as any).allocations = allocationsResult.data;
+        }
+
+        return item;
+      })
+    );
+
+    return items;
   }
 
   /**

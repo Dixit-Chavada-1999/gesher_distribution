@@ -657,7 +657,7 @@ export function ViewQuoteDrawer({
                       {quote.termsAndConditions && (
                         <div className="space-y-1.5">
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Terms & Conditions</p>
-                          <p className="text-sm whitespace-pre-wrap bg-muted/50 rounded-md p-3">{quote.termsAndConditions}</p>
+                          <p className="text-sm whitespace-pre-wrap bg-muted/50 rounded-md p-3 max-h-40 overflow-y-auto">{quote.termsAndConditions}</p>
                         </div>
                       )}
                     </div>

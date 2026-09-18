@@ -19,6 +19,9 @@ export { CreateSalesOrderDrawer } from './CreateSalesOrderDrawer';
 export { ViewSalesOrderDrawer } from './ViewSalesOrderDrawer';
 export { EditSalesOrderDrawer } from './EditSalesOrderDrawer';
 
+// Modals
+export { ConfirmAllocationsModal } from './ConfirmAllocationsModal';
+
 // Table
 export { SalesOrdersTable } from './SalesOrdersTable';
 export { getSalesOrdersTableColumns } from './SalesOrdersTableColumns';

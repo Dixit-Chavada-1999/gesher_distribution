@@ -75,6 +75,13 @@ interface DealerLocation {
   locationName: string;
 }
 
+interface LocationContact {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+}
+
 // ============================================
 // COMPONENT
 // ============================================
@@ -92,15 +99,18 @@ export function CreateAllocationDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedSource, setSelectedSource] = useState<FulfillmentSource | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [locationContacts, setLocationContacts] = useState<LocationContact[]>([]);
   const [dealers, setDealers] = useState<Dealer[]>([]);
   const [dealerLocations, setDealerLocations] = useState<DealerLocation[]>([]);
   const [loadingLocations, setLoadingLocations] = useState(false);
+  const [loadingContacts, setLoadingContacts] = useState(false);
   const [loadingDealers, setLoadingDealers] = useState(false);
   const [inventoryInfo, setInventoryInfo] = useState<{
     onHand: number;
     allocated: number;
     available: number;
     loading: boolean;
+    exists: boolean; // Track if product is assigned to this location
   } | null>(null);
 
   // Cache for all location inventory (prefetched)
@@ -108,11 +118,13 @@ export function CreateAllocationDialog({
     onHand: number;
     allocated: number;
     available: number;
+    exists: boolean;
   }>>({});
   const [dealerInventoryCache, setDealerInventoryCache] = useState<Record<string, {
     onHand: number;
     allocated: number;
     available: number;
+    exists: boolean;
   }>>({});
 
   // Form
@@ -175,6 +187,35 @@ export function CreateAllocationDialog({
     }
   }
 
+  async function loadLocationContacts(locationId: string) {
+    try {
+      setLoadingContacts(true);
+      // Import and call location contacts action
+      const { getActiveLocationContacts } = await import(
+        '@/features/locations/actions/location-contacts'
+      );
+      const result = await getActiveLocationContacts(locationId);
+
+      if (result.success && result.data) {
+        setLocationContacts(
+          result.data.map((contact) => ({
+            id: contact.id,
+            name: contact.name,
+            email: contact.email,
+            phone: contact.phone,
+          }))
+        );
+      } else {
+        setLocationContacts([]);
+      }
+    } catch (error) {
+      console.error('Error loading location contacts:', error);
+      setLocationContacts([]);
+    } finally {
+      setLoadingContacts(false);
+    }
+  }
+
   async function loadDealers() {
     try {
       setLoadingDealers(true);
@@ -205,7 +246,7 @@ export function CreateAllocationDialog({
       if (locs.length === 0) return;
 
       const { getInventoryByProductAndLocation } = await import('@/features/inventory/actions');
-      const cache: Record<string, { onHand: number; allocated: number; available: number }> = {};
+      const cache: Record<string, { onHand: number; allocated: number; available: number; exists: boolean }> = {};
 
       // Fetch inventory for all locations in parallel
       await Promise.all(
@@ -216,9 +257,11 @@ export function CreateAllocationDialog({
               onHand: result.data.onHand,
               allocated: result.data.allocated,
               available: result.data.onHand - result.data.allocated,
+              exists: true,
             };
           } else {
-            cache[loc.id] = { onHand: 0, allocated: 0, available: 0 };
+            // Product not assigned to this location
+            cache[loc.id] = { onHand: 0, allocated: 0, available: 0, exists: false };
           }
         })
       );
@@ -241,7 +284,7 @@ export function CreateAllocationDialog({
 
     // Fallback to API call if not in cache
     try {
-      setInventoryInfo({ onHand: 0, allocated: 0, available: 0, loading: true });
+      setInventoryInfo({ onHand: 0, allocated: 0, available: 0, loading: true, exists: true });
 
       const { getInventoryByProductAndLocation } = await import('@/features/inventory/actions');
       const result = await getInventoryByProductAndLocation(productId, locationId);
@@ -251,16 +294,18 @@ export function CreateAllocationDialog({
           onHand: result.data.onHand,
           allocated: result.data.allocated,
           available: result.data.onHand - result.data.allocated,
+          exists: true,
         };
         setInventoryInfo({ ...invData, loading: false });
         // Update cache
         setLocationInventoryCache(prev => ({ ...prev, [locationId]: invData }));
       } else {
-        setInventoryInfo({ onHand: 0, allocated: 0, available: 0, loading: false });
+        // Product not assigned to this location
+        setInventoryInfo({ onHand: 0, allocated: 0, available: 0, loading: false, exists: false });
       }
     } catch (error) {
       console.error('Error loading GDC inventory:', error);
-      setInventoryInfo({ onHand: 0, allocated: 0, available: 0, loading: false });
+      setInventoryInfo({ onHand: 0, allocated: 0, available: 0, loading: false, exists: false });
     }
   }
 
@@ -270,7 +315,7 @@ export function CreateAllocationDialog({
       if (dealerLocs.length === 0) return;
 
       const { getDealerInventoryAction } = await import('@/features/platinum-dealers/actions');
-      const cache: Record<string, { onHand: number; allocated: number; available: number }> = {};
+      const cache: Record<string, { onHand: number; allocated: number; available: number; exists: boolean }> = {};
 
       // Fetch inventory for all dealer locations in parallel
       await Promise.all(
@@ -284,9 +329,11 @@ export function CreateAllocationDialog({
               onHand: result.data.onHand,
               allocated: result.data.allocated,
               available: result.data.available,
+              exists: true,
             };
           } else {
-            cache[loc.id] = { onHand: 0, allocated: 0, available: 0 };
+            // Product not assigned to this dealer location
+            cache[loc.id] = { onHand: 0, allocated: 0, available: 0, exists: false };
           }
         })
       );
@@ -309,7 +356,7 @@ export function CreateAllocationDialog({
 
     // Fallback to API call if not in cache
     try {
-      setInventoryInfo({ onHand: 0, allocated: 0, available: 0, loading: true });
+      setInventoryInfo({ onHand: 0, allocated: 0, available: 0, loading: true, exists: true });
 
       const { getDealerInventoryAction } = await import('@/features/platinum-dealers/actions');
       const result = await getDealerInventoryAction({
@@ -322,16 +369,18 @@ export function CreateAllocationDialog({
           onHand: result.data.onHand,
           allocated: result.data.allocated,
           available: result.data.available,
+          exists: true,
         };
         setInventoryInfo({ ...invData, loading: false });
         // Update cache
         setDealerInventoryCache(prev => ({ ...prev, [dealerLocationId]: invData }));
       } else {
-        setInventoryInfo({ onHand: 0, allocated: 0, available: 0, loading: false });
+        // Product not assigned to this dealer location
+        setInventoryInfo({ onHand: 0, allocated: 0, available: 0, loading: false, exists: false });
       }
     } catch (error) {
       console.error('Error loading dealer inventory:', error);
-      setInventoryInfo({ onHand: 0, allocated: 0, available: 0, loading: false });
+      setInventoryInfo({ onHand: 0, allocated: 0, available: 0, loading: false, exists: false });
     }
   }
 
@@ -398,8 +447,10 @@ export function CreateAllocationDialog({
   useEffect(() => {
     if (watchedSource === 'gdc_inventory' && watchedLocationId) {
       loadGdcInventory(watchedLocationId);
+      loadLocationContacts(watchedLocationId);
     } else if (watchedSource !== 'gdc_inventory') {
       setInventoryInfo(null);
+      setLocationContacts([]);
     }
   }, [watchedLocationId, watchedSource, productId]);
 
@@ -561,36 +612,141 @@ export function CreateAllocationDialog({
                   )}
                 />
 
+                {/* Location Contact - Required */}
+                {watchedLocationId && (
+                  <>
+                    {locationContacts.length === 0 && !loadingContacts && (
+                      <Alert className="bg-amber-50 border-amber-200">
+                        <AlertCircle className="h-4 w-4 text-amber-600" />
+                        <AlertDescription className="text-amber-800">
+                          <strong>No contacts found for this location.</strong> Please add a
+                          contact to this location before creating allocation.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {locationContacts.length > 0 && (
+                      <FormField
+                        control={form.control}
+                        name={'assignedContactId' as any}
+                        render={({ field }) => {
+                          const selectedContact = locationContacts.find(
+                            (c) => c.id === field.value
+                          );
+                          return (
+                            <FormItem>
+                              <FormLabel>Assigned Contact *</FormLabel>
+                              <Select
+                                onValueChange={field.onChange}
+                                value={field.value}
+                                disabled={loadingContacts}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue>
+                                      {selectedContact ? (
+                                        <span className="font-medium">
+                                          {selectedContact.name}
+                                        </span>
+                                      ) : (
+                                        <span className="text-muted-foreground">
+                                          Select warehouse contact
+                                        </span>
+                                      )}
+                                    </SelectValue>
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {locationContacts.map((contact) => (
+                                    <SelectItem key={contact.id} value={contact.id}>
+                                      <div className="flex flex-col py-1">
+                                        <span className="font-medium">
+                                          {contact.name}
+                                        </span>
+                                        <span className="text-xs text-muted-foreground">
+                                          {contact.email}
+                                          {contact.phone && ` • ${contact.phone}`}
+                                        </span>
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormDescription>
+                                Contact will receive email notification with allocation details
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          );
+                        }}
+                      />
+                    )}
+                  </>
+                )}
+
                 {/* Inventory Info */}
                 {inventoryInfo && watchedLocationId && (
-                  <Alert className="bg-blue-50 border-blue-200">
-                    <AlertDescription>
-                      {inventoryInfo.loading ? (
-                        <div className="flex items-center gap-2">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span>Loading inventory...</span>
-                        </div>
-                      ) : (
-                        <div className="space-y-1">
-                          <div className="font-medium text-sm text-blue-900">Location Inventory</div>
-                          <div className="grid grid-cols-3 gap-4 text-sm">
-                            <div>
-                              <span className="text-gray-600">On Hand:</span>
-                              <span className="ml-2 font-semibold">{inventoryInfo.onHand}</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-600">Allocated:</span>
-                              <span className="ml-2 font-semibold">{inventoryInfo.allocated}</span>
-                            </div>
-                            <div>
-                              <span className="text-green-700">Available:</span>
-                              <span className="ml-2 font-bold text-green-700">{inventoryInfo.available}</span>
+                  <>
+                    <Alert className="bg-blue-50 border-blue-200">
+                      <AlertDescription>
+                        {inventoryInfo.loading ? (
+                          <div className="flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span>Loading inventory...</span>
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            <div className="font-medium text-sm text-blue-900">Location Inventory</div>
+                            <div className="grid grid-cols-3 gap-4 text-sm">
+                              <div>
+                                <span className="text-gray-600">On Hand:</span>
+                                <span className="ml-2 font-semibold">{inventoryInfo.onHand}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Allocated:</span>
+                                <span className="ml-2 font-semibold">{inventoryInfo.allocated}</span>
+                              </div>
+                              <div>
+                                <span className="text-green-700">Available:</span>
+                                <span className="ml-2 font-bold text-green-700">{inventoryInfo.available}</span>
+                              </div>
                             </div>
                           </div>
-                        </div>
+                        )}
+                      </AlertDescription>
+                    </Alert>
+
+                    {/* Product Not Assigned Warning */}
+                    {!inventoryInfo.loading && !inventoryInfo.exists && (
+                      <Alert className="bg-red-50 border-red-200">
+                        <AlertCircle className="h-4 w-4 text-red-600" />
+                        <AlertDescription className="text-red-800">
+                          <strong>Product not assigned to this location.</strong> This product is not
+                          currently tracked at the selected warehouse. You can still create the allocation,
+                          but the product will need to be added to this location's inventory before
+                          fulfillment.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {/* Low Inventory Warning */}
+                    {!inventoryInfo.loading &&
+                      inventoryInfo.exists &&
+                      watchedQuantity > 0 &&
+                      inventoryInfo.available < watchedQuantity && (
+                        <Alert className="bg-amber-50 border-amber-200">
+                          <AlertCircle className="h-4 w-4 text-amber-600" />
+                          <AlertDescription className="text-amber-800">
+                            <strong>Low inventory warning:</strong> Only{' '}
+                            <span className="font-bold">{inventoryInfo.available}</span> units available,
+                            but allocating <span className="font-bold">{watchedQuantity}</span> units.
+                            {inventoryInfo.available === 0 && (
+                              <> Stock will need to be received before fulfillment.</>
+                            )}
+                          </AlertDescription>
+                        </Alert>
                       )}
-                    </AlertDescription>
-                  </Alert>
+                  </>
                 )}
               </>
             )}
@@ -849,6 +1005,40 @@ export function CreateAllocationDialog({
                         </AlertDescription>
                       </Alert>
                     )}
+
+                    {/* Product Not Assigned Warning for Dealer */}
+                    {!inventoryInfo?.loading && watchedDealerLocationId && inventoryInfo && !inventoryInfo.exists && (
+                      <Alert className="bg-red-50 border-red-200">
+                        <AlertCircle className="h-4 w-4 text-red-600" />
+                        <AlertDescription className="text-red-800">
+                          <strong>Product not assigned to this dealer location.</strong> This product is
+                          not currently tracked at the selected dealer location. You can still create the
+                          allocation, but the product will need to be added to this location's inventory
+                          before fulfillment.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {/* Low Inventory Warning for Dealer Inventory */}
+                    {!inventoryInfo?.loading &&
+                      watchedDealerLocationId &&
+                      watchedQuantity > 0 &&
+                      inventoryInfo &&
+                      inventoryInfo.exists &&
+                      inventoryInfo.available < watchedQuantity && (
+                        <Alert className="bg-amber-50 border-amber-200">
+                          <AlertCircle className="h-4 w-4 text-amber-600" />
+                          <AlertDescription className="text-amber-800">
+                            <strong>Low inventory warning:</strong> Only{' '}
+                            <span className="font-bold">{inventoryInfo.available}</span> units available at
+                            dealer location, but allocating{' '}
+                            <span className="font-bold">{watchedQuantity}</span> units.
+                            {inventoryInfo.available === 0 && (
+                              <> Dealer stock will need to be received before fulfillment.</>
+                            )}
+                          </AlertDescription>
+                        </Alert>
+                      )}
                   </>
                 )}
 

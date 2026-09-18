@@ -86,6 +86,10 @@ export async function createAllocationAction(
         'locationId' in validated.data
           ? validated.data.locationId
           : undefined,
+      assignedContactId:
+        'assignedContactId' in validated.data
+          ? validated.data.assignedContactId
+          : undefined,
       platinumDealerId:
         'platinumDealerId' in validated.data
           ? validated.data.platinumDealerId
@@ -164,6 +168,10 @@ export async function createMultiSourceAllocationAction(
       quantity: allocation.quantity,
       locationId:
         'locationId' in allocation ? allocation.locationId : undefined,
+      assignedContactId:
+        'assignedContactId' in allocation
+          ? allocation.assignedContactId
+          : undefined,
       platinumDealerId:
         'platinumDealerId' in allocation
           ? allocation.platinumDealerId
@@ -272,6 +280,7 @@ export async function updateAllocationAction(
       id: allocationId,
       status: validated.data.status,
       locationId: validated.data.locationId,
+      assignedContactId: validated.data.assignedContactId,
       platinumDealerId: validated.data.platinumDealerId,
       dealerLocationId: validated.data.dealerLocationId,
       purchaseOrderId: validated.data.purchaseOrderId,
@@ -612,6 +621,51 @@ export async function validateOrderFullyAllocatedAction(
       success: false,
       error:
         error instanceof Error ? error.message : 'An unexpected error occurred',
+    };
+  }
+}
+
+// ============================================
+// UPDATE ALLOCATION STATUS
+// ============================================
+
+/**
+ * Update allocation status
+ * Used when resources (PO, Pick Ticket) are created for an allocation
+ */
+export async function updateAllocationStatus(
+  allocationId: string,
+  status: 'pending' | 'allocated' | 'fulfilled' | 'cancelled'
+): Promise<ActionResult<FulfillmentAllocation | null>> {
+  try {
+    const { updateAllocation } = await import(
+      '@/features/sales-orders/repositories/fulfillment-allocations.repository'
+    );
+
+    const result = await updateAllocation({
+      id: allocationId,
+      status,
+    });
+
+    if (result.error) {
+      return {
+        success: false,
+        error: result.error.message,
+      };
+    }
+
+    return {
+      success: true,
+      data: result.data,
+    };
+  } catch (error) {
+    console.error('Error updating allocation status:', error);
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Failed to update allocation status',
     };
   }
 }

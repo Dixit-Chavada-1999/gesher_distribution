@@ -23,6 +23,8 @@ interface CreateAllocationParams {
   quantity: number;
   status?: AllocationStatus;
   locationId?: string | null;
+  assignedContactId?: string | null;
+  assignedUserId?: string | null;
   platinumDealerId?: string | null;
   dealerLocationId?: string | null;
   purchaseOrderId?: string | null;
@@ -38,6 +40,8 @@ interface UpdateAllocationParams {
   quantity?: number;
   status?: AllocationStatus;
   locationId?: string | null;
+  assignedContactId?: string | null;
+  assignedUserId?: string | null;
   platinumDealerId?: string | null;
   dealerLocationId?: string | null;
   purchaseOrderId?: string | null;
@@ -76,6 +80,8 @@ export async function createAllocation(
         quantity: params.quantity,
         status: params.status || 'pending',
         location_id: params.locationId,
+        assigned_contact_id: params.assignedContactId,
+        assigned_user_id: params.assignedUserId,
         platinum_dealer_id: params.platinumDealerId,
         dealer_location_id: params.dealerLocationId,
         purchase_order_id: params.purchaseOrderId,
@@ -121,6 +127,8 @@ export async function createBatchAllocations(
       quantity: params.quantity,
       status: params.status || 'pending',
       location_id: params.locationId,
+      assigned_contact_id: params.assignedContactId,
+      assigned_user_id: params.assignedUserId,
       platinum_dealer_id: params.platinumDealerId,
       dealer_location_id: params.dealerLocationId,
       purchase_order_id: params.purchaseOrderId,
@@ -202,6 +210,7 @@ export async function getAllocationByIdWithDetails(
         `
         *,
         location:locations(id, location_code, name),
+        assigned_contact:location_contacts(id, name, email, phone),
         platinum_dealer:platinum_dealers(id, dealer_name, code),
         dealer_location:platinum_dealer_locations(id, location_name, location_code, address_city, address_state),
         purchase_order:purchase_orders(id, po_number, status)
@@ -243,6 +252,7 @@ export async function getAllocationsByItemId(
         `
         *,
         location:locations(id, location_code, name),
+        assigned_contact:location_contacts(id, name, email, phone),
         platinum_dealer:platinum_dealers(id, dealer_name, code),
         dealer_location:platinum_dealer_locations(id, location_name, location_code, address_city, address_state),
         purchase_order:purchase_orders(id, po_number, status)
@@ -281,6 +291,10 @@ export async function updateAllocation(
     if (params.status !== undefined) updateData.status = params.status;
     if (params.locationId !== undefined)
       updateData.location_id = params.locationId;
+    if (params.assignedContactId !== undefined)
+      updateData.assigned_contact_id = params.assignedContactId;
+    if (params.assignedUserId !== undefined)
+      updateData.assigned_user_id = params.assignedUserId;
     if (params.platinumDealerId !== undefined)
       updateData.platinum_dealer_id = params.platinumDealerId;
     if (params.dealerLocationId !== undefined)
@@ -687,6 +701,8 @@ function mapAllocationFromDb(data: any): FulfillmentAllocation {
     quantity: data.quantity,
     status: data.status,
     locationId: data.location_id,
+    assignedContactId: data.assigned_contact_id,
+    assignedUserId: data.assigned_user_id,
     platinumDealerId: data.platinum_dealer_id,
     dealerLocationId: data.dealer_location_id,
     purchaseOrderId: data.purchase_order_id,
@@ -715,6 +731,14 @@ function mapAllocationWithDetailsFromDb(
           id: data.location.id,
           locationCode: data.location.location_code,
           name: data.location.name,
+        }
+      : undefined,
+    assignedContact: data.assigned_contact
+      ? {
+          id: data.assigned_contact.id,
+          name: data.assigned_contact.name,
+          email: data.assigned_contact.email,
+          phone: data.assigned_contact.phone,
         }
       : undefined,
     platinumDealer: data.platinum_dealer
