@@ -627,7 +627,8 @@ export async function createPickTicketFromSalesOrder(
   warehouseId: string,
   notifyContactIds?: string[],
   specialInstructions?: string,
-  assignedToId?: string
+  assignedToId?: string,
+  skipStatusCheck?: boolean
 ): Promise<CreateFromSOResult> {
   const auth = await authorize('pick_tickets.create');
   if (!auth.ok) {
@@ -683,15 +684,18 @@ export async function createPickTicketFromSalesOrder(
       .eq('id', salesOrderId)
       .single();
 
-    if (!soStatus || !['confirmed', 'processing'].includes(soStatus.status)) {
-      return {
-        success: false,
-        error: 'Sales order must be confirmed or processing to create a pick ticket',
-      };
+    // Skip status check if called from allocation modal (skipStatusCheck = true)
+    if (!skipStatusCheck) {
+      if (!soStatus || !['confirmed', 'processing'].includes(soStatus.status)) {
+        return {
+          success: false,
+          error: 'Sales order must be confirmed or processing to create a pick ticket',
+        };
+      }
     }
 
-    // Validate Order Series is selected
-    if (!soStatus.order_series) {
+    // Validate Order Series is selected (only if not skipping status check)
+    if (!skipStatusCheck && !soStatus?.order_series) {
       return {
         success: false,
         error: 'Order Series is required. Please select an Order Series (GDC 1, GDC 2, or GDC 3) on the Sales Order before generating a Pick Ticket.',
@@ -754,39 +758,46 @@ export async function createPickTicketFromSalesOrder(
       };
     }
 
-    // Allocate inventory for each item before creating pick ticket
-    const { inventoryService } = await import('@/features/inventory/services/inventory.service');
+    // Determine warehouse ID (needed for both allocation and email)
     const finalWarehouseId = warehouseId || salesOrder.warehouse_id;
-    const allocationErrors: string[] = [];
 
-    for (const item of items) {
-      if (!item.productId) {
-        continue; // Skip items without product ID
-      }
+    // Allocate inventory for each item before creating pick ticket
+    // Skip if called from allocation modal (skipStatusCheck = true) as inventory is already allocated
+    if (!skipStatusCheck) {
+      const { inventoryService } = await import('@/features/inventory/services/inventory.service');
+      const allocationErrors: string[] = [];
 
-      const allocResult = await inventoryService.allocateByProductLocation(
-        item.productId,
-        finalWarehouseId,
-        item.quantityToPick,
-        userId,
-        {
-          type: 'sales_order',
-          id: salesOrderId,
-          number: salesOrder.order_number,
+      for (const item of items) {
+        if (!item.productId) {
+          continue; // Skip items without product ID
         }
-      );
 
-      if (!allocResult.success) {
-        allocationErrors.push(`${item.sku}: ${allocResult.error}`);
+        const allocResult = await inventoryService.allocateByProductLocation(
+          item.productId,
+          finalWarehouseId,
+          item.quantityToPick,
+          userId,
+          {
+            type: 'sales_order',
+            id: salesOrderId,
+            number: salesOrder.order_number,
+          }
+        );
+
+        if (!allocResult.success) {
+          allocationErrors.push(`${item.sku}: ${allocResult.error}`);
+        }
       }
-    }
 
-    // If any allocation failed, return error
-    if (allocationErrors.length > 0) {
-      return {
-        success: false,
-        error: `Insufficient inventory: ${allocationErrors.join(', ')}`,
-      };
+      // If any allocation failed, return error
+      if (allocationErrors.length > 0) {
+        return {
+          success: false,
+          error: `Insufficient inventory: ${allocationErrors.join(', ')}`,
+        };
+      }
+    } else {
+      console.log('ℹ️ [createPickTicketFromSalesOrder] Skipping inventory allocation (called from modal)');
     }
 
     // Create pick ticket

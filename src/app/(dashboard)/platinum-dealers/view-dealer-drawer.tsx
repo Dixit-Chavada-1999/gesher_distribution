@@ -19,6 +19,8 @@ import {
   Pencil,
   MapPinned,
   Plus,
+  Package,
+  ExternalLink,
 } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
@@ -86,6 +88,20 @@ interface LocationInventorySummary {
   }>;
 }
 
+interface DealerAllocation {
+  id: string;
+  salesOrderId: string;
+  salesOrderNumber: string;
+  customerName: string;
+  productSku: string;
+  productDescription: string;
+  quantity: number;
+  status: string;
+  fulfillmentSource: string;
+  dealerLocationName?: string;
+  createdAt: string;
+}
+
 // ============================================
 // HELPER COMPONENTS
 // ============================================
@@ -131,6 +147,8 @@ export function ViewDealerDrawer({
   const [inventorySummaries, setInventorySummaries] = useState<
     Record<string, LocationInventorySummary>
   >({});
+  const [allocations, setAllocations] = useState<DealerAllocation[]>([]);
+  const [isLoadingAllocations, setIsLoadingAllocations] = useState(false);
 
   // Dialog states
   const [addLocationDialogOpen, setAddLocationDialogOpen] = useState(false);
@@ -244,19 +262,94 @@ export function ViewDealerDrawer({
     }
   }, [dealerId]);
 
+  const loadAllocations = useCallback(async () => {
+    if (!dealerId) {
+      setAllocations([]);
+      return;
+    }
+
+    setIsLoadingAllocations(true);
+    try {
+      const { createClient } = await import('@/shared/lib/supabase/client');
+      const supabase = createClient();
+
+      // Fetch allocations for this dealer
+      const { data, error } = await supabase
+        .from('fulfillment_allocations')
+        .select(`
+          id,
+          sales_order_item_id,
+          quantity,
+          status,
+          fulfillment_source,
+          created_at,
+          platinum_dealer_id,
+          dealer_location_id,
+          sales_order_items!inner (
+            id,
+            sku,
+            description,
+            sales_orders!inner (
+              id,
+              order_number,
+              customers (
+                company_name
+              )
+            )
+          ),
+          platinum_dealer_locations (
+            location_name
+          )
+        `)
+        .eq('platinum_dealer_id', dealerId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading allocations:', error);
+        toast.error('Failed to load allocations');
+        return;
+      }
+
+      if (data) {
+        const formattedAllocations: DealerAllocation[] = data.map((item: any) => ({
+          id: item.id,
+          salesOrderId: item.sales_order_items.sales_orders.id,
+          salesOrderNumber: item.sales_order_items.sales_orders.order_number,
+          customerName: item.sales_order_items.sales_orders.customers?.company_name || 'Unknown',
+          productSku: item.sales_order_items.sku,
+          productDescription: item.sales_order_items.description || '',
+          quantity: item.quantity,
+          status: item.status,
+          fulfillmentSource: item.fulfillment_source,
+          dealerLocationName: item.platinum_dealer_locations?.location_name,
+          createdAt: item.created_at,
+        }));
+
+        setAllocations(formattedAllocations);
+      }
+    } catch (error) {
+      console.error('Error loading allocations:', error);
+      toast.error('Failed to load allocations');
+    } finally {
+      setIsLoadingAllocations(false);
+    }
+  }, [dealerId]);
+
   useEffect(() => {
     if (open && dealerId) {
       loadDealer();
       loadLocations();
       loadInventorySummaries();
+      loadAllocations();
       setActiveTab('details'); // Reset to details tab
     } else {
       setDealer(null);
       setLocations([]);
       setInventorySummaries({});
+      setAllocations([]);
       setActiveTab('details');
     }
-  }, [dealerId, open, loadDealer, loadLocations, loadInventorySummaries]);
+  }, [dealerId, open, loadDealer, loadLocations, loadInventorySummaries, loadAllocations]);
 
   // ----------------------------------------
   // HANDLERS - Dealer
@@ -375,6 +468,15 @@ export function ViewDealerDrawer({
                     {locations.length > 0 && (
                       <Badge variant="secondary" className="ml-1 h-5 px-1.5">
                         {locations.length}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="allocations" className="gap-2">
+                    <Package className="h-4 w-4" />
+                    Allocations
+                    {allocations.length > 0 && (
+                      <Badge variant="secondary" className="ml-1 h-5 px-1.5">
+                        {allocations.length}
                       </Badge>
                     )}
                   </TabsTrigger>
@@ -539,6 +641,120 @@ export function ViewDealerDrawer({
                             <Plus className="mr-2 h-4 w-4" />
                             Add Location
                           </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+
+              {/* Tab 3: Allocations */}
+              <TabsContent value="allocations" className="flex-1 mt-0">
+                <ScrollArea className="h-full">
+                  <div className="px-6 py-6">
+                    <div className="space-y-4">
+                      {/* Header */}
+                      <div>
+                        <h3 className="text-base font-semibold">Sales Order Allocations</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Items assigned to this dealer from sales orders
+                        </p>
+                      </div>
+
+                      <Separator />
+
+                      {/* Allocations List */}
+                      {isLoadingAllocations ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : allocations.length > 0 ? (
+                        <div className="space-y-3">
+                          {allocations.map((allocation) => (
+                            <Card key={allocation.id}>
+                              <CardContent className="p-4">
+                                <div className="flex items-start justify-between gap-4">
+                                  <div className="flex-1 space-y-2">
+                                    {/* Sales Order & Customer */}
+                                    <div className="flex items-center gap-2">
+                                      <a
+                                        href={`/sales-orders/${allocation.salesOrderId}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="font-semibold text-sm hover:underline flex items-center gap-1"
+                                      >
+                                        {allocation.salesOrderNumber}
+                                        <ExternalLink className="h-3 w-3" />
+                                      </a>
+                                      <span className="text-xs text-muted-foreground">•</span>
+                                      <span className="text-sm text-muted-foreground">
+                                        {allocation.customerName}
+                                      </span>
+                                    </div>
+
+                                    {/* Product Details */}
+                                    <div className="flex items-start gap-2">
+                                      <Package className="h-4 w-4 text-muted-foreground mt-0.5" />
+                                      <div>
+                                        <p className="text-sm font-medium">
+                                          {allocation.productSku}
+                                        </p>
+                                        {allocation.productDescription && (
+                                          <p className="text-xs text-muted-foreground">
+                                            {allocation.productDescription}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Location & Quantity */}
+                                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                      {allocation.dealerLocationName && (
+                                        <>
+                                          <div className="flex items-center gap-1">
+                                            <MapPin className="h-3 w-3" />
+                                            <span>{allocation.dealerLocationName}</span>
+                                          </div>
+                                          <span>•</span>
+                                        </>
+                                      )}
+                                      <span className="font-medium">Qty: {allocation.quantity}</span>
+                                      <span>•</span>
+                                      <span className="capitalize">
+                                        {allocation.fulfillmentSource.replace(/_/g, ' ')}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Status Badge */}
+                                  <Badge
+                                    className={
+                                      allocation.status === 'allocated'
+                                        ? 'bg-blue-100 text-blue-800 border-blue-200'
+                                        : allocation.status === 'fulfilled'
+                                        ? 'bg-green-100 text-green-800 border-green-200'
+                                        : allocation.status === 'partially_fulfilled'
+                                        ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                                        : 'bg-gray-100 text-gray-800 border-gray-200'
+                                    }
+                                  >
+                                    {allocation.status === 'partially_fulfilled'
+                                      ? 'Partial'
+                                      : allocation.status.charAt(0).toUpperCase() +
+                                        allocation.status.slice(1)}
+                                  </Badge>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-12 text-center">
+                          <Package className="h-12 w-12 text-muted-foreground mb-4" />
+                          <h3 className="text-lg font-semibold mb-2">No allocations yet</h3>
+                          <p className="text-sm text-muted-foreground">
+                            No sales order items have been assigned to this dealer.
+                          </p>
                         </div>
                       )}
                     </div>

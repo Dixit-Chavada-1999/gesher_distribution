@@ -229,6 +229,28 @@ export function ConfirmAllocationsModal({
         // Show success message with details from result
         const message = result.data?.message || `${action.label} created successfully`;
         toast.success(message);
+
+        // Check if all allocations are now assigned (completed)
+        const allCompleted = Array.from(completedActions.values()).every(
+          a => a.status === 'completed'
+        );
+
+        // If all allocations are assigned, auto-confirm the sales order
+        if (allCompleted) {
+          console.log('✅ [handleAction] All allocations assigned! Auto-confirming sales order...');
+          try {
+            const { confirmSalesOrder } = await import('../actions');
+            const confirmResult = await confirmSalesOrder(salesOrderId);
+
+            if (confirmResult.success) {
+              console.log('✅ [handleAction] Sales order auto-confirmed successfully');
+              toast.success('All allocations assigned. Sales order confirmed automatically.');
+            }
+          } catch (error) {
+            console.error('❌ [handleAction] Failed to auto-confirm SO:', error);
+            // Don't show error - allocations are still successful
+          }
+        }
       } else {
         throw new Error(result.error || 'Action failed');
       }
@@ -313,6 +335,7 @@ export function ConfirmAllocationsModal({
 
       console.log('📦 [handleCreatePickTicket] Location:', allocation.location.name);
       console.log('👤 [handleCreatePickTicket] Contact:', allocation.assignedContact.name);
+      console.log('👷 [handleCreatePickTicket] Assigned User ID:', allocation.assignedUserId);
 
       // Import required actions
       const { updateAllocationStatus } = await import('../actions/fulfillment-allocation.actions');
@@ -325,7 +348,8 @@ export function ConfirmAllocationsModal({
         allocation.location.id,
         [allocation.assignedContact.id],
         allocation.notes || undefined,
-        allocation.assignedUserId || undefined
+        allocation.assignedUserId || undefined,
+        true // skipStatusCheck - allow PT creation for draft orders
       );
 
       if (!ptResult.success) {

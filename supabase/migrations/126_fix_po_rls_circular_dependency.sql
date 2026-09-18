@@ -34,7 +34,6 @@ BEGIN
     SELECT 1 FROM purchase_order_items poi
     WHERE poi.purchase_order_id = po_id
       AND poi.supplier_id = user_supplier_id
-      AND poi.deleted_at IS NULL
   );
 END;
 $$;
@@ -49,17 +48,7 @@ AS $$
 DECLARE
   user_supplier_id UUID;
   is_supplier BOOLEAN;
-  po_deleted BOOLEAN;
 BEGIN
-  -- Check if PO exists and is not deleted
-  SELECT deleted_at IS NOT NULL INTO po_deleted
-  FROM purchase_orders
-  WHERE id = po_id;
-
-  IF po_deleted THEN
-    RETURN FALSE;
-  END IF;
-
   -- Get user info
   SELECT get_user_supplier_id() INTO user_supplier_id;
   SELECT is_supplier_user() INTO is_supplier;
@@ -87,8 +76,7 @@ DROP POLICY IF EXISTS po_items_select ON purchase_order_items;
 CREATE POLICY purchase_orders_select ON purchase_orders
   FOR SELECT
   USING (
-    deleted_at IS NULL
-    AND auth.role() = 'authenticated'
+    auth.role() = 'authenticated'
     AND can_user_see_purchase_order(id)
   );
 
@@ -96,8 +84,7 @@ CREATE POLICY purchase_orders_select ON purchase_orders
 CREATE POLICY purchase_orders_supplier_update ON purchase_orders
   FOR UPDATE
   USING (
-    deleted_at IS NULL
-    AND is_supplier_user()
+    is_supplier_user()
     AND can_user_see_purchase_order(id)
     AND EXISTS (
       SELECT 1 FROM users u
@@ -115,8 +102,7 @@ CREATE POLICY purchase_orders_supplier_update ON purchase_orders
 CREATE POLICY po_items_select ON purchase_order_items
   FOR SELECT
   USING (
-    deleted_at IS NULL
-    AND auth.role() = 'authenticated'
+    auth.role() = 'authenticated'
     AND can_user_see_po_item(supplier_id, purchase_order_id)
   );
 
