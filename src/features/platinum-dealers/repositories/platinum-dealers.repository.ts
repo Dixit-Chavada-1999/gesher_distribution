@@ -38,7 +38,7 @@ export async function createDealer(
       .from('platinum_dealers')
       .insert({
         dealer_name: params.dealerName,
-        code: params.code || null,
+        code: params.code && params.code.trim() !== '' ? params.code.trim() : null,
         contact_name: params.contactName || null,
         phone: params.phone || null,
         email: params.email || null,
@@ -55,6 +55,22 @@ export async function createDealer(
 
     if (error) {
       console.error('Error creating dealer:', error);
+
+      // Provide better error messages
+      if (error.message?.includes('unique') || error.message?.includes('duplicate')) {
+        return {
+          data: null,
+          error: new Error('A dealer with this code already exists. Please use a different code.')
+        };
+      }
+
+      if (error.code === 'PGRST116') {
+        return {
+          data: null,
+          error: new Error('You do not have permission to create dealers. Please contact your administrator.')
+        };
+      }
+
       return { data: null, error: new Error(error.message) };
     }
 
@@ -204,7 +220,12 @@ export async function updateDealer(
 
     if (params.dealerName !== undefined)
       updateData.dealer_name = params.dealerName;
-    if (params.code !== undefined) updateData.code = params.code;
+
+    // Handle empty code: convert empty string to null to avoid UNIQUE constraint issues
+    if (params.code !== undefined) {
+      updateData.code = params.code && params.code.trim() !== '' ? params.code.trim() : null;
+    }
+
     if (params.contactName !== undefined)
       updateData.contact_name = params.contactName;
     if (params.phone !== undefined) updateData.phone = params.phone;
@@ -226,11 +247,28 @@ export async function updateDealer(
       .from('platinum_dealers')
       .update(updateData)
       .eq('id', id)
+      .is('deleted_at', null) // Ensure we're only updating non-deleted dealers
       .select()
       .single();
 
     if (error) {
       console.error('Error updating dealer:', error);
+
+      // Provide better error messages
+      if (error.code === 'PGRST116') {
+        return {
+          data: null,
+          error: new Error('Dealer not found or you do not have permission to update it. Please contact your administrator.')
+        };
+      }
+
+      if (error.message?.includes('unique') || error.message?.includes('duplicate')) {
+        return {
+          data: null,
+          error: new Error('A dealer with this code already exists. Please use a different code.')
+        };
+      }
+
       return { data: null, error: new Error(error.message) };
     }
 

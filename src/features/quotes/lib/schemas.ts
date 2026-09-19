@@ -148,7 +148,7 @@ export const quoteFormSchema = z.object({
   customerNotes: z.string().default(''),
   internalNotes: z.string().default(''),
   termsAndConditions: z.string().default(''),
-  customerPoNumber: z.string().default(''),
+  customerPoNumber: z.string().min(1, 'Customer PO number is required.'),
 }).refine(
   (data) => {
     // Validate Valid Until is a future date

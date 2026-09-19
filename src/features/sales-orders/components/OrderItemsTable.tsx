@@ -19,8 +19,8 @@
  * - Memoized callbacks with useCallback
  */
 
-import { memo, useCallback, useMemo } from 'react';
-import { Plus, Trash2, AlertTriangle } from 'lucide-react';
+import { memo, useCallback } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
@@ -32,7 +32,6 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 import { Separator } from '@/shared/components/ui/separator';
-import { Alert, AlertDescription } from '@/shared/components/ui/alert';
 import {
   Table,
   TableBody,
@@ -44,12 +43,6 @@ import {
 
 import type { OrderItemsTableProps, OrderItem } from '../types';
 import { createEmptyOrderItem, formatCurrency } from '../lib/mock-data';
-import {
-  needsContainerSplit,
-  calculateContainersNeeded,
-  calculateOptimalSplit,
-  formatSplitSuggestion,
-} from '@/shared/lib/container-capacity';
 
 // ============================================
 // TYPES
@@ -78,7 +71,7 @@ const OrderItemRow = memo(function OrderItemRow({
   taxRates,
   onItemChange,
   onRemove,
-  mode = 'create',
+  mode: _mode = 'create',
   rowErrors,
 }: OrderItemRowProps) {
   // Item ID is required for all handlers
@@ -87,29 +80,6 @@ const OrderItemRow = memo(function OrderItemRow({
   // Check if product is service or non_inventory
   const selectedProduct = products.find((p) => p.id === item.productId);
   const isServiceOrNonInventory = selectedProduct?.itemType === 'service' || selectedProduct?.itemType === 'non_inventory';
-
-  // Check if quantity exceeds container capacity
-  const containerWarning = useMemo(() => {
-    if (!selectedProduct || isServiceOrNonInventory || !item.quantity) {
-      return null;
-    }
-
-    const sku = selectedProduct.sku;
-    const qty = Number(item.quantity);
-
-    if (needsContainerSplit(sku, qty)) {
-      const containersNeeded = calculateContainersNeeded(sku, qty);
-      const splits = calculateOptimalSplit(qty, 72); // TODO: Get actual capacity from SKU
-      const splitSuggestion = formatSplitSuggestion(splits);
-
-      return {
-        containersNeeded,
-        splitSuggestion,
-      };
-    }
-
-    return null;
-  }, [selectedProduct, isServiceOrNonInventory, item.quantity]);
 
   // Memoized handlers
   const handleProductChange = useCallback(
@@ -213,14 +183,6 @@ const OrderItemRow = memo(function OrderItemRow({
             />
             {rowErrors.quantity && (
               <p className="text-xs text-destructive">{rowErrors.quantity}</p>
-            )}
-            {containerWarning && mode === 'create' && (
-              <Alert variant="destructive" className="p-2 mt-1">
-                <AlertTriangle className="h-3 w-3" />
-                <AlertDescription className="text-xs ml-1">
-                  Needs {containerWarning.containersNeeded} containers: {containerWarning.splitSuggestion}
-                </AlertDescription>
-              </Alert>
             )}
           </div>
         )}
