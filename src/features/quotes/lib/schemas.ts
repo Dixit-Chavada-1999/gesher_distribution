@@ -53,7 +53,7 @@ export const createQuoteItemSchema = z.object({
   description: z.string().max(500, 'Description must be 500 characters or less.').nullable(),
   quantity: z.number({ required_error: 'Quantity is required.' }).int('Quantity must be a whole number.').positive('Quantity must be greater than 0.'),
   unitCode: z.string().min(1).max(10).default('EA'),
-  unitPrice: z.number({ required_error: 'Unit price is required.' }).int().min(0, 'Unit price cannot be negative.'),
+  unitPrice: z.number({ required_error: 'Unit price is required.' }).int().positive('Unit price must be greater than 0.'),
   discountPercent: z.number().min(0, 'Discount cannot be negative.').max(100, 'Discount cannot exceed 100%.').default(0),
   taxRate: z.number().min(0, 'Tax rate cannot be negative.').max(100, 'Tax rate cannot exceed 100%.').default(0),
 });
@@ -68,15 +68,19 @@ export const quoteItemFormSchema = z.object({
   productId: z.string().min(1, 'Product is required.'),
   sku: z.string().default(''), // SKU is auto-filled when product is selected
   description: z.string().default(''),
-  quantity: z.union([z.string(), z.number()]).transform((val) => {
-    const num = typeof val === 'string' ? parseInt(val, 10) : val;
-    return isNaN(num) ? 1 : num;
-  }),
+  quantity: z.union([z.string(), z.number()])
+    .transform((val) => {
+      const num = typeof val === 'string' ? parseInt(val, 10) : val;
+      return isNaN(num) ? 0 : num;
+    })
+    .refine((val) => val > 0, { message: 'Quantity must be greater than 0' }),
   unitId: z.string().default('EA'),
-  unitPrice: z.union([z.string(), z.number()]).transform((val) => {
-    const num = typeof val === 'string' ? parseFloat(val) : val;
-    return isNaN(num) ? 0 : num;
-  }),
+  unitPrice: z.union([z.string(), z.number()])
+    .transform((val) => {
+      const num = typeof val === 'string' ? parseFloat(val) : val;
+      return isNaN(num) ? 0 : num;
+    })
+    .refine((val) => val > 0, { message: 'Unit price must be greater than 0' }),
   discountPercent: z.union([z.string(), z.number()]).transform((val) => {
     const num = typeof val === 'string' ? parseFloat(val) : val;
     return isNaN(num) ? 0 : num;
@@ -133,7 +137,7 @@ export const updateQuoteSchema = z.object({
 export const quoteFormSchema = z.object({
   quoteNumber: z.string().optional().default(''),
   quoteDate: z.string().min(1, 'Quote date is required.'),
-  validUntil: z.string().default(''),
+  validUntil: z.string().min(1, 'Valid until date is required.'),
   customerId: z.string().min(1, 'Customer is required.'),
   salesRepId: z.string().default(''),
   currencyId: z.string().default('USD'),
@@ -144,8 +148,33 @@ export const quoteFormSchema = z.object({
   customerNotes: z.string().default(''),
   internalNotes: z.string().default(''),
   termsAndConditions: z.string().default(''),
-  customerPoNumber: z.string().min(1, 'Customer PO number is required.'),
-});
+  customerPoNumber: z.string().default(''),
+}).refine(
+  (data) => {
+    // Validate Valid Until is a future date
+    if (!data.validUntil) return false;
+    const validUntilDate = new Date(data.validUntil);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time to start of day
+    return validUntilDate > today;
+  },
+  {
+    message: 'Valid until must be a future date',
+    path: ['validUntil'],
+  }
+).refine(
+  (data) => {
+    // Validate Valid Until is after Quote Date
+    if (!data.quoteDate || !data.validUntil) return false;
+    const quoteDate = new Date(data.quoteDate);
+    const validUntilDate = new Date(data.validUntil);
+    return validUntilDate > quoteDate;
+  },
+  {
+    message: 'Valid until must be after quote date',
+    path: ['validUntil'],
+  }
+);
 
 // ============================================
 // LIST PARAMS SCHEMA

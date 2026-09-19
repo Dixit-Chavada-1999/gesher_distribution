@@ -388,6 +388,8 @@ export interface PlatinumDealerSummary {
   id: string;
   dealerName: string;
   code: string | null;
+  email: string | null;
+  contactName: string | null;
 }
 
 export interface PlatinumDealerLocationSummary {
@@ -395,8 +397,10 @@ export interface PlatinumDealerLocationSummary {
   dealerId: string;
   locationName: string;
   locationCode: string | null;
+  addressStreet: string | null;
   addressCity: string | null;
   addressState: string | null;
+  addressPostalCode: string | null;
 }
 
 export interface PurchaseOrderSummary {
@@ -729,6 +733,8 @@ export interface OrderItemsTableProps {
   onProductSelect?: (itemIndex: number, productId: string) => void;
   columnConfig?: OrderItemColumnConfig;
   mode?: 'create' | 'edit';
+  itemErrors?: Array<Record<string, string>>;
+  itemsError?: string;
 }
 
 export interface OrderSummaryCardsProps {
@@ -749,6 +755,7 @@ export interface SalesOrderFormProps {
   onCancel?: () => void;
   onSaveDraft?: (data: SalesOrderFormData) => void;
   mode?: 'create' | 'edit';
+  onValidationChange?: (isValid: boolean) => void;
 }
 
 export interface CreateSalesOrderDrawerProps {

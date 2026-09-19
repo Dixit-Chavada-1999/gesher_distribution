@@ -61,6 +61,7 @@ export function EditSalesOrderDrawer({
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [_isFormValid, setIsFormValid] = useState(false);
 
   // ----------------------------------------
   // EFFECTS
@@ -281,6 +282,7 @@ export function EditSalesOrderDrawer({
                 onSubmit={handleUpdate}
                 onCancel={handleCancel}
                 mode="edit"
+                onValidationChange={setIsFormValid}
               />
             ) : null}
           </div>

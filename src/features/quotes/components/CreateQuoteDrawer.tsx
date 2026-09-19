@@ -72,6 +72,7 @@ export function CreateQuoteDrawer({ open, onClose, onSuccess }: CreateQuoteDrawe
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingDraft, _setIsSavingDraft] = useState(false);
   const [serverErrors, setServerErrors] = useState<Record<string, string[]> | undefined>(undefined);
+  const [_isFormValid, setIsFormValid] = useState(false);
 
   // Fetch master data when drawer opens
   useEffect(() => {
@@ -199,6 +200,7 @@ export function CreateQuoteDrawer({ open, onClose, onSuccess }: CreateQuoteDrawe
                 onCancel={handleClose}
                 isSubmitting={isFormLoading}
                 serverErrors={serverErrors}
+                onValidationChange={setIsFormValid}
               />
             ) : (
               <div className="flex flex-col items-center justify-center py-12 text-center">

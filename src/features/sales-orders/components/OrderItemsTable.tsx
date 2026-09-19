@@ -64,6 +64,7 @@ interface OrderItemRowProps {
   onItemChange: (itemId: string, field: string, value: string | number) => void;
   onRemove: (itemId: string) => void;
   mode?: 'create' | 'edit';
+  rowErrors: Record<string, string>;
 }
 
 // ============================================
@@ -78,6 +79,7 @@ const OrderItemRow = memo(function OrderItemRow({
   onItemChange,
   onRemove,
   mode = 'create',
+  rowErrors,
 }: OrderItemRowProps) {
   // Item ID is required for all handlers
   const itemId = item.id || '';
@@ -154,21 +156,26 @@ const OrderItemRow = memo(function OrderItemRow({
     <TableRow>
       {/* Product Select */}
       <TableCell>
-        <Select
-          value={item.productId || undefined}
-          onValueChange={handleProductChange}
-        >
-          <SelectTrigger className="h-9">
-            <SelectValue placeholder="Select product" />
-          </SelectTrigger>
-          <SelectContent>
-            {products.map((product) => (
-              <SelectItem key={product.id} value={product.id}>
-                {product.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="space-y-1">
+          <Select
+            value={item.productId || undefined}
+            onValueChange={handleProductChange}
+          >
+            <SelectTrigger className={`h-9 ${rowErrors.productId ? 'border-destructive' : ''}`}>
+              <SelectValue placeholder="Select product" />
+            </SelectTrigger>
+            <SelectContent>
+              {products.map((product) => (
+                <SelectItem key={product.id} value={product.id}>
+                  {product.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {rowErrors.productId && (
+            <p className="text-xs text-destructive">{rowErrors.productId}</p>
+          )}
+        </div>
       </TableCell>
 
       {/* SKU (Read-only) */}
@@ -196,16 +203,19 @@ const OrderItemRow = memo(function OrderItemRow({
         {isServiceOrNonInventory ? (
           <div className="h-9 flex items-center justify-end text-sm text-muted-foreground">-</div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-1">
             <Input
               type="number"
               min={1}
               value={item.quantity || ''}
               onChange={handleQuantityChange}
-              className="h-9 text-right w-full"
+              className={`h-9 text-right w-full ${rowErrors.quantity ? 'border-destructive' : ''}`}
             />
+            {rowErrors.quantity && (
+              <p className="text-xs text-destructive">{rowErrors.quantity}</p>
+            )}
             {containerWarning && mode === 'create' && (
-              <Alert variant="destructive" className="p-2">
+              <Alert variant="destructive" className="p-2 mt-1">
                 <AlertTriangle className="h-3 w-3" />
                 <AlertDescription className="text-xs ml-1">
                   Needs {containerWarning.containersNeeded} containers: {containerWarning.splitSuggestion}
@@ -237,14 +247,19 @@ const OrderItemRow = memo(function OrderItemRow({
 
       {/* Unit Price */}
       <TableCell>
-        <Input
-          type="number"
-          min={0}
-          step={0.01}
-          value={item.unitPrice}
-          onChange={handleUnitPriceChange}
-          className="h-9 text-right"
-        />
+        <div className="space-y-1">
+          <Input
+            type="number"
+            min={0}
+            step={0.01}
+            value={item.unitPrice}
+            onChange={handleUnitPriceChange}
+            className={`h-9 text-right ${rowErrors.unitPrice ? 'border-destructive' : ''}`}
+          />
+          {rowErrors.unitPrice && (
+            <p className="text-xs text-destructive">{rowErrors.unitPrice}</p>
+          )}
+        </div>
       </TableCell>
 
       {/* Discount % */}
@@ -317,6 +332,8 @@ function OrderItemsTableComponent({
   onProductSelect,
   columnConfig: _columnConfig = {},
   mode = 'create',
+  itemErrors = [],
+  itemsError,
 }: OrderItemsTableProps) {
   // ----------------------------------------
   // MEMOIZED HANDLERS
@@ -417,6 +434,11 @@ function OrderItemsTableComponent({
 
       <Separator />
 
+      {/* Items Error Message */}
+      {itemsError && (
+        <p className="text-sm text-destructive">{itemsError}</p>
+      )}
+
       {/* Items Table */}
       <div className="rounded-md border">
         <Table>
@@ -456,6 +478,7 @@ function OrderItemsTableComponent({
                   onItemChange={handleItemChange}
                   onRemove={handleRemoveLine}
                   mode={mode}
+                  rowErrors={itemErrors[index] || {}}
                 />
               ))
             )}

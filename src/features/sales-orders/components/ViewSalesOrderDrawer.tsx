@@ -868,7 +868,9 @@ const handleReleaseHold = async () => {
             salesOrderId={order.id}
             salesOrderNumber={order.orderNumber}
             onConfirmComplete={() => {
-              fetchOrder(); // Refresh order data
+              // Close modal and refresh sales order data
+              setShowConfirmAllocationsModal(false);
+              fetchOrder(); // Refresh sales order data without full page reload
             }}
           />
         )}

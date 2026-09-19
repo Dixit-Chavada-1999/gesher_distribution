@@ -568,7 +568,10 @@ export function CreateAllocationDialog({
                       <Input
                         type="number"
                         {...field}
-                        onChange={(e) => field.onChange(parseInt(e.target.value, 10))}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          field.onChange(isNaN(val) ? undefined : val);
+                        }}
                       />
                     </FormControl>
                     <FormDescription>

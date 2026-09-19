@@ -590,6 +590,14 @@ export const salesOrderService = {
         };
       }
 
+      // Check if already in the target status
+      if (existing.status === newStatus) {
+        return {
+          success: false,
+          error: `Sales order is already ${newStatus}`,
+        };
+      }
+
       // Check if transition is valid
       if (!isValidStatusTransition(existing.status, newStatus)) {
         return {

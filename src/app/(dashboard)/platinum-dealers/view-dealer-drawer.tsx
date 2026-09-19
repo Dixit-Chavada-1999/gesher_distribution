@@ -273,7 +273,7 @@ export function ViewDealerDrawer({
       const { createClient } = await import('@/shared/lib/supabase/client');
       const supabase = createClient();
 
-      // Fetch allocations for this dealer
+      // Fetch allocations for this dealer with simplified query
       const { data, error } = await supabase
         .from('fulfillment_allocations')
         .select(`
@@ -283,23 +283,7 @@ export function ViewDealerDrawer({
           status,
           fulfillment_source,
           created_at,
-          platinum_dealer_id,
-          dealer_location_id,
-          sales_order_items!inner (
-            id,
-            sku,
-            description,
-            sales_orders!inner (
-              id,
-              order_number,
-              customers (
-                company_name
-              )
-            )
-          ),
-          platinum_dealer_locations (
-            location_name
-          )
+          dealer_location_id
         `)
         .eq('platinum_dealer_id', dealerId)
         .order('created_at', { ascending: false });
@@ -307,29 +291,80 @@ export function ViewDealerDrawer({
       if (error) {
         console.error('Error loading allocations:', error);
         toast.error('Failed to load allocations');
+        setAllocations([]);
         return;
       }
 
-      if (data) {
-        const formattedAllocations: DealerAllocation[] = data.map((item: any) => ({
+      if (!data || data.length === 0) {
+        setAllocations([]);
+        return;
+      }
+
+      // Fetch related data separately
+      const itemIds = data.map((a: any) => a.sales_order_item_id);
+      const locationIds = data.map((a: any) => a.dealer_location_id).filter(Boolean);
+
+      // Get sales order items
+      const { data: itemsData } = await supabase
+        .from('sales_order_items')
+        .select('id, sku, description, sales_order_id')
+        .in('id', itemIds);
+
+      // Get sales orders
+      const orderIds = itemsData?.map((i: any) => i.sales_order_id) || [];
+      const { data: ordersData } = await supabase
+        .from('sales_orders')
+        .select('id, order_number, customer_id')
+        .in('id', orderIds);
+
+      // Get customers
+      const customerIds = ordersData?.map((o: any) => o.customer_id).filter(Boolean) || [];
+      const { data: customersData } = await supabase
+        .from('customers')
+        .select('id, company_name')
+        .in('id', customerIds);
+
+      // Get dealer locations
+      const { data: locationsData } = locationIds.length > 0
+        ? await supabase
+            .from('platinum_dealer_locations')
+            .select('id, location_name')
+            .in('id', locationIds)
+        : { data: [] };
+
+      // Build lookup maps
+      const itemsMap = new Map(itemsData?.map((i: any) => [i.id, i]) || []);
+      const ordersMap = new Map(ordersData?.map((o: any) => [o.id, o]) || []);
+      const customersMap = new Map(customersData?.map((c: any) => [c.id, c]) || []);
+      const locationsMap = new Map(locationsData?.map((l: any) => [l.id, l]) || []);
+
+      // Format allocations
+      const formattedAllocations: DealerAllocation[] = data.map((item: any) => {
+        const soItem = itemsMap.get(item.sales_order_item_id);
+        const order = soItem ? ordersMap.get(soItem.sales_order_id) : null;
+        const customer = order ? customersMap.get(order.customer_id) : null;
+        const location = item.dealer_location_id ? locationsMap.get(item.dealer_location_id) : null;
+
+        return {
           id: item.id,
-          salesOrderId: item.sales_order_items.sales_orders.id,
-          salesOrderNumber: item.sales_order_items.sales_orders.order_number,
-          customerName: item.sales_order_items.sales_orders.customers?.company_name || 'Unknown',
-          productSku: item.sales_order_items.sku,
-          productDescription: item.sales_order_items.description || '',
+          salesOrderId: order?.id || '',
+          salesOrderNumber: order?.order_number || 'N/A',
+          customerName: customer?.company_name || 'Unknown',
+          productSku: soItem?.sku || 'N/A',
+          productDescription: soItem?.description || '',
           quantity: item.quantity,
           status: item.status,
           fulfillmentSource: item.fulfillment_source,
-          dealerLocationName: item.platinum_dealer_locations?.location_name,
+          dealerLocationName: location?.location_name,
           createdAt: item.created_at,
-        }));
+        };
+      });
 
-        setAllocations(formattedAllocations);
-      }
+      setAllocations(formattedAllocations);
     } catch (error) {
       console.error('Error loading allocations:', error);
       toast.error('Failed to load allocations');
+      setAllocations([]);
     } finally {
       setIsLoadingAllocations(false);
     }

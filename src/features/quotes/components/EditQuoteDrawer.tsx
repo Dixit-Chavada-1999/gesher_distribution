@@ -74,6 +74,7 @@ export function EditQuoteDrawer({ open, onClose, quoteId, onSuccess }: EditQuote
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverErrors, setServerErrors] = useState<Record<string, string[]> | undefined>(undefined);
   const [poDocumentUrl, setPoDocumentUrl] = useState<string | null>(null);
+  const [_isFormValid, setIsFormValid] = useState(false);
 
   // Fetch signed URL for PO document when quote has one
   useEffect(() => {
@@ -263,6 +264,7 @@ export function EditQuoteDrawer({ open, onClose, quoteId, onSuccess }: EditQuote
                   onCancel={handleClose}
                   isSubmitting={isSubmitting}
                   serverErrors={serverErrors}
+                  onValidationChange={setIsFormValid}
                 />
 
                 {/* PO Document Viewer */}

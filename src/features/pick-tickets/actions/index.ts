@@ -702,22 +702,12 @@ export async function createPickTicketFromSalesOrder(
       };
     }
 
-    // Check if pick ticket already exists for this sales order
-    const { data: existingPT } = await db
-      .from('pick_tickets')
-      .select('id, pick_ticket_number')
-      .eq('sales_order_id', salesOrderId)
-      .is('deleted_at', null)
-      .neq('status', 'cancelled')
-      .limit(1);
+    // Determine warehouse ID early
+    const finalWarehouseId = warehouseId || salesOrder.warehouse_id;
 
-    const firstExistingPT = existingPT?.[0];
-    if (firstExistingPT) {
-      return {
-        success: false,
-        error: `Pick ticket ${firstExistingPT.pick_ticket_number} already exists for this sales order`,
-      };
-    }
+    // Note: Duplicate check removed - allocation-based system allows multiple PTs
+    // Each allocation can create its own PT, and the UI prevents duplicate creation
+    // via allocation status tracking (buttons disabled after PT created)
 
     // Prepare items for pick ticket - ONLY include physical inventory items
     // Service and non-inventory items don't need to be picked from warehouse
@@ -758,8 +748,7 @@ export async function createPickTicketFromSalesOrder(
       };
     }
 
-    // Determine warehouse ID (needed for both allocation and email)
-    const finalWarehouseId = warehouseId || salesOrder.warehouse_id;
+    // Note: finalWarehouseId already determined above (before duplicate check)
 
     // Allocate inventory for each item before creating pick ticket
     // Skip if called from allocation modal (skipStatusCheck = true) as inventory is already allocated

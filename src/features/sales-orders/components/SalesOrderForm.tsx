@@ -80,6 +80,7 @@ function SalesOrderFormComponent({
   onCancel: _onCancel,
   onSaveDraft: _onSaveDraft,
   mode = 'create',
+  onValidationChange,
 }: SalesOrderFormProps) {
   // ----------------------------------------
   // FORM SETUP
@@ -91,10 +92,25 @@ function SalesOrderFormComponent({
       ...getDefaultFormValues(),
       ...initialData,
     },
-    mode: 'onBlur',
+    mode: 'onTouched', // Validates after field is touched, then continues with onChange
   });
 
-  const { watch, setValue, handleSubmit, reset } = methods;
+  const { watch, setValue, handleSubmit, reset, clearErrors, formState: { isValid, errors } } = methods;
+
+  // ----------------------------------------
+  // VALIDATION STATE TRACKING
+  // ----------------------------------------
+
+  // Notify parent component when validation state changes
+  useEffect(() => {
+    if (onValidationChange) {
+      onValidationChange(isValid);
+    }
+  }, [isValid, onValidationChange]);
+
+  // ----------------------------------------
+  // FORM RESET (Edit Mode)
+  // ----------------------------------------
 
   // Reset form when initialData changes (for edit mode)
   // Skip reset after first initialization to prevent form reset during save
@@ -397,8 +413,50 @@ function SalesOrderFormComponent({
   // ----------------------------------------
 
   const handleItemsChange = useCallback((updatedItems: unknown[]) => {
-    setValue('items', updatedItems as typeof items, { shouldValidate: true });
-  }, [setValue]);
+    // Detect if this is an add operation (new item added)
+    const isAddOperation = (updatedItems as typeof items).length > items.length;
+
+    if (isAddOperation) {
+      // For add operation, don't validate immediately
+      setValue('items', updatedItems as typeof items, { shouldValidate: false });
+
+      // Clear errors for the newly added item (last item in array)
+      const newItemIndex = (updatedItems as typeof items).length - 1;
+      clearErrors(`items.${newItemIndex}.productId`);
+      clearErrors(`items.${newItemIndex}.unitPrice`);
+      clearErrors(`items.${newItemIndex}.quantity`);
+    } else {
+      // For edit/delete operations, validate normally
+      setValue('items', updatedItems as typeof items, { shouldValidate: true });
+    }
+  }, [setValue, clearErrors, items.length]);
+
+  // ----------------------------------------
+  // ITEM ERRORS
+  // ----------------------------------------
+
+  const itemErrors = useMemo(() => {
+    const itemsErrors = errors.items;
+    if (!itemsErrors || !Array.isArray(itemsErrors)) {return [];}
+
+    return itemsErrors.map((itemError) => {
+      if (!itemError || typeof itemError !== 'object') {return {};}
+
+      const result: Record<string, string> = {};
+
+      if ('productId' in itemError && itemError.productId?.message) {
+        result.productId = itemError.productId.message as string;
+      }
+      if ('quantity' in itemError && itemError.quantity?.message) {
+        result.quantity = itemError.quantity.message as string;
+      }
+      if ('unitPrice' in itemError && itemError.unitPrice?.message) {
+        result.unitPrice = itemError.unitPrice.message as string;
+      }
+
+      return result;
+    });
+  }, [errors.items]);
 
   const handleFormSubmit = useCallback(
     handleSubmit((data) => {
@@ -441,6 +499,8 @@ function SalesOrderFormComponent({
           onItemsChange={handleItemsChange}
           onProductSelect={handleProductSelect}
           mode={mode}
+          itemErrors={itemErrors}
+          itemsError={errors.items?.message || errors.items?.root?.message}
         />
 
         {/* Section 4: Order Summary with Credit Check */}

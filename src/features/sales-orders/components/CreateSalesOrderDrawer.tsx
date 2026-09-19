@@ -47,6 +47,7 @@ export function CreateSalesOrderDrawer({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [_isFormValid, setIsFormValid] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const formRef = useRef<{ getFormData: () => any | null }>(null);
 
@@ -158,6 +159,7 @@ export function CreateSalesOrderDrawer({
                 onCancel={handleCancel}
                 onSaveDraft={handleSaveDraft}
                 onSubmit={handleCreate}
+                onValidationChange={setIsFormValid}
               />
             </div>
           </ScrollArea>

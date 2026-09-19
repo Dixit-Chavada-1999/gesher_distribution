@@ -65,6 +65,7 @@ interface QuoteFormProps {
   onCancel: () => void;
   isSubmitting?: boolean;
   serverErrors?: Record<string, string[]>;
+  onValidationChange?: (isValid: boolean) => void;
 }
 
 // ============================================
@@ -153,6 +154,7 @@ function QuoteFormComponent({
   onCancel: _onCancel,
   isSubmitting: _isSubmitting = false,
   serverErrors,
+  onValidationChange,
 }: QuoteFormProps) {
   // ----------------------------------------
   // FORM SETUP
@@ -164,10 +166,21 @@ function QuoteFormComponent({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(quoteFormSchema) as any,
     defaultValues,
-    mode: 'onBlur',
+    mode: 'onTouched', // Validates after field is touched, then continues with onChange
   });
 
-  const { watch, setValue, handleSubmit, setError, formState: { errors } } = methods;
+  const { watch, setValue, handleSubmit, setError, clearErrors, formState: { errors, isValid } } = methods;
+
+  // ----------------------------------------
+  // VALIDATION STATE TRACKING
+  // ----------------------------------------
+
+  // Notify parent component when validation state changes
+  useEffect(() => {
+    if (onValidationChange) {
+      onValidationChange(isValid);
+    }
+  }, [isValid, onValidationChange]);
 
   // ----------------------------------------
   // SET SERVER ERRORS
@@ -326,6 +339,9 @@ function QuoteFormComponent({
   // ----------------------------------------
 
   const handleItemsChange = useCallback((updatedItems: typeof items) => {
+    // Detect if this is an add operation (new item added)
+    const isAddOperation = updatedItems.length > items.length;
+
     // Recalculate line totals
     const itemsWithTotals = updatedItems.map((item) => {
       const quantity = Number(item.quantity) || 0;
@@ -334,8 +350,21 @@ function QuoteFormComponent({
       const lineTotal = quantity * unitPrice * (1 - discountPercent / 100);
       return { ...item, lineTotal };
     });
-    setValue('items', itemsWithTotals, { shouldValidate: true });
-  }, [setValue]);
+
+    if (isAddOperation) {
+      // For add operation, don't validate immediately
+      setValue('items', itemsWithTotals, { shouldValidate: false });
+
+      // Clear errors for the newly added item (last item in array)
+      const newItemIndex = itemsWithTotals.length - 1;
+      clearErrors(`items.${newItemIndex}.productId`);
+      clearErrors(`items.${newItemIndex}.unitPrice`);
+      clearErrors(`items.${newItemIndex}.quantity`);
+    } else {
+      // For edit/delete operations, validate normally
+      setValue('items', itemsWithTotals, { shouldValidate: true });
+    }
+  }, [setValue, clearErrors, items.length]);
 
   const handleCustomerChangeWithPriceUpdate = useCallback(async (newCustomerId: string) => {
     await handleCustomerChange(newCustomerId);

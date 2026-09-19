@@ -74,15 +74,19 @@ export const orderItemFormSchema = z.object({
   productId: z.string().min(1, 'Product is required'),
   sku: z.string(), // SKU is auto-filled when product is selected (empty string allowed)
   description: z.string().optional().default(''),
-  quantity: z.union([z.string(), z.number()]).transform((val) => {
-    const num = typeof val === 'string' ? parseInt(val, 10) : val;
-    return isNaN(num) ? 1 : num;
-  }),
+  quantity: z.union([z.string(), z.number()])
+    .transform((val) => {
+      const num = typeof val === 'string' ? parseInt(val, 10) : val;
+      return isNaN(num) ? 0 : num;
+    })
+    .refine((val) => val > 0, { message: 'Quantity must be greater than 0' }),
   unitId: z.string().optional().default('EA'),
-  unitPrice: z.union([z.string(), z.number()]).transform((val) => {
-    const num = typeof val === 'string' ? parseFloat(val) : val;
-    return isNaN(num) ? 0 : num;
-  }),
+  unitPrice: z.union([z.string(), z.number()])
+    .transform((val) => {
+      const num = typeof val === 'string' ? parseFloat(val) : val;
+      return isNaN(num) ? 0 : num;
+    })
+    .refine((val) => val > 0, { message: 'Unit price must be greater than 0' }),
   discountPercent: z.union([z.string(), z.number()]).transform((val) => {
     const num = typeof val === 'string' ? parseFloat(val) : val;
     return isNaN(num) ? 0 : num;
@@ -151,7 +155,7 @@ export const salesOrderFormSchema = z.object({
   warehouseId: z.string().optional().default(''),
   currencyId: z.string().optional().default('USD'),
   customerPoNumber: z.string().optional().default(''),
-  orderSeries: z.string().optional().default(''), // GDC 1, GDC 2, GDC 3 - Required only when status is 'confirmed'
+  orderSeries: z.string().min(1, 'Order series is required'),
   status: orderStatusSchema.default('draft'),
   billingAddress: addressFormSchema,
   shippingAddress: addressFormSchema,
@@ -161,15 +165,28 @@ export const salesOrderFormSchema = z.object({
   internalNotes: z.string().optional().default(''),
 }).refine(
   (data) => {
-    // Order series is required only when status is 'confirmed'
-    if (data.status === 'confirmed' && !data.orderSeries) {
-      return false;
-    }
-    return true;
+    // Validate Requested Delivery Date is a future date
+    if (!data.requestedDeliveryDate) return false;
+    const deliveryDate = new Date(data.requestedDeliveryDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time to start of day
+    return deliveryDate > today;
   },
   {
-    message: 'Order series is required when confirming order',
-    path: ['orderSeries'],
+    message: 'Requested delivery date must be a future date',
+    path: ['requestedDeliveryDate'],
+  }
+).refine(
+  (data) => {
+    // Validate Requested Delivery Date is after Order Date
+    if (!data.orderDate || !data.requestedDeliveryDate) return false;
+    const orderDate = new Date(data.orderDate);
+    const deliveryDate = new Date(data.requestedDeliveryDate);
+    return deliveryDate > orderDate;
+  },
+  {
+    message: 'Requested delivery date must be after order date',
+    path: ['requestedDeliveryDate'],
   }
 );
 

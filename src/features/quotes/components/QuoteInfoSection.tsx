@@ -147,7 +147,7 @@ function QuoteInfoSectionComponent({
 
         {/* Valid Until */}
         <div className="space-y-2">
-          <Label htmlFor="validUntil">Valid Until</Label>
+          <Label htmlFor="validUntil">Valid Until *</Label>
           <Input
             id="validUntil"
             type="date"

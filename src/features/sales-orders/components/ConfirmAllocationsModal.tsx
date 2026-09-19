@@ -55,6 +55,14 @@ interface AllocationAction {
   error?: string;
 }
 
+// Extended allocation type with item details for display
+interface AllocationWithItemDetails extends FulfillmentAllocationWithDetails {
+  salesOrderItem?: {
+    sku: string;
+    description: string | null;
+  };
+}
+
 // ============================================
 // COMPONENT
 // ============================================
@@ -66,7 +74,7 @@ export function ConfirmAllocationsModal({
   salesOrderNumber,
   onConfirmComplete,
 }: ConfirmAllocationsModalProps) {
-  const [allocations, setAllocations] = useState<FulfillmentAllocationWithDetails[]>([]);
+  const [allocations, setAllocations] = useState<AllocationWithItemDetails[]>([]);
   const [actions, setActions] = useState<Map<string, AllocationAction>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -87,12 +95,20 @@ export function ConfirmAllocationsModal({
 
       if (result.success && result.data) {
         // Collect all allocations from all items
-        const allAllocations: FulfillmentAllocationWithDetails[] = [];
+        const allAllocations: AllocationWithItemDetails[] = [];
         for (const item of result.data.items) {
           // Items may have allocations populated by the service
           const itemWithAllocations = item as any;
           if (itemWithAllocations.allocations && itemWithAllocations.allocations.length > 0) {
-            allAllocations.push(...itemWithAllocations.allocations);
+            // Add sales order item data to each allocation for display
+            const allocationsWithItem = itemWithAllocations.allocations.map((alloc: any) => ({
+              ...alloc,
+              salesOrderItem: {
+                sku: item.sku,
+                description: item.description,
+              },
+            }));
+            allAllocations.push(...allocationsWithItem);
           }
         }
 
@@ -229,28 +245,6 @@ export function ConfirmAllocationsModal({
         // Show success message with details from result
         const message = result.data?.message || `${action.label} created successfully`;
         toast.success(message);
-
-        // Check if all allocations are now assigned (completed)
-        const allCompleted = Array.from(completedActions.values()).every(
-          a => a.status === 'completed'
-        );
-
-        // If all allocations are assigned, auto-confirm the sales order
-        if (allCompleted) {
-          console.log('✅ [handleAction] All allocations assigned! Auto-confirming sales order...');
-          try {
-            const { confirmSalesOrder } = await import('../actions');
-            const confirmResult = await confirmSalesOrder(salesOrderId);
-
-            if (confirmResult.success) {
-              console.log('✅ [handleAction] Sales order auto-confirmed successfully');
-              toast.success('All allocations assigned. Sales order confirmed automatically.');
-            }
-          } catch (error) {
-            console.error('❌ [handleAction] Failed to auto-confirm SO:', error);
-            // Don't show error - allocations are still successful
-          }
-        }
       } else {
         throw new Error(result.error || 'Action failed');
       }
@@ -385,31 +379,103 @@ export function ConfirmAllocationsModal({
    */
   async function handleSendEmail(allocation: FulfillmentAllocationWithDetails) {
     try {
+      console.log('🔄 [handleSendEmail] Starting email send for allocation:', allocation.id);
+
       if (!allocation.platinumDealer) {
         throw new Error('Dealer information not found for allocation');
       }
 
-      // TODO: Implement actual email sending
-      // For now, just log the allocation details
-      console.log('✅ Email notification to dealer:', {
-        dealer: allocation.platinumDealer.dealerName,
+      // Check if dealer has email
+      if (!allocation.platinumDealer.email) {
+        throw new Error(`Dealer "${allocation.platinumDealer.dealerName}" does not have an email address configured`);
+      }
+
+      // Get sales order details
+      const { getSalesOrder } = await import('../actions');
+      const soResult = await getSalesOrder(salesOrderId);
+
+      if (!soResult.success || !soResult.data) {
+        throw new Error('Failed to fetch sales order details');
+      }
+
+      const salesOrder = soResult.data;
+
+      // Find the sales order item for this allocation
+      const salesOrderItem = salesOrder.items.find(
+        (item) => item.id === allocation.salesOrderItemId
+      );
+
+      if (!salesOrderItem) {
+        throw new Error('Sales order item not found');
+      }
+
+      // Build location address if available
+      let locationAddress = '';
+      if (allocation.dealerLocation) {
+        const parts = [
+          allocation.dealerLocation.addressStreet,
+          allocation.dealerLocation.addressCity,
+          allocation.dealerLocation.addressState,
+          allocation.dealerLocation.addressPostalCode,
+        ].filter(Boolean);
+        locationAddress = parts.join(', ');
+      }
+
+      // Send email using the platinum dealer email action (server-side)
+      const { sendDealerAllocationEmailAction } = await import(
+        '@/features/platinum-dealers/actions/email.actions'
+      );
+
+      console.log('📧 [handleSendEmail] Sending email to:', allocation.platinumDealer.email);
+
+      const emailResult = await sendDealerAllocationEmailAction({
+        // Dealer Info
+        dealerEmail: allocation.platinumDealer.email,
+        dealerName: allocation.platinumDealer.dealerName,
+        dealerContactName: allocation.platinumDealer.contactName || undefined,
+
+        // Sales Order Info
+        salesOrderId: salesOrder.id,
+        salesOrderNumber: salesOrder.orderNumber,
+        customerName: salesOrder.customer?.name || 'Unknown Customer',
+
+        // Product Info
+        productSku: salesOrderItem.sku,
+        productDescription: salesOrderItem.description || '',
         quantity: allocation.quantity,
-        fulfillmentSource: allocation.fulfillmentSource,
-        location: allocation.dealerLocation?.locationName,
+
+        // Allocation Info
+        fulfillmentSource: allocation.fulfillmentSource as 'platinum_dealer_inventory' | 'platinum_dealer_fulfillment',
+        locationName: allocation.dealerLocation?.locationName,
+        locationAddress: locationAddress || undefined,
+
+        // Additional Info
+        notes: allocation.notes || undefined,
+        requestedDeliveryDate: salesOrder.requestedDeliveryDate
+          ? new Date(salesOrder.requestedDeliveryDate).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            })
+          : undefined,
       });
+
+      if (!emailResult.success) {
+        throw new Error(emailResult.error || 'Failed to send email to dealer');
+      }
+
+      console.log('✅ [handleSendEmail] Email sent successfully');
 
       // Update allocation status to 'allocated'
       const { updateAllocationStatus } = await import('../actions/fulfillment-allocation.actions');
       await updateAllocationStatus(allocation.id, 'allocated');
-
-      // Simulate email sending
-      await new Promise((resolve) => setTimeout(resolve, 500));
 
       return {
         success: true,
         data: { emailSent: true },
       };
     } catch (error) {
+      console.error('❌ [handleSendEmail] Error:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to send email',
@@ -446,21 +512,44 @@ export function ConfirmAllocationsModal({
         status: a.status
       })));
 
-      // Step 1: Confirm the sales order
-      // NOTE: confirmSalesOrder() automatically creates PO for manufacturer (direct) allocations
-      console.log('📞 [Modal] Calling confirmSalesOrder...');
-      const { confirmSalesOrder } = await import('../actions');
-      const confirmResult = await confirmSalesOrder(salesOrderId);
+      // Step 1: Check current SO status and confirm if needed
+      const { getSalesOrder, confirmSalesOrder } = await import('../actions');
+      const soResult = await getSalesOrder(salesOrderId);
 
-      console.log('📊 [Modal] confirmSalesOrder result:', confirmResult);
-
-      if (!confirmResult.success) {
-        console.error('❌ [Modal] Confirm failed:', confirmResult.error);
-        toast.error(confirmResult.error || 'Failed to confirm order');
+      if (!soResult.success || !soResult.data) {
+        toast.error('Failed to fetch sales order status');
+        setIsProcessing(false);
         return;
       }
 
-      console.log('✅ [Modal] Order confirmed. PO should be created for manufacturer allocations.');
+      const currentStatus = soResult.data.status;
+      console.log('📊 [Modal] Current SO status:', currentStatus);
+
+      let wasAutoConfirmed = false;
+
+      // Only confirm if not already confirmed
+      if (currentStatus === 'draft' || currentStatus === 'pending') {
+        console.log('📞 [Modal] Calling confirmSalesOrder...');
+        const confirmResult = await confirmSalesOrder(salesOrderId);
+
+        console.log('📊 [Modal] confirmSalesOrder result:', confirmResult);
+
+        if (!confirmResult.success) {
+          console.error('❌ [Modal] Confirm failed:', confirmResult.error);
+          toast.error(confirmResult.error || 'Failed to confirm order');
+          setIsProcessing(false);
+          return;
+        }
+
+        console.log('✅ [Modal] Order confirmed. PO should be created for manufacturer allocations.');
+      } else if (currentStatus === 'confirmed' || currentStatus === 'processing') {
+        console.log('ℹ️ [Modal] Order already confirmed (auto-confirmed when all allocations assigned)');
+        wasAutoConfirmed = true;
+      } else {
+        toast.error(`Cannot confirm order with status: ${currentStatus}`);
+        setIsProcessing(false);
+        return;
+      }
 
       // Step 2: Create Pick Tickets for GDC Inventory allocations
       const gdcAllocations = allocations.filter((a) => a.fulfillmentSource === 'gdc_inventory');
@@ -526,7 +615,11 @@ export function ConfirmAllocationsModal({
         ? ` ${resourcesCreated.join(' and ')} created.`
         : '';
 
-      toast.success(`Order ${salesOrderNumber} confirmed successfully!${resourcesText}`);
+      const confirmText = wasAutoConfirmed
+        ? 'Order was already confirmed.'
+        : `Order ${salesOrderNumber} confirmed successfully!`;
+
+      toast.success(`${confirmText}${resourcesText}`);
       onConfirmComplete();
       onOpenChange(false);
     } catch (error) {
@@ -568,6 +661,7 @@ export function ConfirmAllocationsModal({
                 <TableHeader>
                   <TableRow>
                     <TableHead>Allocation Source</TableHead>
+                    <TableHead>Product</TableHead>
                     <TableHead>Quantity</TableHead>
                     <TableHead>Details</TableHead>
                     <TableHead>Status</TableHead>
@@ -585,6 +679,14 @@ export function ConfirmAllocationsModal({
                       <TableRow key={allocation.id}>
                         <TableCell className="font-medium">
                           {getSourceLabel(allocation.fulfillmentSource)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            <div className="font-medium">{allocation.salesOrderItem?.sku || '-'}</div>
+                            <div className="text-xs text-muted-foreground truncate max-w-[200px]">
+                              {allocation.salesOrderItem?.description || ''}
+                            </div>
+                          </div>
                         </TableCell>
                         <TableCell>{allocation.quantity} units</TableCell>
                         <TableCell className="text-sm text-muted-foreground">

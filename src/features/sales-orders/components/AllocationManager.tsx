@@ -366,7 +366,9 @@ export function AllocationManager({
                             <TooltipProvider>
                               <Tooltip delayDuration={200}>
                                 <TooltipTrigger asChild>
-                                  <Info className="h-4 w-4 text-muted-foreground hover:text-foreground cursor-help" />
+                                  <button type="button" className="inline-flex items-center">
+                                    <Info className="h-4 w-4 text-muted-foreground hover:text-foreground cursor-help" />
+                                  </button>
                                 </TooltipTrigger>
                                 <TooltipContent className="max-w-sm p-3" align="start">
                                   <div className="space-y-2">

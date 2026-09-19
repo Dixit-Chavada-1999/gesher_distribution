@@ -219,8 +219,8 @@ const POItemRow = memo(function POItemRow({
         <Input
           type="number"
           min={0}
-          step={0.01}
-          value={(item.unitPrice / 100).toFixed(2)}
+          step={1}
+          value={Math.round(item.unitPrice / 100)}
           onChange={handleUnitPriceChange}
           className="h-9 text-right"
         />

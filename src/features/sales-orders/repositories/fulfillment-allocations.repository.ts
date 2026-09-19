@@ -211,8 +211,8 @@ export async function getAllocationByIdWithDetails(
         *,
         location:locations(id, location_code, name),
         assigned_contact:location_contacts(id, name, email, phone),
-        platinum_dealer:platinum_dealers(id, dealer_name, code),
-        dealer_location:platinum_dealer_locations(id, location_name, location_code, address_city, address_state),
+        platinum_dealer:platinum_dealers(id, dealer_name, code, email, contact_name),
+        dealer_location:platinum_dealer_locations(id, location_name, location_code, address_street, address_city, address_state, address_postal_code),
         purchase_order:purchase_orders(id, po_number, status)
       `
       )
@@ -253,8 +253,8 @@ export async function getAllocationsByItemId(
         *,
         location:locations(id, location_code, name),
         assigned_contact:location_contacts(id, name, email, phone),
-        platinum_dealer:platinum_dealers(id, dealer_name, code),
-        dealer_location:platinum_dealer_locations(id, location_name, location_code, address_city, address_state),
+        platinum_dealer:platinum_dealers(id, dealer_name, code, email, contact_name),
+        dealer_location:platinum_dealer_locations(id, location_name, location_code, address_street, address_city, address_state, address_postal_code),
         purchase_order:purchase_orders(id, po_number, status)
       `
       )
@@ -542,8 +542,8 @@ export async function getAllocationsBySource(
         `
         *,
         location:locations(id, location_code, name),
-        platinum_dealer:platinum_dealers(id, dealer_name, code),
-        dealer_location:platinum_dealer_locations(id, location_name, location_code, address_city, address_state),
+        platinum_dealer:platinum_dealers(id, dealer_name, code, email, contact_name),
+        dealer_location:platinum_dealer_locations(id, location_name, location_code, address_street, address_city, address_state, address_postal_code),
         purchase_order:purchase_orders(id, po_number, status)
       `
       )
@@ -583,8 +583,8 @@ export async function getAllocationsByDealer(
         `
         *,
         location:locations(id, location_code, name),
-        platinum_dealer:platinum_dealers(id, dealer_name, code),
-        dealer_location:platinum_dealer_locations(id, location_name, location_code, address_city, address_state),
+        platinum_dealer:platinum_dealers(id, dealer_name, code, email, contact_name),
+        dealer_location:platinum_dealer_locations(id, location_name, location_code, address_street, address_city, address_state, address_postal_code),
         purchase_order:purchase_orders(id, po_number, status)
       `
       )
@@ -624,8 +624,8 @@ export async function getAllocationsByLocation(
         `
         *,
         location:locations(id, location_code, name),
-        platinum_dealer:platinum_dealers(id, dealer_name, code),
-        dealer_location:platinum_dealer_locations(id, location_name, location_code, address_city, address_state),
+        platinum_dealer:platinum_dealers(id, dealer_name, code, email, contact_name),
+        dealer_location:platinum_dealer_locations(id, location_name, location_code, address_street, address_city, address_state, address_postal_code),
         purchase_order:purchase_orders(id, po_number, status)
       `
       )
@@ -663,8 +663,8 @@ export async function getPendingAllocations(): Promise<{
         `
         *,
         location:locations(id, location_code, name),
-        platinum_dealer:platinum_dealers(id, dealer_name, code),
-        dealer_location:platinum_dealer_locations(id, location_name, location_code, address_city, address_state),
+        platinum_dealer:platinum_dealers(id, dealer_name, code, email, contact_name),
+        dealer_location:platinum_dealer_locations(id, location_name, location_code, address_street, address_city, address_state, address_postal_code),
         purchase_order:purchase_orders(id, po_number, status)
       `
       )
@@ -746,6 +746,8 @@ function mapAllocationWithDetailsFromDb(
           id: data.platinum_dealer.id,
           dealerName: data.platinum_dealer.dealer_name,
           code: data.platinum_dealer.code,
+          email: data.platinum_dealer.email,
+          contactName: data.platinum_dealer.contact_name,
         }
       : undefined,
     dealerLocation: data.dealer_location
@@ -754,8 +756,10 @@ function mapAllocationWithDetailsFromDb(
           dealerId: allocation.platinumDealerId!,
           locationName: data.dealer_location.location_name,
           locationCode: data.dealer_location.location_code,
+          addressStreet: data.dealer_location.address_street,
           addressCity: data.dealer_location.address_city,
           addressState: data.dealer_location.address_state,
+          addressPostalCode: data.dealer_location.address_postal_code,
         }
       : undefined,
     purchaseOrder: data.purchase_order

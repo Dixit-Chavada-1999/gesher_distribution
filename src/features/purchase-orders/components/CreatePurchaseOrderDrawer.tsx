@@ -119,6 +119,9 @@ export function CreatePurchaseOrderDrawer({
     },
   });
 
+  // Watch PO Date for Expected Delivery Date validation
+  const poDate = form.watch('poDate');
+
   // Load suppliers on mount
   useEffect(() => {
     if (open) {
@@ -349,7 +352,11 @@ export function CreatePurchaseOrderDrawer({
                         <FormItem>
                           <FormLabel>Expected Delivery</FormLabel>
                           <FormControl>
-                            <Input type="date" {...field} />
+                            <Input
+                              type="date"
+                              min={poDate || undefined}
+                              {...field}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
