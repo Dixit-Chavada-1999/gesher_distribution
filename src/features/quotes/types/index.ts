@@ -427,6 +427,7 @@ export interface QuoteFormData {
 export interface QuotesTableProps {
   data: QuoteListItem[];
   isLoading?: boolean;
+  isSuperAdmin?: boolean;
   onRowClick?: (quote: QuoteListItem) => void;
   onView?: (quote: QuoteListItem) => void;
   onEdit?: (quote: QuoteListItem) => void;

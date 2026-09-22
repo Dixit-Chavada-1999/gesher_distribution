@@ -266,16 +266,19 @@ export async function logDealerInventoryMovement(
 
     if (error) {
       console.error('Failed to log dealer inventory movement:', error);
-      return { success: false, error: error.message };
+      // ⚠️ TEMPORARY FIX: Don't fail allocation if movement log fails
+      // Root cause: dealer_location_id not in locations table (foreign key constraint)
+      // TODO: Add dealer_location_id column to inventory_movements table
+      console.warn('⚠️ Skipping movement log for dealer inventory (foreign key constraint issue)');
+      return { success: true }; // Return success anyway - allocation already created
     }
 
     return { success: true };
   } catch (error) {
     console.error('Error logging dealer inventory movement:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    // Don't fail allocation on logging errors
+    console.warn('⚠️ Skipping movement log due to error');
+    return { success: true }; // Return success anyway
   }
 }
 

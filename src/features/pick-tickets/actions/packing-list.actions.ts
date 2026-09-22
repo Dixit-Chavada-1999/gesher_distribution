@@ -197,19 +197,26 @@ export async function transitionPackingListStatus(id: string, status: PackingLis
   const result = await PackingListService.transitionStatus(id, status, userId);
 
   if (result.success && result.data) {
-    // When transitioning to 'shipped', create the warehouse shipment
-    let shipmentWarning: string | undefined;
+    // NOTE: Warehouse orders no longer create shipments
+    // Packing list itself tracks delivery (tracking number, carrier, delivered date)
+    // Only supplier/dropship orders create shipments (from PO confirmation)
 
-    if (status === 'shipped') {
-      // The status change is already committed, so a shipment failure must not
-      // roll it back — but it must surface, or the order silently never
-      // reaches the Shipments page.
+    // When transitioning to 'delivered', update sales order status
+    if (status === 'delivered') {
       try {
-        await createShipmentFromPackingList(result.data, userId);
+        const { db } = await import('@/shared/lib/supabase/database');
+        await db
+          .from('sales_orders')
+          .update({
+            status: 'delivered',
+            updated_at: new Date().toISOString(),
+            updated_by: userId || null,
+          })
+          .eq('id', result.data.salesOrderId);
+
+        console.log(`[Packing List DELIVERED] Updated SO ${result.data.salesOrderId} to delivered status`);
       } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
-        console.error('[transitionPackingListStatus] Failed to create shipment:', error);
-        shipmentWarning = `Packing list shipped, but the shipment could not be created: ${detail}`;
+        console.error('[transitionPackingListStatus] Failed to update sales order status:', error);
       }
     }
 
@@ -218,164 +225,14 @@ export async function transitionPackingListStatus(id: string, status: PackingLis
     revalidatePath('/pick-tickets');
     revalidatePath('/inventory');
     revalidatePath('/operations');
-    revalidatePath('/shipments');
-
-    if (shipmentWarning) {
-      return { ...result, warning: shipmentWarning };
-    }
+    revalidatePath('/sales-orders');
   }
 
   return result;
 }
 
-/**
- * Helper: Create shipment from shipped packing list
- */
-async function createShipmentFromPackingList(
-  packingList: PackingListWithItems,
-  userId?: string
-): Promise<void> {
-  const { db } = await import('@/shared/lib/supabase/database');
-  const { PickTicketService } = await import('../services');
-
-  // Get pick ticket details
-  const ptResult = await PickTicketService.getPickTicketById(packingList.pickTicketId);
-  if (!ptResult.success || !ptResult.data) {
-    console.log('[transitionPackingListStatus] Pick ticket not found, skipping shipment creation');
-    return;
-  }
-
-  const pickTicket = ptResult.data;
-
-  if (!pickTicket.salesOrderId) {
-    console.log('[transitionPackingListStatus] No sales order linked, skipping shipment creation');
-    return;
-  }
-
-  // Generate shipment number
-  const { data: shipmentNumber, error: numError } = await db.rpc('generate_shipment_number');
-  if (numError || !shipmentNumber) {
-    throw new Error(`Failed to generate shipment number: ${numError?.message}`);
-  }
-
-  // Get sales order details
-  const { data: salesOrder, error: soError } = await db
-    .from('sales_orders')
-    .select(`
-      id,
-      order_number,
-      shipping_address_street,
-      shipping_address_city,
-      shipping_address_state,
-      shipping_address_postal_code,
-      shipping_address_country,
-      customer_po_number,
-      requested_delivery_date,
-      customers(id, name)
-    `)
-    .eq('id', pickTicket.salesOrderId)
-    .single();
-
-  if (soError || !salesOrder) {
-    throw new Error(
-      `Failed to load sales order ${pickTicket.salesOrderId} for shipment creation: ${soError?.message || 'not found'}`
-    );
-  }
-
-  const customer = Array.isArray(salesOrder.customers)
-    ? salesOrder.customers[0]
-    : salesOrder.customers;
-
-  // Calculate total quantity from packing list items
-  const totalQty = (packingList.items || []).reduce((sum, item) => sum + item.quantityPacked, 0);
-
-  // Create shipment with source='warehouse'
-  const { data: shipment, error: shipmentError } = await db
-    .from('shipments')
-    .insert({
-      shipment_number: shipmentNumber,
-      shipment_date: new Date().toISOString().split('T')[0],
-      sales_order_id: salesOrder.id,
-      from_location_id: pickTicket.warehouseId,
-      source: 'warehouse',
-      load_status: 'in_transit',
-      total_qty: totalQty,
-      outstanding_qty: totalQty,
-      ship_to_name: customer?.name || null,
-      ship_to_address_street: salesOrder.shipping_address_street || null,
-      ship_to_address_city: salesOrder.shipping_address_city || null,
-      ship_to_address_state: salesOrder.shipping_address_state || null,
-      ship_to_address_postal_code: salesOrder.shipping_address_postal_code || null,
-      ship_to_address_country: salesOrder.shipping_address_country || null,
-      customer_expected_delivery: salesOrder.requested_delivery_date || null,
-      status: 'in_transit',
-      created_by: userId || null,
-      updated_by: userId || null,
-    })
-    .select()
-    .single();
-
-  if (shipmentError) {
-    throw new Error(`Failed to create shipment: ${shipmentError.message}`);
-  }
-
-  // Create shipment items from packing list items
-  const shipmentItems = (packingList.items || []).map((item, index) => ({
-    shipment_id: shipment.id,
-    product_id: item.productId,
-    sku: item.sku,
-    description: item.description || null,
-    quantity_shipped: item.quantityPacked,
-    sort_order: index,
-    created_by: userId || null,
-    updated_by: userId || null,
-  }));
-
-  if (shipmentItems.length > 0) {
-    const { error: itemsError } = await db
-      .from('shipment_items')
-      .insert(shipmentItems);
-
-    if (itemsError) {
-      // Clean up shipment if items insertion fails
-      await db.from('shipments').delete().eq('id', shipment.id);
-      throw new Error(`Failed to create shipment items: ${itemsError.message}`);
-    }
-  }
-
-  // Link packing list to shipment
-  await db
-    .from('packing_lists')
-    .update({ shipment_id: shipment.id })
-    .eq('id', packingList.id);
-
-  // Ship inventory for each packed item
-  const { inventoryService } = await import('@/features/inventory/services/inventory.service');
-
-  for (const item of packingList.items || []) {
-    if (!item.productId || !pickTicket.warehouseId) {
-      continue;
-    }
-
-    try {
-      await inventoryService.shipByProductLocation(
-        item.productId,
-        pickTicket.warehouseId,
-        item.quantityPacked,
-        userId,
-        {
-          type: 'packing_list',
-          id: packingList.id,
-          number: packingList.packingListNumber,
-        }
-      );
-    } catch (error) {
-      console.error(`Failed to ship inventory for ${item.sku}:`, error);
-    }
-  }
-
-  console.log(`[Packing List SHIPPED] Created shipment ${shipmentNumber} with source='warehouse' for PL ${packingList.packingListNumber}`);
-}
+// NOTE: Removed createShipmentFromPackingList function
+// Warehouse orders no longer create shipments - packing list tracks delivery directly
 
 // ============================================
 // DELETE PACKING LIST

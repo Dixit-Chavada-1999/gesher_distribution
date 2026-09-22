@@ -46,6 +46,7 @@ import {
 } from '@/features/sales-orders/validations/fulfillment-allocation.schema';
 import { createAllocationAction } from '@/features/sales-orders/actions/fulfillment-allocation.actions';
 import type { FulfillmentSource } from '@/features/sales-orders/types';
+import { getActiveLocationContacts } from '@/features/locations/actions/location-contacts';
 
 // ============================================
 // TYPES
@@ -100,10 +101,12 @@ export function CreateAllocationDialog({
   const [selectedSource, setSelectedSource] = useState<FulfillmentSource | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
   const [locationContacts, setLocationContacts] = useState<LocationContact[]>([]);
+  const [_warehouseUsers, _setWarehouseUsers] = useState<{ id: string; name: string; email: string }[]>([]);
   const [dealers, setDealers] = useState<Dealer[]>([]);
   const [dealerLocations, setDealerLocations] = useState<DealerLocation[]>([]);
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [loadingContacts, setLoadingContacts] = useState(false);
+  const [_loadingUsers, _setLoadingUsers] = useState(false);
   const [loadingDealers, setLoadingDealers] = useState(false);
   const [inventoryInfo, setInventoryInfo] = useState<{
     onHand: number;
@@ -132,7 +135,7 @@ export function CreateAllocationDialog({
     resolver: zodResolver(createFulfillmentAllocationSchema),
     defaultValues: {
       salesOrderItemId,
-      fulfillmentSource: 'direct',
+      fulfillmentSource: '' as any, // Empty to show placeholder "Select source"
       quantity: remainingToAllocate,
       notes: '',
       // Add default values for conditional fields to prevent controlled/uncontrolled warning
@@ -190,10 +193,7 @@ export function CreateAllocationDialog({
   async function loadLocationContacts(locationId: string) {
     try {
       setLoadingContacts(true);
-      // Import and call location contacts action
-      const { getActiveLocationContacts } = await import(
-        '@/features/locations/actions/location-contacts'
-      );
+      // Call location contacts action (static import - faster loading)
       const result = await getActiveLocationContacts(locationId);
 
       if (result.success && result.data) {
@@ -483,6 +483,16 @@ export function CreateAllocationDialog({
     try {
       setIsSubmitting(true);
 
+      // 🐛 DEBUG: Log form data before submission
+      console.log('🔍 [CreateAllocationDialog] Form data submitted:', {
+        fulfillmentSource: data.fulfillmentSource,
+        quantity: data.quantity,
+        platinumDealerId: 'platinumDealerId' in data ? (data as any).platinumDealerId : 'NOT FOUND',
+        dealerLocationId: 'dealerLocationId' in data ? (data as any).dealerLocationId : 'NOT FOUND',
+        locationId: 'locationId' in data ? (data as any).locationId : 'NOT FOUND',
+        fullData: data,
+      });
+
       const result = await createAllocationAction(data, productId);
 
       if (result.success) {
@@ -537,7 +547,7 @@ export function CreateAllocationDialog({
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select source" />
+                        <SelectValue placeholder="Select fulfillment type" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -653,7 +663,7 @@ export function CreateAllocationDialog({
                                         </span>
                                       ) : (
                                         <span className="text-muted-foreground">
-                                          Select warehouse contact
+                                          Select location contact
                                         </span>
                                       )}
                                     </SelectValue>

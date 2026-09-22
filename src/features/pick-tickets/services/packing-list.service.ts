@@ -31,7 +31,8 @@ interface ServiceResult<T = unknown> {
 const PACKING_LIST_STATUS_TRANSITIONS: Record<PackingListStatus, PackingListStatus[]> = {
   draft: ['packed'],
   packed: ['shipped'],
-  shipped: [],
+  shipped: ['delivered'],
+  delivered: [],
 };
 
 // ============================================
@@ -310,6 +311,9 @@ export const PackingListService = {
         await PickTicketRepository.updateStatus(packingList.pickTicketId, 'packed', userId);
       } else if (newStatus === 'shipped') {
         await PickTicketRepository.updateStatus(packingList.pickTicketId, 'shipped', userId);
+      } else if (newStatus === 'delivered') {
+        // Pick ticket remains 'shipped' - packing list tracks final delivery
+        // Sales order status will be updated in the action layer
       }
 
       const updatedPackingList = await PackingListRepository.findById(id);

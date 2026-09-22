@@ -341,7 +341,7 @@ function OrderItemsTableComponent({
             // Fallback to local product data (mock behavior)
             if (product) {
               updatedItem.sku = product.sku;
-              updatedItem.description = product.description;
+              updatedItem.description = product.description || product.name; // Use description if available, fallback to name
               updatedItem.unitPrice = product.unitPrice;
               // Keep existing unitId or default to 'EA'
               if (!updatedItem.unitId) {

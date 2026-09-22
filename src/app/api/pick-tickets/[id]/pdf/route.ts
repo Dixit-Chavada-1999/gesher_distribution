@@ -101,6 +101,7 @@ export async function GET(
       customerName: pickTicket.salesOrder?.customerName || 'Unknown Customer',
       shipToAddress: formatShipToAddress(salesOrder),
       requiredDate: salesOrder?.requested_delivery_date || null,
+      shippingMethod: salesOrder?.shipping_method || null,
       warehouseName: pickTicket.warehouse?.name || '-',
       warehouseCode: pickTicket.warehouse?.code || '-',
       assignedTo,

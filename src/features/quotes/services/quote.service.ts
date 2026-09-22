@@ -647,10 +647,15 @@ export const quoteService = {
   /**
    * Convert quote to sales order (accepted -> converted)
    * This also creates the sales order with credit check
+   *
+   * @param id - Quote ID
+   * @param userId - User performing the conversion
+   * @param bypassValidation - If true, allows Super Admin to convert from any status
    */
   async convertToSalesOrder(
     id: string,
-    userId?: string
+    userId?: string,
+    bypassValidation = false
   ): Promise<ServiceResult<{ quote: Quote; salesOrderId: string; creditStatus: 'ok' | 'hold' }>> {
     try {
       const existing = await quoteRepository.findById(id);
@@ -661,8 +666,8 @@ export const quoteService = {
         };
       }
 
-      // Check if transition is valid
-      if (!isValidStatusTransition(existing.status, 'converted')) {
+      // Check if transition is valid (skip for Super Admin)
+      if (!bypassValidation && !isValidStatusTransition(existing.status, 'converted')) {
         return {
           success: false,
           error: `Cannot convert quote in ${existing.status} status. Quote must be approved first.`,

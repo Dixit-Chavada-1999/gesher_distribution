@@ -8,7 +8,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { Plus, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -91,10 +91,6 @@ export default function PickTicketsPage() {
   // ----------------------------------------
   // HANDLERS
   // ----------------------------------------
-
-  const handleCreateClick = () => {
-    toast.info('Pick tickets are created from Sales Orders. Go to Sales Orders → Open a confirmed order → Click "Create Pick Ticket"');
-  };
 
   const handleView = useCallback((pickTicket: PickTicketListItem) => {
     setSelectedPickTicketId(pickTicket.id);
@@ -207,20 +203,14 @@ export default function PickTicketsPage() {
         title="Pick Tickets"
         description="Warehouse fulfillment: Pick items from inventory for sales orders."
         actions={
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={handleRefresh}
-              disabled={isPickTicketsLoading}
-            >
-              <RefreshCw className={`h-4 w-4 ${isPickTicketsLoading ? 'animate-spin' : ''}`} />
-            </Button>
-            <Button onClick={handleCreateClick}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Pick Ticket
-            </Button>
-          </div>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleRefresh}
+            disabled={isPickTicketsLoading}
+          >
+            <RefreshCw className={`h-4 w-4 ${isPickTicketsLoading ? 'animate-spin' : ''}`} />
+          </Button>
         }
       />
 

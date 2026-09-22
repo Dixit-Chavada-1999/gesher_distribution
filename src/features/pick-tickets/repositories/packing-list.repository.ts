@@ -34,6 +34,12 @@ function mapPackingListRow(row: Record<string, unknown>): PackingList {
     status: row.status as PackingListStatus,
     packedAt: row.packed_at ? new Date(row.packed_at as string) : null,
     packedBy: row.packed_by as string | null,
+    // Delivery tracking fields (replaces shipment for warehouse orders)
+    trackingNumber: row.tracking_number as string | null,
+    carrier: row.carrier as string | null,
+    shippedDate: row.shipped_date ? new Date(row.shipped_date as string) : null,
+    deliveredDate: row.delivered_date ? new Date(row.delivered_date as string) : null,
+    deliveryNotes: row.delivery_notes as string | null,
     notes: row.notes as string | null,
     createdAt: new Date(row.created_at as string),
     updatedAt: new Date(row.updated_at as string),
@@ -101,6 +107,10 @@ export const PackingListRepository = {
         total_packages,
         total_weight,
         status,
+        tracking_number,
+        carrier,
+        shipped_date,
+        delivered_date,
         created_at,
         pick_tickets!inner (
           pick_ticket_number
@@ -181,6 +191,11 @@ export const PackingListRepository = {
         totalWeight: row.total_weight,
         status: row.status as PackingListStatus,
         shipmentNumber: shipment?.shipment_number || null,
+        // Delivery tracking fields (warehouse orders)
+        trackingNumber: row.tracking_number || null,
+        carrier: row.carrier || null,
+        shippedDate: row.shipped_date ? new Date(row.shipped_date) : null,
+        deliveredDate: row.delivered_date ? new Date(row.delivered_date) : null,
         createdAt: new Date(row.created_at),
       };
     });
@@ -404,6 +419,16 @@ export const PackingListRepository = {
       updateData.packed_by = userId || null;
     }
 
+    // If status is 'shipped', set shipped_date (auto)
+    if (status === 'shipped') {
+      updateData.shipped_date = new Date().toISOString().split('T')[0];
+    }
+
+    // If status is 'delivered', set delivered_date (auto)
+    if (status === 'delivered') {
+      updateData.delivered_date = new Date().toISOString().split('T')[0];
+    }
+
     const { data, error } = await db
       .from('packing_lists')
       .update(updateData)
@@ -443,6 +468,66 @@ export const PackingListRepository = {
     if (error) {
       console.error('[PackingListRepository.updateNotes] Error:', error);
       throw new Error(`Failed to update packing list notes: ${error.message}`);
+    }
+
+    return mapPackingListRow(data);
+  },
+
+  /**
+   * Update packing list delivery tracking
+   * (Replaces shipment tracking for warehouse orders)
+   */
+  async updateDeliveryTracking(
+    id: string,
+    deliveryData: {
+      trackingNumber?: string | null;
+      carrier?: string | null;
+      shippedDate?: Date | null;
+      deliveredDate?: Date | null;
+      deliveryNotes?: string | null;
+      status?: PackingListStatus;
+    },
+    userId?: string
+  ): Promise<PackingList> {
+    const updateData: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+      updated_by: userId || null,
+    };
+
+    if (deliveryData.trackingNumber !== undefined) {
+      updateData.tracking_number = deliveryData.trackingNumber;
+    }
+    if (deliveryData.carrier !== undefined) {
+      updateData.carrier = deliveryData.carrier;
+    }
+    if (deliveryData.shippedDate !== undefined) {
+      updateData.shipped_date = deliveryData.shippedDate
+        ? deliveryData.shippedDate.toISOString().split('T')[0]
+        : null;
+    }
+    if (deliveryData.deliveredDate !== undefined) {
+      updateData.delivered_date = deliveryData.deliveredDate
+        ? deliveryData.deliveredDate.toISOString().split('T')[0]
+        : null;
+    }
+    if (deliveryData.deliveryNotes !== undefined) {
+      updateData.delivery_notes = deliveryData.deliveryNotes;
+    }
+    if (deliveryData.status !== undefined) {
+      updateData.status = deliveryData.status;
+    }
+
+    const { data, error } = await db
+      .from('packing_lists')
+      .update(updateData)
+      .eq('id', id)
+      .is('deleted_at', null)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[PackingListRepository.updateDeliveryTracking] Error:', error);
+      throw new Error(`Failed to update delivery tracking: ${error.message}`);
     }
 
     return mapPackingListRow(data);

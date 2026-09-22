@@ -20,6 +20,7 @@ export interface PickTicketPdfData {
   customerName: string;
   shipToAddress: string;
   requiredDate: string | null;
+  shippingMethod: string | null;
   warehouseName: string;
   warehouseCode: string;
   assignedTo: string | null;
@@ -131,7 +132,7 @@ function generatePickTicketHtml(data: PickTicketPdfData): string {
     assignedTo: data.assignedTo,
     shipToAddress: data.shipToAddress,
     requiredDate: data.requiredDate,
-    shippingMethod: null,
+    shippingMethod: data.shippingMethod,
     items: data.items.map(item => ({
       rowNum: item.rowNum,
       sku: item.sku,

@@ -20,12 +20,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/shared/components/ui/table';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/shared/components/ui/tooltip';
 import { Plus, Edit2, Trash2, AlertCircle, CheckCircle, Info, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { FulfillmentAllocation, FulfillmentAllocationWithDetails, FulfillmentSource } from '@/features/sales-orders/types';
@@ -336,7 +330,6 @@ export function AllocationManager({
                     <TableHead>Quantity</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Location/Dealer</TableHead>
-                    <TableHead>Container Info</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -355,94 +348,10 @@ export function AllocationManager({
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        <div className="flex items-center gap-2">
-                          <span>
-                            {allocation.location?.name ||
-                              allocation.platinumDealer?.dealerName ||
-                              allocation.dealerLocation?.locationName ||
-                              '-'}
-                          </span>
-                          {(allocation.location || allocation.platinumDealer || allocation.assignedContact || allocation.dealerLocation) && (
-                            <TooltipProvider>
-                              <Tooltip delayDuration={200}>
-                                <TooltipTrigger asChild>
-                                  <button type="button" className="inline-flex items-center">
-                                    <Info className="h-4 w-4 text-muted-foreground hover:text-foreground cursor-help" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent className="max-w-sm p-3" align="start">
-                                  <div className="space-y-2">
-                                    {/* GDC Inventory - Location & Contact */}
-                                    {allocation.location && (
-                                      <div className="space-y-1">
-                                        <div className="text-xs font-semibold text-primary">
-                                          📍 Warehouse Location
-                                        </div>
-                                        <div className="text-sm font-medium">{allocation.location.name}</div>
-                                        {allocation.location.locationCode && (
-                                          <div className="text-xs opacity-80">Code: {allocation.location.locationCode}</div>
-                                        )}
-
-                                        {allocation.assignedContact && (
-                                          <div className="mt-2 pt-2 border-t border-border/50">
-                                            <div className="text-xs font-semibold text-primary">👤 Assigned Contact</div>
-                                            <div className="text-sm font-medium mt-1">{allocation.assignedContact.name}</div>
-                                            <div className="text-xs opacity-80">{allocation.assignedContact.email}</div>
-                                            {allocation.assignedContact.phone && (
-                                              <div className="text-xs opacity-80">{allocation.assignedContact.phone}</div>
-                                            )}
-                                          </div>
-                                        )}
-                                      </div>
-                                    )}
-
-                                    {/* Platinum Dealer */}
-                                    {allocation.platinumDealer && (
-                                      <div className="space-y-1">
-                                        <div className="text-xs font-semibold text-primary">🏢 Dealer</div>
-                                        <div className="text-sm font-medium">{allocation.platinumDealer.dealerName}</div>
-                                        {allocation.platinumDealer.code && (
-                                          <div className="text-xs opacity-80">Code: {allocation.platinumDealer.code}</div>
-                                        )}
-
-                                        {allocation.dealerLocation && (
-                                          <div className="mt-2 pt-2 border-t border-border/50">
-                                            <div className="text-xs font-semibold text-primary">📍 Dealer Location</div>
-                                            <div className="text-sm font-medium mt-1">{allocation.dealerLocation.locationName}</div>
-                                            {allocation.dealerLocation.locationCode && (
-                                              <div className="text-xs opacity-80">Code: {allocation.dealerLocation.locationCode}</div>
-                                            )}
-                                            {(allocation.dealerLocation.addressCity || allocation.dealerLocation.addressState) && (
-                                              <div className="text-xs opacity-80">
-                                                {allocation.dealerLocation.addressCity}
-                                                {allocation.dealerLocation.addressCity && allocation.dealerLocation.addressState && ', '}
-                                                {allocation.dealerLocation.addressState}
-                                              </div>
-                                            )}
-                                          </div>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {allocation.containerQty ? (
-                          <div>
-                            <div>Qty: {allocation.containerQty}</div>
-                            {allocation.containerRemaining !== null && (
-                              <div className="text-xs">
-                                Remaining: {allocation.containerRemaining}
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          '-'
-                        )}
+                        {allocation.location?.name ||
+                          allocation.platinumDealer?.dealerName ||
+                          allocation.dealerLocation?.locationName ||
+                          '-'}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -454,18 +363,21 @@ export function AllocationManager({
                           >
                             <Edit2 className="h-4 w-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteClick(allocation)}
-                            disabled={allocation.status === 'fulfilled' || deletingId === allocation.id}
-                          >
-                            {deletingId === allocation.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin text-destructive" />
-                            ) : (
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            )}
-                          </Button>
+                          {/* Only show delete button when status is "pending" */}
+                          {allocation.status === 'pending' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteClick(allocation)}
+                              disabled={deletingId === allocation.id}
+                            >
+                              {deletingId === allocation.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin text-destructive" />
+                              ) : (
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              )}
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -527,15 +439,19 @@ export function AllocationManager({
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Cancel Allocation?</AlertDialogTitle>
+            <AlertDialogTitle>Delete Allocation?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will cancel the allocation and deallocate the inventory. This action cannot be
-              undone.
+              This will delete the allocation and deallocate the inventory. This action cannot be undone.
+              {selectedAllocation?.status === 'pending' && (
+                <span className="block mt-2 text-sm text-muted-foreground">
+                  💡 <strong>Tip:</strong> To change the fulfillment source type, delete this allocation and create a new one with the desired type.
+                </span>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmDelete}>Confirm</AlertDialogAction>
+            <AlertDialogAction onClick={handleConfirmDelete}>Delete Allocation</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

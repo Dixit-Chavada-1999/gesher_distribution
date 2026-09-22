@@ -327,7 +327,9 @@ export function ViewPickTicketDrawer({
                   <div>
                     <p className="text-muted-foreground">Assigned To</p>
                     <p className="font-medium">
-                      {pickTicket.assignedUser
+                      {pickTicket.assignedContact
+                        ? pickTicket.assignedContact.name
+                        : pickTicket.assignedUser
                         ? `${pickTicket.assignedUser.firstName} ${pickTicket.assignedUser.lastName}`
                         : <span className="italic text-muted-foreground">Unassigned</span>
                       }

@@ -69,13 +69,16 @@ export function PickTicketsTableColumns(options: ColumnsOptions = {}): ColumnDef
     {
       accessorKey: 'assignedUserName',
       header: 'Assigned To',
-      cell: ({ row }) => (
-        <span className="text-sm">
-          {row.original.assignedUserName || (
-            <span className="text-muted-foreground italic">Unassigned</span>
-          )}
-        </span>
-      ),
+      cell: ({ row }) => {
+        const displayName = row.original.assignedContactName || row.original.assignedUserName;
+        return (
+          <span className="text-sm">
+            {displayName || (
+              <span className="text-muted-foreground italic">Unassigned</span>
+            )}
+          </span>
+        );
+      },
     },
     {
       accessorKey: 'priority',
@@ -145,7 +148,9 @@ export function PickTicketsTableColumns(options: ColumnsOptions = {}): ColumnDef
         const pickTicket = row.original;
         // Allow editing for all statuses except cancelled (per Ankur/Jenny feedback Aug 26)
         const canEdit = pickTicket.status !== 'cancelled';
-        const canAssign = pickTicket.status === 'pending';
+        // Allow assign/reassign for pending and assigned statuses
+        const canAssign = ['pending', 'assigned'].includes(pickTicket.status);
+        const isReassign = pickTicket.status === 'assigned';
         const canStartPicking = pickTicket.status === 'assigned';
         const canDelete = ['pending', 'cancelled'].includes(pickTicket.status);
 
@@ -179,7 +184,7 @@ export function PickTicketsTableColumns(options: ColumnsOptions = {}): ColumnDef
               {onAssign && canAssign && (
                 <DropdownMenuItem onClick={() => onAssign(pickTicket)}>
                   <UserPlus className="mr-2 h-4 w-4" />
-                  Assign
+                  {isReassign ? 'Reassign' : 'Assign'}
                 </DropdownMenuItem>
               )}
               {onStartPicking && canStartPicking && (

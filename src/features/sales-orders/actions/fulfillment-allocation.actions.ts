@@ -84,19 +84,19 @@ export async function createAllocationAction(
       productId, // Pass productId to service
       locationId:
         'locationId' in validated.data
-          ? validated.data.locationId
+          ? validated.data.locationId || undefined  // Convert empty string to undefined
           : undefined,
       assignedContactId:
         'assignedContactId' in validated.data
-          ? validated.data.assignedContactId
+          ? validated.data.assignedContactId || undefined  // Convert empty string to undefined
           : undefined,
       platinumDealerId:
         'platinumDealerId' in validated.data
-          ? validated.data.platinumDealerId
+          ? validated.data.platinumDealerId || undefined  // Convert empty string to undefined
           : undefined,
       dealerLocationId:
         'dealerLocationId' in validated.data
-          ? validated.data.dealerLocationId
+          ? validated.data.dealerLocationId || undefined  // Convert empty string to undefined
           : undefined,
       containerQty:
         'containerQty' in validated.data
@@ -167,18 +167,18 @@ export async function createMultiSourceAllocationAction(
       fulfillmentSource: allocation.fulfillmentSource,
       quantity: allocation.quantity,
       locationId:
-        'locationId' in allocation ? allocation.locationId : undefined,
+        'locationId' in allocation ? allocation.locationId || undefined : undefined,  // Convert empty string to undefined
       assignedContactId:
         'assignedContactId' in allocation
-          ? allocation.assignedContactId
+          ? allocation.assignedContactId || undefined  // Convert empty string to undefined
           : undefined,
       platinumDealerId:
         'platinumDealerId' in allocation
-          ? allocation.platinumDealerId
+          ? allocation.platinumDealerId || undefined  // Convert empty string to undefined
           : undefined,
       dealerLocationId:
         'dealerLocationId' in allocation
-          ? allocation.dealerLocationId
+          ? allocation.dealerLocationId || undefined  // Convert empty string to undefined
           : undefined,
       containerQty:
         'containerQty' in allocation ? allocation.containerQty : undefined,
@@ -270,7 +270,7 @@ export async function updateAllocationAction(
       };
     }
 
-    // Otherwise, just update other fields (status, notes, etc.)
+    // Otherwise, just update other fields (status, notes, source, etc.)
     // Import repository function directly for simple updates
     const { updateAllocation } = await import(
       '@/features/sales-orders/repositories/fulfillment-allocations.repository'
@@ -278,15 +278,17 @@ export async function updateAllocationAction(
 
     const { data, error } = await updateAllocation({
       id: allocationId,
-      status: validated.data.status,
-      locationId: validated.data.locationId,
-      assignedContactId: validated.data.assignedContactId,
-      platinumDealerId: validated.data.platinumDealerId,
-      dealerLocationId: validated.data.dealerLocationId,
-      purchaseOrderId: validated.data.purchaseOrderId,
-      containerId: validated.data.containerId,
-      containerQty: validated.data.containerQty,
-      notes: validated.data.notes,
+      fulfillmentSource: (validated.data as any).fulfillmentSource,
+      status: (validated.data as any).status,
+      locationId: (validated.data as any).locationId,
+      assignedContactId: (validated.data as any).assignedContactId,
+      assignedUserId: (validated.data as any).assignedUserId,
+      platinumDealerId: (validated.data as any).platinumDealerId,
+      dealerLocationId: (validated.data as any).dealerLocationId,
+      purchaseOrderId: (validated.data as any).purchaseOrderId,
+      containerId: (validated.data as any).containerId,
+      containerQty: (validated.data as any).containerQty,
+      notes: (validated.data as any).notes,
     });
 
     if (error || !data) {

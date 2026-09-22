@@ -53,8 +53,8 @@ import {
 
 import { getPickTicket, updatePickTicket, completePicking } from '../actions';
 import { createPackingListFromPickTicket } from '../actions/packing-list.actions';
-import { getUsers } from '@/features/users/actions';
 import { getLocations } from '@/features/locations/actions';
+import { getActiveLocationContacts } from '@/features/locations/actions/location-contacts';
 import {
   PICK_TICKET_STATUSES,
   PICK_TICKET_STATUS_LABELS,
@@ -78,16 +78,17 @@ interface EditPickTicketDrawerProps {
   onSuccess?: () => void;
 }
 
-interface UserOption {
-  id: string;
-  fullName: string;
-  email: string;
-}
-
 interface WarehouseOption {
   id: string;
   name: string;
   code: string;
+}
+
+interface LocationContactOption {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
 }
 
 interface EditableItem extends PickTicketItem {
@@ -99,6 +100,7 @@ interface EditableItem extends PickTicketItem {
 const editPickTicketSchema = z.object({
   status: z.enum(['pending', 'assigned', 'picking', 'picked', 'packing', 'packed', 'shipped', 'cancelled']),
   assignedTo: z.string().nullable().optional(),
+  assignedContactId: z.string().nullable().optional(),
   warehouseId: z.string().optional(),
   priority: z.enum(['low', 'normal', 'high', 'urgent']),
   notes: z.string().nullable().optional(),
@@ -120,9 +122,10 @@ export function EditPickTicketDrawer({
   const [pickTicket, setPickTicket] = useState<PickTicketWithItems | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [users, setUsers] = useState<UserOption[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
+  const [locationContacts, setLocationContacts] = useState<LocationContactOption[]>([]);
   const [isLoadingOptions, setIsLoadingOptions] = useState(false);
+  const [isLoadingContacts, setIsLoadingContacts] = useState(false);
   const [editableItems, setEditableItems] = useState<EditableItem[]>([]);
   const [isCreatingPackingList, setIsCreatingPackingList] = useState(false);
   const [isCompletingPicking, setIsCompletingPicking] = useState(false);
@@ -133,6 +136,7 @@ export function EditPickTicketDrawer({
     defaultValues: {
       status: 'pending',
       assignedTo: null,
+      assignedContactId: null,
       warehouseId: '',
       priority: 'normal',
       notes: '',
@@ -148,27 +152,21 @@ export function EditPickTicketDrawer({
     }
   }, [open, pickTicketId]);
 
+  // Fetch location contacts when warehouse changes
+  useEffect(() => {
+    const warehouseId = form.watch('warehouseId');
+    if (warehouseId) {
+      fetchLocationContacts(warehouseId);
+    } else {
+      setLocationContacts([]);
+    }
+  }, [form.watch('warehouseId')]);
+
   const fetchOptions = async () => {
     setIsLoadingOptions(true);
     try {
-      // Fetch users and warehouses in parallel
-      const [usersResult, locationsResult] = await Promise.all([
-        getUsers({ status: 'active', limit: 100 }),
-        getLocations({ locationType: 'warehouse', limit: 100 }),
-      ]);
-
-      if (usersResult.success && usersResult.data) {
-        const usersData = usersResult.data as { data: Array<{ id: string; first_name?: string; last_name?: string; email: string }> };
-        if (usersData.data) {
-          setUsers(
-            usersData.data.map((user) => ({
-              id: user.id,
-              fullName: `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email,
-              email: user.email,
-            }))
-          );
-        }
-      }
+      // Fetch warehouses
+      const locationsResult = await getLocations({ locationType: 'warehouse', limit: 100 });
 
       if (locationsResult.success && locationsResult.data) {
         const locationsData = locationsResult.data as { data: Array<{ id: string; name: string; location_code: string }> };
@@ -189,6 +187,30 @@ export function EditPickTicketDrawer({
     }
   };
 
+  const fetchLocationContacts = async (warehouseId: string) => {
+    setIsLoadingContacts(true);
+    try {
+      const result = await getActiveLocationContacts(warehouseId);
+      if (result.success && result.data) {
+        setLocationContacts(
+          result.data.map((contact) => ({
+            id: contact.id,
+            name: contact.name,
+            email: contact.email,
+            phone: contact.phone,
+          }))
+        );
+      } else {
+        setLocationContacts([]);
+      }
+    } catch (error) {
+      console.error('Failed to load location contacts:', error);
+      setLocationContacts([]);
+    } finally {
+      setIsLoadingContacts(false);
+    }
+  };
+
   const fetchPickTicket = async () => {
     if (!pickTicketId) { return; }
 
@@ -201,6 +223,7 @@ export function EditPickTicketDrawer({
         form.reset({
           status: result.data.status,
           assignedTo: result.data.assignedTo || null,
+          assignedContactId: result.data.assignedContactId || null,
           warehouseId: result.data.warehouseId || '',
           priority: result.data.priority,
           notes: result.data.notes || '',
@@ -214,6 +237,10 @@ export function EditPickTicketDrawer({
             newQuantityPicked: item.quantityPicked,
           }))
         );
+        // Fetch location contacts if warehouse is set
+        if (result.data.warehouseId) {
+          fetchLocationContacts(result.data.warehouseId);
+        }
       } else {
         toast.error('Failed to load pick ticket');
         onClose();
@@ -276,6 +303,7 @@ export function EditPickTicketDrawer({
       const result = await updatePickTicket(pickTicketId, {
         status: data.status as PickTicketStatus,
         assignedTo: data.assignedTo || null,
+        assignedContactId: data.assignedContactId || null,
         warehouseId: data.warehouseId || undefined,
         priority: data.priority as PickTicketPriority,
         notes: data.notes || null,
@@ -437,7 +465,6 @@ export function EditPickTicketDrawer({
   const handleClose = () => {
     if (!isSubmitting) {
       setPickTicket(null);
-      setUsers([]);
       setWarehouses([]);
       setEditableItems([]);
       setSelectedAction(null);
@@ -479,6 +506,7 @@ export function EditPickTicketDrawer({
               onSubmit={form.handleSubmit(handleSubmit)}
               className="space-y-6"
             >
+
               {/* Status & Priority Row */}
               <div className="grid grid-cols-2 gap-4">
                 {/* Status */}
@@ -564,85 +592,7 @@ export function EditPickTicketDrawer({
                 />
               </div>
 
-              {/* Action Buttons - Show ONLY when status is "picked" */}
-              {canShowActionButtons && (
-                <>
-                  <Separator />
-                  <div className="space-y-3 rounded-lg border border-red-200 bg-red-50 p-4">
-                    <Label className="text-red-900">Quick Actions Required</Label>
-                    <p className="text-sm text-red-700">
-                      {!allItemsPicked ? (
-                        <>⚠️ Please pick all items first, then select an action below and click Save Changes.</>
-                      ) : (
-                        <>Status is now "Picked". Please select an action below, then click Save Changes.</>
-                      )}
-                    </p>
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        onClick={handleSelectCreatePackingList}
-                        disabled={isSubmitting || !allItemsPicked}
-                        variant={selectedAction === 'create_packing_list' ? 'default' : 'outline'}
-                        className={`flex-1 ${selectedAction === 'create_packing_list' ? 'ring-2 ring-primary ring-offset-2' : ''}`}
-                      >
-                        <ClipboardList className="mr-2 h-4 w-4" />
-                        Create Packing List
-                        {selectedAction === 'create_packing_list' && (
-                          <CheckCircle2 className="ml-2 h-4 w-4" />
-                        )}
-                      </Button>
-                      <Button
-                        type="button"
-                        onClick={handleSelectCompletePicking}
-                        disabled={isSubmitting || !allItemsPicked}
-                        variant={selectedAction === 'complete_picking' ? 'default' : 'outline'}
-                        className={`flex-1 ${selectedAction === 'complete_picking' ? 'ring-2 ring-primary ring-offset-2' : ''}`}
-                      >
-                        <CheckCircle2 className="mr-2 h-4 w-4" />
-                        Complete Picking
-                        {selectedAction === 'complete_picking' && (
-                          <CheckCircle2 className="ml-2 h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </>
-              )}
-
               <Separator />
-
-              {/* Assigned To - Shows system users */}
-              <FormField
-                control={form.control}
-                name="assignedTo"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Assigned To</FormLabel>
-                    <Select
-                      value={field.value || 'unassigned'}
-                      onValueChange={(value) => field.onChange(value === 'unassigned' ? null : value)}
-                      disabled={isSubmitting || isLoadingOptions}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select user" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="unassigned">
-                          <span className="text-muted-foreground">Unassigned</span>
-                        </SelectItem>
-                        {users.map((user) => (
-                          <SelectItem key={user.id} value={user.id}>
-                            {user.fullName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
 
               {/* Warehouse */}
               <FormField
@@ -665,6 +615,45 @@ export function EditPickTicketDrawer({
                         {warehouses.map((warehouse) => (
                           <SelectItem key={warehouse.id} value={warehouse.id}>
                             {warehouse.name} ({warehouse.code})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Assigned To - Shows location contacts */}
+              <FormField
+                control={form.control}
+                name="assignedContactId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Assigned To</FormLabel>
+                    <Select
+                      value={field.value || 'unassigned'}
+                      onValueChange={(value) => field.onChange(value === 'unassigned' ? null : value)}
+                      disabled={isSubmitting || isLoadingContacts || !form.watch('warehouseId')}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder={
+                            !form.watch('warehouseId')
+                              ? 'Select warehouse first'
+                              : isLoadingContacts
+                                ? 'Loading contacts...'
+                                : 'Select contact'
+                          } />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="unassigned">
+                          <span className="text-muted-foreground">Unassigned</span>
+                        </SelectItem>
+                        {locationContacts.map((contact) => (
+                          <SelectItem key={contact.id} value={contact.id}>
+                            {contact.name} - {contact.email}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -791,6 +780,50 @@ export function EditPickTicketDrawer({
           </div>
         )}
         </div>
+
+        {/* Quick Actions - Fixed position above footer */}
+        {!isLoading && canShowActionButtons && (
+          <div className="flex-shrink-0 border-t bg-red-50 px-6 py-4">
+            <div className="space-y-3 rounded-lg border border-red-200 bg-white p-4">
+              <Label className="text-red-900">Quick Actions Required</Label>
+              <p className="text-sm text-red-700">
+                {!allItemsPicked ? (
+                  <>⚠️ Please pick all items first, then select an action below and click Save Changes.</>
+                ) : (
+                  <>Status is now "Picked". Please select an action below, then click Save Changes.</>
+                )}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  onClick={handleSelectCreatePackingList}
+                  disabled={isSubmitting || !allItemsPicked}
+                  variant={selectedAction === 'create_packing_list' ? 'default' : 'outline'}
+                  className={`flex-1 ${selectedAction === 'create_packing_list' ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+                >
+                  <ClipboardList className="mr-2 h-4 w-4" />
+                  Create Packing List
+                  {selectedAction === 'create_packing_list' && (
+                    <CheckCircle2 className="ml-2 h-4 w-4" />
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleSelectCompletePicking}
+                  disabled={isSubmitting || !allItemsPicked}
+                  variant={selectedAction === 'complete_picking' ? 'default' : 'outline'}
+                  className={`flex-1 ${selectedAction === 'complete_picking' ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+                >
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  Complete Picking
+                  {selectedAction === 'complete_picking' && (
+                    <CheckCircle2 className="ml-2 h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <DialogFooter className="flex-shrink-0 gap-2 border-t px-6 py-4 sm:justify-end">
           <Button

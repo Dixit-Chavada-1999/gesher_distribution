@@ -159,7 +159,7 @@ export function ViewQuoteDrawer({
   isApproving = false,
   isRejecting = false,
 }: ViewQuoteDrawerProps) {
-  const { hasPermission } = useAuthStore();
+  const { hasPermission, isSuperAdmin } = useAuthStore();
 
   // ----------------------------------------
   // HYDRATION GUARD
@@ -319,8 +319,8 @@ export function ViewQuoteDrawer({
   const canSubmitForApproval = quote && quote.status === 'draft' && canSubmitForApprovalPermission;
   // Can approve/reject pending_approval quotes (and must have approve permission)
   const canApproveReject = quote && quote.status === 'pending_approval' && canApprovePermission;
-  // Can only convert approved quotes (and must have convert_to_order permission)
-  const canConvert = quote && quote.status === 'approved' && canConvertToOrderPermission;
+  // ONLY Super Admin can convert to Sales Order (from any status)
+  const canConvert = quote && isSuperAdmin() && canConvertToOrderPermission;
 
   // ----------------------------------------
   // RENDER
@@ -756,16 +756,27 @@ export function ViewQuoteDrawer({
                 </Button>
               )}
               {canConvert && onConvert && (
-                <Button variant="secondary" onClick={handleConvert} disabled={isConverting}>
-                  {isConverting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Converting...
-                    </>
-                  ) : (
-                    'Convert to Order'
-                  )}
-                </Button>
+                <div className="flex flex-col gap-1">
+                  <Button variant="secondary" onClick={handleConvert} disabled={isConverting}>
+                    {isConverting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Converting...
+                      </>
+                    ) : (
+                      <>
+                        Convert to Order
+                        <Badge variant="outline" className="ml-2 text-xs bg-amber-50 text-amber-700 border-amber-200">
+                          Admin Only
+                        </Badge>
+                      </>
+                    )}
+                  </Button>
+                  <p className="text-xs text-amber-600 flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    Super Admin privilege - converts from any status
+                  </p>
+                </div>
               )}
               {canEdit && onEdit && (
                 <Button onClick={handleEdit}>

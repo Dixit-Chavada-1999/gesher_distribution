@@ -7,7 +7,7 @@
  */
 
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontal, Eye, Trash2, Package, CheckCircle, FileText } from 'lucide-react';
+import { MoreHorizontal, Eye, Trash2, Package, CheckCircle, FileText, Truck, Calendar, Barcode } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
@@ -89,6 +89,40 @@ export function getPackingListsTableColumns({
       ),
     },
     {
+      accessorKey: 'trackingNumber',
+      header: 'Tracking #',
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2">
+          {row.original.trackingNumber ? (
+            <>
+              <Barcode className="h-4 w-4 text-muted-foreground" />
+              <span className="font-mono text-sm">
+                {row.original.trackingNumber}
+              </span>
+            </>
+          ) : (
+            <span className="text-sm text-muted-foreground">-</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'carrier',
+      header: 'Carrier',
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2">
+          {row.original.carrier ? (
+            <>
+              <Truck className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">{row.original.carrier}</span>
+            </>
+          ) : (
+            <span className="text-sm text-muted-foreground">-</span>
+          )}
+        </div>
+      ),
+    },
+    {
       accessorKey: 'status',
       header: 'Status',
       cell: ({ row }) => {
@@ -101,21 +135,39 @@ export function getPackingListsTableColumns({
       },
     },
     {
-      accessorKey: 'shipmentNumber',
-      header: 'Shipment',
+      accessorKey: 'shippedDate',
+      header: 'Shipped',
       cell: ({ row }) => (
-        <span className="font-mono text-sm text-muted-foreground">
-          {row.original.shipmentNumber || '-'}
-        </span>
+        <div className="flex items-center gap-2">
+          {row.original.shippedDate ? (
+            <>
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">
+                {new Date(row.original.shippedDate).toLocaleDateString()}
+              </span>
+            </>
+          ) : (
+            <span className="text-sm text-muted-foreground">-</span>
+          )}
+        </div>
       ),
     },
     {
-      accessorKey: 'createdAt',
-      header: 'Created',
+      accessorKey: 'deliveredDate',
+      header: 'Delivered',
       cell: ({ row }) => (
-        <span className="text-sm text-muted-foreground">
-          {new Date(row.original.createdAt).toLocaleDateString()}
-        </span>
+        <div className="flex items-center gap-2">
+          {row.original.deliveredDate ? (
+            <>
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <span className="text-sm">
+                {new Date(row.original.deliveredDate).toLocaleDateString()}
+              </span>
+            </>
+          ) : (
+            <span className="text-sm text-muted-foreground">-</span>
+          )}
+        </div>
       ),
     },
     {

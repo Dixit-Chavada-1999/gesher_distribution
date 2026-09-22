@@ -376,3 +376,44 @@ export async function validateUserEmail(
 
   return userService.validateEmail(email, excludeId);
 }
+
+/**
+ * Find active user by email
+ * Used to match warehouse contacts with system users
+ */
+export async function findUserByEmail(
+  email: string
+): Promise<ActionResult<{ id: string; name: string; email: string } | null>> {
+  try {
+    const { db } = await import('@/shared/lib/supabase/database');
+
+    const { data: user, error } = await db
+      .from('users')
+      .select('id, name, email')
+      .eq('email', email)
+      .eq('status', 'active')
+      .single();
+
+    if (error) {
+      // User not found is not an error, just return null
+      if (error.code === 'PGRST116') {
+        return {
+          success: true,
+          data: null,
+        };
+      }
+      throw error;
+    }
+
+    return {
+      success: true,
+      data: user,
+    };
+  } catch (error) {
+    console.error('Error finding user by email:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to find user',
+    };
+  }
+}

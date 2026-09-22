@@ -6,7 +6,7 @@
  * Read-only drawer to view packing list details.
  */
 
-import { Loader2, Package, FileText, Scale, Truck, CheckCircle } from 'lucide-react';
+import { Loader2, Package, FileText, Scale, Truck, CheckCircle, Calendar, Barcode } from 'lucide-react';
 import { toast } from 'sonner';
 import { useState } from 'react';
 
@@ -18,6 +18,16 @@ import {
   SheetTitle,
   SheetDescription,
 } from '@/shared/components/ui/sheet';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/shared/components/ui/dialog';
+import { Input } from '@/shared/components/ui/input';
+import { Label } from '@/shared/components/ui/label';
 import { ScrollArea } from '@/shared/components/ui/scroll-area';
 import { Badge } from '@/shared/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
@@ -87,6 +97,9 @@ export function ViewPackingListDrawer({
   const { data: packingList, isLoading, error, refetch } = usePackingList(open ? packingListId : null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [showPdfModal, setShowPdfModal] = useState(false);
+  const [showShipDialog, setShowShipDialog] = useState(false);
+  const [trackingNumber, setTrackingNumber] = useState('');
+  const [carrier, setCarrier] = useState('');
 
   const handleMarkAsPacked = async () => {
     if (!packingList) {
@@ -110,23 +123,66 @@ export function ViewPackingListDrawer({
     }
   };
 
-  const handleShip = async () => {
+  const handleShip = () => {
+    // Open dialog to enter tracking info
+    setShowShipDialog(true);
+  };
+
+  const handleConfirmShip = async () => {
+    if (!packingList) {
+      return;
+    }
+
+    setIsUpdating(true);
+    setShowShipDialog(false);
+
+    try {
+      const result = await transitionPackingListStatus(packingList.id, 'shipped');
+      if (result.success) {
+        // Update tracking info if provided
+        if (trackingNumber || carrier) {
+          const { PackingListRepository } = await import('../repositories/packing-list.repository');
+          await PackingListRepository.updateDeliveryTracking(
+            packingList.id,
+            {
+              trackingNumber: trackingNumber || null,
+              carrier: carrier || null,
+            }
+          );
+        }
+
+        toast.success('Packing list marked as shipped!');
+        setTrackingNumber('');
+        setCarrier('');
+        refetch();
+        onStatusChange?.();
+      } else {
+        toast.error(result.error || 'Failed to mark as shipped');
+      }
+    } catch {
+      toast.error('Failed to mark as shipped');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleDeliver = async () => {
     if (!packingList) {
       return;
     }
 
     setIsUpdating(true);
     try {
-      const result = await transitionPackingListStatus(packingList.id, 'shipped');
+      const result = await transitionPackingListStatus(packingList.id, 'delivered');
       if (result.success) {
-        toast.success('Shipment created successfully! Check GDC1 Inventory.');
+        toast.success('Packing list marked as delivered! Sales order updated.');
         refetch();
         onStatusChange?.();
       } else {
-        toast.error(result.error || 'Failed to ship');
+        toast.error(result.error || 'Failed to mark as delivered');
       }
     } catch {
-      toast.error('Failed to ship');
+      toast.error('Failed to mark as delivered');
     } finally {
       setIsUpdating(false);
     }
@@ -134,6 +190,7 @@ export function ViewPackingListDrawer({
 
   const canMarkAsPacked = packingList?.status === 'draft';
   const canShip = packingList?.status === 'packed';
+  const canDeliver = packingList?.status === 'shipped';
 
   return (
     <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -228,13 +285,57 @@ export function ViewPackingListDrawer({
                       }
                       icon={<Scale className="h-4 w-4" />}
                     />
-                    <InfoItem
-                      label="Shipment"
-                      value={packingList.shipment?.shipmentNumber || '-'}
-                      icon={<Truck className="h-4 w-4" />}
-                    />
                   </div>
                 </Section>
+
+                {/* Delivery Tracking (Warehouse Orders) */}
+                {(packingList.status === 'shipped' || packingList.status === 'delivered' ||
+                  packingList.trackingNumber || packingList.carrier) && (
+                  <Section title="Delivery Tracking">
+                    <div className="grid grid-cols-2 gap-4">
+                      <InfoItem
+                        label="Tracking Number"
+                        value={
+                          packingList.trackingNumber ? (
+                            <span className="font-mono">{packingList.trackingNumber}</span>
+                          ) : '-'
+                        }
+                        icon={<Barcode className="h-4 w-4" />}
+                      />
+                      <InfoItem
+                        label="Carrier"
+                        value={packingList.carrier || '-'}
+                        icon={<Truck className="h-4 w-4" />}
+                      />
+                      <InfoItem
+                        label="Shipped Date"
+                        value={
+                          packingList.shippedDate
+                            ? new Date(packingList.shippedDate).toLocaleDateString()
+                            : '-'
+                        }
+                        icon={<Calendar className="h-4 w-4" />}
+                      />
+                      <InfoItem
+                        label="Delivered Date"
+                        value={
+                          packingList.deliveredDate
+                            ? new Date(packingList.deliveredDate).toLocaleDateString()
+                            : '-'
+                        }
+                        icon={<CheckCircle className="h-4 w-4" />}
+                      />
+                    </div>
+                    {packingList.deliveryNotes && (
+                      <div className="mt-3">
+                        <p className="text-xs text-muted-foreground mb-1">Delivery Notes</p>
+                        <p className="text-sm whitespace-pre-wrap bg-muted/50 rounded-md p-3">
+                          {packingList.deliveryNotes}
+                        </p>
+                      </div>
+                    )}
+                  </Section>
+                )}
 
                 {/* Items */}
                 <Section title="Packed Items">
@@ -310,10 +411,16 @@ export function ViewPackingListDrawer({
                 </Button>
               )}
               {canShip && (
-                <Button onClick={handleShip} disabled={isUpdating} className="bg-emerald-600 hover:bg-emerald-700">
-                  {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <Button onClick={handleShip} disabled={isUpdating} className="bg-blue-600 hover:bg-blue-700">
                   <Truck className="mr-2 h-4 w-4" />
-                  Ship & Create Shipment
+                  Mark as Shipped
+                </Button>
+              )}
+              {canDeliver && (
+                <Button onClick={handleDeliver} disabled={isUpdating} className="bg-green-600 hover:bg-green-700">
+                  {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  Mark as Delivered
                 </Button>
               )}
             </div>
@@ -331,6 +438,54 @@ export function ViewPackingListDrawer({
           />
         )}
       </SheetContent>
+
+      {/* Mark as Shipped Dialog */}
+      <Dialog open={showShipDialog} onOpenChange={setShowShipDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Mark as Shipped</DialogTitle>
+            <DialogDescription>
+              Enter tracking information for this shipment (optional).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="trackingNumber">Tracking Number</Label>
+              <Input
+                id="trackingNumber"
+                placeholder="e.g., 1Z999AA10123456784"
+                value={trackingNumber}
+                onChange={(e) => setTrackingNumber(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="carrier">Carrier</Label>
+              <Input
+                id="carrier"
+                placeholder="e.g., UPS Ground, FedEx, LTL Freight"
+                value={carrier}
+                onChange={(e) => setCarrier(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowShipDialog(false);
+                setTrackingNumber('');
+                setCarrier('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleConfirmShip} disabled={isUpdating}>
+              {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Confirm & Ship
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Sheet>
   );
 }

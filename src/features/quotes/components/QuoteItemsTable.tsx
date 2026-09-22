@@ -356,7 +356,7 @@ function QuoteItemsTableComponent({
           // Fallback to local product data
           if (product) {
             updatedItem.sku = product.sku;
-            updatedItem.description = product.name;
+            updatedItem.description = product.description || product.name; // Use description if available, fallback to name
             updatedItem.unitPrice = product.unitPrice / 100;
           }
         }

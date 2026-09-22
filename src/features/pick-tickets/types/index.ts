@@ -92,24 +92,27 @@ export const PICK_TICKET_PRIORITY_COLORS: Record<PickTicketPriority, string> = {
 };
 
 // Packing List Status
-export type PackingListStatus = 'draft' | 'packed' | 'shipped';
+export type PackingListStatus = 'draft' | 'packed' | 'shipped' | 'delivered';
 
 export const PACKING_LIST_STATUSES: PackingListStatus[] = [
   'draft',
   'packed',
   'shipped',
+  'delivered',
 ];
 
 export const PACKING_LIST_STATUS_LABELS: Record<PackingListStatus, string> = {
   draft: 'Draft',
   packed: 'Packed',
   shipped: 'Shipped',
+  delivered: 'Delivered',
 };
 
 export const PACKING_LIST_STATUS_COLORS: Record<PackingListStatus, string> = {
   draft: 'bg-stone-100 text-stone-700 border border-stone-200',
   packed: 'bg-teal-100 text-teal-700 border border-teal-200',
   shipped: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
+  delivered: 'bg-green-100 text-green-700 border border-green-200',
 };
 
 // ============================================
@@ -177,6 +180,12 @@ export interface PackingList {
   status: PackingListStatus;
   packedAt: Date | null;
   packedBy: string | null;
+  // Delivery tracking fields (replaces shipment for warehouse orders)
+  trackingNumber: string | null;
+  carrier: string | null;
+  shippedDate: Date | null;
+  deliveredDate: Date | null;
+  deliveryNotes: string | null;
   notes: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -268,6 +277,7 @@ export interface PickTicketPdfSalesOrderFields {
   shipping_address_postal_code: string | null;
   requested_delivery_date: string | null;
   customer_po_number: string | null;
+  shipping_method: string | null;
 }
 
 export interface PickTicketSummary {
@@ -305,7 +315,8 @@ export interface CreatePickTicketDTO {
   salesOrderId: string;
   warehouseId: string;
   pickTicketNumber?: string;
-  assignedTo?: string | null;
+  assignedTo?: string | null;          // User ID
+  assignedContactId?: string | null;   // Location Contact ID
   priority?: PickTicketPriority;
   notes?: string | null;
   specialInstructions?: string | null;
@@ -351,6 +362,11 @@ export interface CreatePackingListDTO {
   totalPackages?: number;
   totalWeight?: number | null;
   weightUnit?: string;
+  trackingNumber?: string | null;
+  carrier?: string | null;
+  shippedDate?: Date | null;
+  deliveredDate?: Date | null;
+  deliveryNotes?: string | null;
   notes?: string | null;
   items: CreatePackingListItemDTO[];
 }
@@ -384,6 +400,8 @@ export interface PickTicketListItem {
   warehouseName: string;
   assignedTo: string | null;
   assignedUserName: string | null;
+  assignedContactId: string | null;
+  assignedContactName: string | null;
   priority: PickTicketPriority;
   status: PickTicketStatus;
   itemCount: number;
@@ -414,7 +432,12 @@ export interface PackingListListItem {
   totalPackages: number;
   totalWeight: number | null;
   status: PackingListStatus;
-  shipmentNumber: string | null;
+  shipmentNumber: string | null; // Deprecated - kept for supplier shipments only
+  // Delivery tracking fields (warehouse orders)
+  trackingNumber: string | null;
+  carrier: string | null;
+  shippedDate: Date | null;
+  deliveredDate: Date | null;
   createdAt: Date;
 }
 

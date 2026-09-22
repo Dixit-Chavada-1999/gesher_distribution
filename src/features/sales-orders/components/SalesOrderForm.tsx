@@ -348,7 +348,7 @@ function SalesOrderFormComponent({
           id: currentItem?.id,
           productId,
           sku: result.data.sku,
-          description: result.data.name + (result.data.description ? ` - ${result.data.description}` : ''),
+          description: result.data.description || result.data.name || '', // Use description if available, fallback to name
           quantity,
           unitId: currentItem?.unitId || 'EA',
           unitPrice,

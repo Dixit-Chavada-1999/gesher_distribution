@@ -342,7 +342,7 @@ class SalesOrderRepositoryImpl {
   async findItemsByOrderId(orderId: string): Promise<SalesOrderItem[]> {
     const { data, error } = await db
       .from('sales_order_items')
-      .select(`*, products:product_id (item_type)`)
+      .select(`*, products:product_id (item_type, sku, name, description)`)
       .eq('sales_order_id', orderId)
       .order('sort_order', { ascending: true });
 
@@ -356,7 +356,13 @@ class SalesOrderRepositoryImpl {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const rowData = row as any;
         const itemType = rowData.products?.item_type as 'inventory' | 'non_inventory' | 'service' | undefined;
-        const item = this.mapToSalesOrderItem(rowData as DbSalesOrderItem, itemType);
+
+        // If SKU or description is missing, use product data
+        const productData = rowData.products;
+        const sku = rowData.sku || productData?.sku || '';
+        const description = rowData.description || productData?.description || productData?.name || '';
+
+        const item = this.mapToSalesOrderItem(rowData as DbSalesOrderItem, itemType, sku, description);
 
         // Load allocations for this item
         const { getAllocationsByItemId } = await import('./fulfillment-allocations.repository');
@@ -1102,14 +1108,16 @@ class SalesOrderRepositoryImpl {
 
   private mapToSalesOrderItem(
     data: DbSalesOrderItem,
-    itemType?: 'inventory' | 'non_inventory' | 'service'
+    itemType?: 'inventory' | 'non_inventory' | 'service',
+    skuOverride?: string,
+    descriptionOverride?: string
   ): SalesOrderItem {
     return {
       id: data.id,
       salesOrderId: data.sales_order_id,
       productId: data.product_id,
-      sku: data.sku,
-      description: data.description,
+      sku: skuOverride || data.sku,
+      description: descriptionOverride || data.description,
       quantity: data.quantity,
       customerQty: data.customer_qty,
       unitCode: data.unit_code,

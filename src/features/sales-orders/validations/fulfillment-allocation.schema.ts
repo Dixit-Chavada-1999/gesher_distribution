@@ -111,8 +111,7 @@ export const createDealerFulfillmentAllocationSchema =
       .uuid('Invalid platinum dealer ID')
       .describe('Required for dealer fulfillment source'),
     dealerLocationId: z
-      .string()
-      .uuid('Invalid dealer location ID')
+      .union([z.string().uuid('Invalid dealer location ID'), z.literal('')])
       .optional()
       .describe('Optional for dealer fulfillment source'),
   });
@@ -139,27 +138,77 @@ export type CreateFulfillmentAllocationInput = z.infer<
 // UPDATE FULFILLMENT ALLOCATION
 // ============================================
 
-export const updateFulfillmentAllocationSchema = z.object({
+/**
+ * Base schema for updating allocation (common fields)
+ */
+export const updateFulfillmentAllocationBaseSchema = z.object({
   quantity: z
     .number()
     .int('Quantity must be an integer')
     .positive('Quantity must be greater than 0')
     .optional(),
   status: allocationStatusSchema.optional(),
-  locationId: z.string().uuid('Invalid location ID').optional(),
-  assignedContactId: z.string().uuid('Invalid contact ID').optional(),
-  assignedUserId: z.string().uuid('Invalid user ID').optional(),
-  platinumDealerId: z.string().uuid('Invalid platinum dealer ID').optional(),
-  dealerLocationId: z.string().uuid('Invalid dealer location ID').optional(),
-  purchaseOrderId: z.string().uuid('Invalid purchase order ID').optional(),
-  containerId: z.string().optional(),
-  containerQty: z
-    .number()
-    .int('Container quantity must be an integer')
-    .positive('Container quantity must be greater than 0')
-    .optional(),
   notes: z.string().optional(),
 });
+
+/**
+ * Update schema for GDC Inventory allocation
+ */
+export const updateGdcInventoryAllocationSchema =
+  updateFulfillmentAllocationBaseSchema.extend({
+    fulfillmentSource: z.literal('gdc_inventory').optional(),
+    locationId: z.string().uuid('Invalid location ID').optional(),
+    assignedContactId: z.string().uuid('Invalid contact ID').optional(),
+    assignedUserId: z.string().uuid('Invalid user ID').optional(),
+  });
+
+/**
+ * Update schema for Direct (Manufacturer) allocation
+ */
+export const updateDirectAllocationSchema =
+  updateFulfillmentAllocationBaseSchema.extend({
+    fulfillmentSource: z.literal('direct').optional(),
+    containerQty: z
+      .number()
+      .int('Container quantity must be an integer')
+      .positive('Container quantity must be greater than 0')
+      .optional(),
+    containerId: z.string().optional(),
+    purchaseOrderId: z.string().uuid('Invalid purchase order ID').optional(),
+  });
+
+/**
+ * Update schema for Dealer Inventory allocation
+ */
+export const updateDealerInventoryAllocationSchema =
+  updateFulfillmentAllocationBaseSchema.extend({
+    fulfillmentSource: z.literal('platinum_dealer_inventory').optional(),
+    platinumDealerId: z.string().uuid('Invalid platinum dealer ID').optional(),
+    dealerLocationId: z.string().uuid('Invalid dealer location ID').optional(),
+  });
+
+/**
+ * Update schema for Dealer Fulfillment allocation
+ */
+export const updateDealerFulfillmentAllocationSchema =
+  updateFulfillmentAllocationBaseSchema.extend({
+    fulfillmentSource: z.literal('platinum_dealer_fulfillment').optional(),
+    platinumDealerId: z.string().uuid('Invalid platinum dealer ID').optional(),
+    dealerLocationId: z
+      .union([z.string().uuid('Invalid dealer location ID'), z.literal('')])
+      .optional(),
+  });
+
+/**
+ * Union schema for updating allocations
+ * Allows changing fulfillment source when status is pending
+ */
+export const updateFulfillmentAllocationSchema = z.union([
+  updateGdcInventoryAllocationSchema,
+  updateDirectAllocationSchema,
+  updateDealerInventoryAllocationSchema,
+  updateDealerFulfillmentAllocationSchema,
+]);
 
 export type UpdateFulfillmentAllocationInput = z.infer<
   typeof updateFulfillmentAllocationSchema

@@ -19,6 +19,7 @@ interface SendPickTicketEmailParams {
   customerName: string;
   shipToAddress: string;
   requiredDate: string | null;
+  shippingMethod: string | null;
   customerPoNumber: string | null;
   notes: string | null;
   items: Array<{
@@ -52,6 +53,7 @@ export async function sendPickTicketEmails(params: SendPickTicketEmailParams): P
     customerName,
     shipToAddress,
     requiredDate,
+    shippingMethod,
     customerPoNumber,
     notes,
     items,
@@ -90,6 +92,7 @@ export async function sendPickTicketEmails(params: SendPickTicketEmailParams): P
       customerName,
       shipToAddress,
       requiredDate,
+      shippingMethod,
       warehouseName,
       warehouseCode,
       assignedTo: assignedToName,

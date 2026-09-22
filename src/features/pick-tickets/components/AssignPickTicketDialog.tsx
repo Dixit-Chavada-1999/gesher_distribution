@@ -29,7 +29,8 @@ import {
 import { Label } from '@/shared/components/ui/label';
 
 import { assignPickTicket } from '../actions';
-import { getUsers } from '@/features/users/actions';
+import { getActiveLocations } from '@/features/locations/actions';
+import { getActiveLocationContacts } from '@/features/locations/actions/location-contacts';
 import type { PickTicketListItem } from '../types';
 
 // ============================================
@@ -43,10 +44,17 @@ interface AssignPickTicketDialogProps {
   onSuccess?: () => void;
 }
 
-interface UserOption {
+interface LocationOption {
   id: string;
-  fullName: string;
+  name: string;
+  code: string;
+}
+
+interface ContactOption {
+  id: string;
+  name: string;
   email: string;
+  phone: string | null;
 }
 
 // ============================================
@@ -59,78 +67,115 @@ export function AssignPickTicketDialog({
   onClose,
   onSuccess,
 }: AssignPickTicketDialogProps) {
-  const [selectedUserId, setSelectedUserId] = useState<string>('');
-  const [users, setUsers] = useState<UserOption[]>([]);
-  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
+  const [selectedContactId, setSelectedContactId] = useState<string>('');
+  const [locations, setLocations] = useState<LocationOption[]>([]);
+  const [contacts, setContacts] = useState<ContactOption[]>([]);
+  const [isLoadingLocations, setIsLoadingLocations] = useState(false);
+  const [isLoadingContacts, setIsLoadingContacts] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
 
-  // Fetch users when dialog opens
+  // Fetch locations when dialog opens
   useEffect(() => {
     if (open) {
-      fetchUsers();
-      // Pre-select current assignee if exists
-      setSelectedUserId(pickTicket?.assignedTo || '');
+      fetchLocations();
+      // Pre-select pick ticket's warehouse if exists
+      if (pickTicket?.warehouseId) {
+        setSelectedWarehouseId(pickTicket.warehouseId);
+      }
+      // Pre-select assigned contact if exists
+      if (pickTicket?.assignedContactId) {
+        setSelectedContactId(pickTicket.assignedContactId);
+      }
     }
-  }, [open, pickTicket?.assignedTo]);
+  }, [open, pickTicket?.warehouseId, pickTicket?.assignedContactId]);
 
-  const fetchUsers = async () => {
-    setIsLoadingUsers(true);
+  // Fetch contacts when warehouse changes
+  useEffect(() => {
+    if (selectedWarehouseId) {
+      fetchLocationContacts(selectedWarehouseId);
+    } else {
+      setContacts([]);
+      setSelectedContactId('');
+    }
+  }, [selectedWarehouseId]);
+
+  const fetchLocations = async () => {
+    setIsLoadingLocations(true);
     try {
-      const result = await getUsers({ status: 'active', limit: 100 });
+      const result = await getActiveLocations();
       if (result.success && result.data) {
-        // Map to simple user options - data is { data: UserTableRow[], meta: {...} }
-        const userData = result.data as { data: Array<{
-          id: string;
-          fullName: string;
-          email: string;
-          roleScope: string | null;
-        }> };
-        // Filter out supplier users - only show internal users for pick ticket assignment
-        const userOptions = (userData.data || [])
-          .filter((user) => user.roleScope !== 'supplier')
-          .map((user) => ({
-            id: user.id,
-            fullName: user.fullName,
-            email: user.email,
+        const locationOptions = result.data
+          .filter((loc) => loc.locationType === 'warehouse')
+          .map((loc) => ({
+            id: loc.id,
+            name: loc.name,
+            code: loc.locationCode,
           }));
-        setUsers(userOptions);
+        setLocations(locationOptions);
       }
     } catch (error) {
-      console.error('Failed to fetch users:', error);
-      toast.error('Failed to load users');
+      console.error('Failed to fetch locations:', error);
+      toast.error('Failed to load warehouses');
     } finally {
-      setIsLoadingUsers(false);
+      setIsLoadingLocations(false);
+    }
+  };
+
+  const fetchLocationContacts = async (warehouseId: string) => {
+    setIsLoadingContacts(true);
+    try {
+      const result = await getActiveLocationContacts(warehouseId);
+      if (result.success && result.data) {
+        const contactOptions = result.data.map((contact) => ({
+          id: contact.id,
+          name: contact.name,
+          email: contact.email,
+          phone: contact.phone,
+        }));
+        setContacts(contactOptions);
+      } else {
+        setContacts([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch location contacts:', error);
+      toast.error('Failed to load warehouse contacts');
+      setContacts([]);
+    } finally {
+      setIsLoadingContacts(false);
     }
   };
 
   const handleAssign = async () => {
-    if (!pickTicket || !selectedUserId) {
+    if (!pickTicket || !selectedWarehouseId || !selectedContactId) {
       return;
     }
 
     setIsAssigning(true);
+    const isReassign = !!pickTicket.assignedContactId;
     try {
-      const result = await assignPickTicket(pickTicket.id, selectedUserId);
+      const result = await assignPickTicket(pickTicket.id, selectedWarehouseId, selectedContactId);
       if (result.success) {
-        const assignedUser = users.find(u => u.id === selectedUserId);
+        const assignedContact = contacts.find(c => c.id === selectedContactId);
         toast.success(
-          `Assigned ${pickTicket.pickTicketNumber} to ${assignedUser?.fullName}`
+          `${isReassign ? 'Reassigned' : 'Assigned'} ${pickTicket.pickTicketNumber} to ${assignedContact?.name}`
         );
         onSuccess?.();
         onClose();
       } else {
-        toast.error(result.error || 'Failed to assign pick ticket');
+        toast.error(result.error || `Failed to ${isReassign ? 'reassign' : 'assign'} pick ticket`);
       }
     } catch (error) {
       console.error('Failed to assign pick ticket:', error);
-      toast.error('Failed to assign pick ticket');
+      toast.error(`Failed to ${isReassign ? 'reassign' : 'assign'} pick ticket`);
     } finally {
       setIsAssigning(false);
     }
   };
 
   const handleClose = () => {
-    setSelectedUserId('');
+    setSelectedWarehouseId('');
+    setSelectedContactId('');
     onClose();
   };
 
@@ -140,46 +185,83 @@ export function AssignPickTicketDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <User className="h-5 w-5" />
-            Assign Pick Ticket
+            {pickTicket?.assignedContactId ? 'Reassign Pick Ticket' : 'Assign Pick Ticket'}
           </DialogTitle>
           <DialogDescription>
-            Assign <span className="font-semibold">{pickTicket?.pickTicketNumber}</span> to a
+            {pickTicket?.assignedContactId ? 'Reassign' : 'Assign'}{' '}
+            <span className="font-semibold">{pickTicket?.pickTicketNumber}</span> to a
             warehouse worker for picking.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="py-4">
-          <Label htmlFor="assignee">Assign To</Label>
-          {isLoadingUsers ? (
-            <div className="flex items-center justify-center py-4">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-              <SelectTrigger className="mt-2">
-                <SelectValue placeholder="Select a worker..." />
-              </SelectTrigger>
-              <SelectContent>
-                {users.map((user) => (
-                  <SelectItem key={user.id} value={user.id}>
-                    {user.fullName}
-                    <span className="text-muted-foreground ml-2 text-xs">
-                      ({user.email})
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+        <div className="py-4 space-y-4">
+          {/* Warehouse Dropdown */}
+          <div>
+            <Label htmlFor="warehouse">Warehouse</Label>
+            {isLoadingLocations ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
+                <SelectTrigger className="mt-2">
+                  <SelectValue placeholder="Select warehouse..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {locations.map((location) => (
+                    <SelectItem key={location.id} value={location.id}>
+                      {location.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
+          {/* Contact Dropdown */}
+          <div>
+            <Label htmlFor="contact">Assign To</Label>
+            {isLoadingContacts ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <Select
+                value={selectedContactId}
+                onValueChange={setSelectedContactId}
+                disabled={!selectedWarehouseId}
+              >
+                <SelectTrigger className="mt-2">
+                  <SelectValue placeholder={
+                    !selectedWarehouseId
+                      ? "Select warehouse first..."
+                      : contacts.length === 0
+                      ? "No contacts available"
+                      : "Select contact..."
+                  } />
+                </SelectTrigger>
+                <SelectContent>
+                  {contacts.map((contact) => (
+                    <SelectItem key={contact.id} value={contact.id}>
+                      {contact.name}
+                      <span className="text-muted-foreground ml-2 text-xs">
+                        ({contact.email})
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={handleClose} disabled={isAssigning}>
             Cancel
           </Button>
-          <Button onClick={handleAssign} disabled={isAssigning || !selectedUserId}>
+          <Button onClick={handleAssign} disabled={isAssigning || !selectedWarehouseId || !selectedContactId}>
             {isAssigning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Assign
+            {pickTicket?.assignedContactId ? 'Reassign' : 'Assign'}
           </Button>
         </DialogFooter>
       </DialogContent>

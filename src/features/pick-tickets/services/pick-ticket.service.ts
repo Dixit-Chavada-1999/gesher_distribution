@@ -267,6 +267,70 @@ class PickTicketServiceImpl {
   }
 
   /**
+   * Assign pick ticket to a location contact (warehouse worker)
+   */
+  async assignPickTicketToContact(
+    id: string,
+    warehouseId: string,
+    contactId: string,
+    userId?: string
+  ): Promise<ServiceResult<PickTicket>> {
+    try {
+      const existing = await PickTicketRepository.findById(id);
+
+      if (!existing) {
+        return { success: false, error: 'Pick ticket not found' };
+      }
+
+      // Can assign pending or reassign already assigned pick tickets
+      if (!['pending', 'assigned'].includes(existing.status)) {
+        return {
+          success: false,
+          error: `Cannot assign pick ticket in ${existing.status} status`,
+        };
+      }
+
+      // Update pick ticket with warehouse and contact assignment
+      const pickTicket = await PickTicketRepository.update(
+        id,
+        {
+          warehouseId,
+          assignedContactId: contactId,
+          status: 'assigned',
+        },
+        userId
+      );
+
+      // Log audit event (fire and forget)
+      const isReassign = existing.assignedContactId !== null;
+      auditService.log({
+        action: 'update', // assign
+        module: 'pick_tickets',
+        entityType: 'PickTicket',
+        entityId: pickTicket.id,
+        oldData: {
+          warehouseId: existing.warehouseId,
+          assignedContactId: existing.assignedContactId,
+          status: existing.status
+        },
+        newData: { warehouseId, assignedContactId: contactId, status: pickTicket.status },
+        userId,
+        description: `Pick ticket ${pickTicket.pickTicketNumber} ${isReassign ? 'reassigned' : 'assigned'} to contact`,
+      }).catch((err) => {
+        console.error('Failed to log pick ticket assign audit:', err);
+      });
+
+      return { success: true, data: pickTicket };
+    } catch (error) {
+      console.error('[PickTicketService.assignPickTicketToContact] Error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to assign pick ticket',
+      };
+    }
+  }
+
+  /**
    * Start picking (transition to picking status)
    */
   async startPicking(id: string, userId?: string): Promise<ServiceResult<PickTicket>> {

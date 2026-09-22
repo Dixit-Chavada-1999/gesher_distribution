@@ -10,7 +10,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -78,6 +78,7 @@ export function ConfirmAllocationsModal({
   const [actions, setActions] = useState<Map<string, AllocationAction>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   // Load allocations when modal opens
   useEffect(() => {
@@ -329,21 +330,49 @@ export function ConfirmAllocationsModal({
 
       console.log('📦 [handleCreatePickTicket] Location:', allocation.location.name);
       console.log('👤 [handleCreatePickTicket] Contact:', allocation.assignedContact.name);
-      console.log('👷 [handleCreatePickTicket] Assigned User ID:', allocation.assignedUserId);
+      console.log('📧 [handleCreatePickTicket] Contact Email:', allocation.assignedContact.email);
+      console.log('👷 [handleCreatePickTicket] Allocation.assignedUserId:', allocation.assignedUserId);
 
       // Import required actions
       const { updateAllocationStatus } = await import('../actions/fulfillment-allocation.actions');
       const { createPickTicketFromSalesOrder } = await import('@/features/pick-tickets/actions');
+      const { findUserByEmail } = await import('@/features/users/actions');
+
+      // Find matching user by contact email (warehouse user and contact are same person)
+      let assignedUserId = allocation.assignedUserId || undefined;
+      console.log('🎯 [handleCreatePickTicket] Initial assignedUserId:', assignedUserId);
+
+      if (!assignedUserId && allocation.assignedContact?.email) {
+        console.log('🔍 [handleCreatePickTicket] Finding user by contact email:', allocation.assignedContact.email);
+        const userResult = await findUserByEmail(allocation.assignedContact.email);
+        console.log('🔍 [handleCreatePickTicket] findUserByEmail result:', JSON.stringify(userResult));
+
+        if (userResult.success && userResult.data) {
+          assignedUserId = userResult.data.id;
+          console.log('✅ [handleCreatePickTicket] Found matching user:', userResult.data.id, 'Name:', userResult.data.name);
+        } else {
+          console.log('⚠️ [handleCreatePickTicket] No matching user found for contact email. Result:', userResult);
+        }
+      }
+
+      console.log('🎯 [handleCreatePickTicket] Final assignedUserId to pass:', assignedUserId);
 
       // Create the Pick Ticket immediately
-      console.log('📋 [handleCreatePickTicket] Creating Pick Ticket...');
+      console.log('📋 [handleCreatePickTicket] Creating Pick Ticket with params:', {
+        salesOrderId,
+        warehouseId: allocation.location.id,
+        contactIds: [allocation.assignedContact.id],
+        assignedUserId,
+      });
+
       const ptResult = await createPickTicketFromSalesOrder(
         salesOrderId,
         allocation.location.id,
         [allocation.assignedContact.id],
         allocation.notes || undefined,
-        allocation.assignedUserId || undefined,
-        true // skipStatusCheck - allow PT creation for draft orders
+        assignedUserId,
+        true, // skipStatusCheck - allow PT creation for draft orders
+        true  // useAllocatedQuantities - use quantities from allocations, not customer qty
       );
 
       if (!ptResult.success) {
@@ -376,6 +405,7 @@ export function ConfirmAllocationsModal({
 
   /**
    * Send Email for Platinum Dealer allocation
+   * Groups all allocations by dealer and sends one email per dealer
    */
   async function handleSendEmail(allocation: FulfillmentAllocationWithDetails) {
     try {
@@ -390,6 +420,18 @@ export function ConfirmAllocationsModal({
         throw new Error(`Dealer "${allocation.platinumDealer.dealerName}" does not have an email address configured`);
       }
 
+      const dealerId = allocation.platinumDealerId;
+
+      // Find ALL allocations for this dealer in this sales order
+      const dealerAllocations = allocations.filter(
+        (alloc) =>
+          alloc.platinumDealerId === dealerId &&
+          (alloc.fulfillmentSource === 'platinum_dealer_inventory' ||
+           alloc.fulfillmentSource === 'platinum_dealer_fulfillment')
+      );
+
+      console.log(`📋 [handleSendEmail] Found ${dealerAllocations.length} allocations for dealer ${allocation.platinumDealer.dealerName}`);
+
       // Get sales order details
       const { getSalesOrder } = await import('../actions');
       const soResult = await getSalesOrder(salesOrderId);
@@ -400,33 +442,46 @@ export function ConfirmAllocationsModal({
 
       const salesOrder = soResult.data;
 
-      // Find the sales order item for this allocation
-      const salesOrderItem = salesOrder.items.find(
-        (item) => item.id === allocation.salesOrderItemId
-      );
+      // Build items array from all dealer allocations
+      const items = dealerAllocations.map((alloc) => {
+        // Find the sales order item for this allocation
+        const salesOrderItem = salesOrder.items.find(
+          (item) => item.id === alloc.salesOrderItemId
+        );
 
-      if (!salesOrderItem) {
-        throw new Error('Sales order item not found');
-      }
+        if (!salesOrderItem) {
+          throw new Error(`Sales order item not found for allocation ${alloc.id}`);
+        }
 
-      // Build location address if available
-      let locationAddress = '';
-      if (allocation.dealerLocation) {
-        const parts = [
-          allocation.dealerLocation.addressStreet,
-          allocation.dealerLocation.addressCity,
-          allocation.dealerLocation.addressState,
-          allocation.dealerLocation.addressPostalCode,
-        ].filter(Boolean);
-        locationAddress = parts.join(', ');
-      }
+        // Build location address if available
+        let locationAddress = '';
+        if (alloc.dealerLocation) {
+          const parts = [
+            alloc.dealerLocation.addressStreet,
+            alloc.dealerLocation.addressCity,
+            alloc.dealerLocation.addressState,
+            alloc.dealerLocation.addressPostalCode,
+          ].filter(Boolean);
+          locationAddress = parts.join(', ');
+        }
+
+        return {
+          productSku: salesOrderItem.sku,
+          productDescription: salesOrderItem.description || '',
+          quantity: alloc.quantity,
+          fulfillmentSource: alloc.fulfillmentSource as 'platinum_dealer_inventory' | 'platinum_dealer_fulfillment',
+          locationName: alloc.dealerLocation?.locationName,
+          locationAddress: locationAddress || undefined,
+          notes: alloc.notes || undefined,
+        };
+      });
 
       // Send email using the platinum dealer email action (server-side)
       const { sendDealerAllocationEmailAction } = await import(
         '@/features/platinum-dealers/actions/email.actions'
       );
 
-      console.log('📧 [handleSendEmail] Sending email to:', allocation.platinumDealer.email);
+      console.log(`📧 [handleSendEmail] Sending email to: ${allocation.platinumDealer.email} with ${items.length} items`);
 
       const emailResult = await sendDealerAllocationEmailAction({
         // Dealer Info
@@ -439,18 +494,10 @@ export function ConfirmAllocationsModal({
         salesOrderNumber: salesOrder.orderNumber,
         customerName: salesOrder.customer?.name || 'Unknown Customer',
 
-        // Product Info
-        productSku: salesOrderItem.sku,
-        productDescription: salesOrderItem.description || '',
-        quantity: allocation.quantity,
-
-        // Allocation Info
-        fulfillmentSource: allocation.fulfillmentSource as 'platinum_dealer_inventory' | 'platinum_dealer_fulfillment',
-        locationName: allocation.dealerLocation?.locationName,
-        locationAddress: locationAddress || undefined,
+        // Items
+        items,
 
         // Additional Info
-        notes: allocation.notes || undefined,
         requestedDeliveryDate: salesOrder.requestedDeliveryDate
           ? new Date(salesOrder.requestedDeliveryDate).toLocaleDateString('en-US', {
               year: 'numeric',
@@ -466,13 +513,18 @@ export function ConfirmAllocationsModal({
 
       console.log('✅ [handleSendEmail] Email sent successfully');
 
-      // Update allocation status to 'allocated'
+      // Update ALL allocations for this dealer to 'allocated'
       const { updateAllocationStatus } = await import('../actions/fulfillment-allocation.actions');
-      await updateAllocationStatus(allocation.id, 'allocated');
+
+      for (const alloc of dealerAllocations) {
+        await updateAllocationStatus(alloc.id, 'allocated');
+      }
+
+      console.log(`✅ [handleSendEmail] Updated ${dealerAllocations.length} allocations to 'allocated' status`);
 
       return {
         success: true,
-        data: { emailSent: true },
+        data: { emailSent: true, allocationsUpdated: dealerAllocations.length },
       };
     } catch (error) {
       console.error('❌ [handleSendEmail] Error:', error);
@@ -581,8 +633,9 @@ export function ConfirmAllocationsModal({
               .map(a => a.notes)
               .join('\n---\n');
 
-            // Get assigned user ID from first allocation (if any)
+            // Get assigned user ID and contact ID from first allocation (if any)
             const assignedUserId = allocationsForLocation.find(a => a.assignedUserId)?.assignedUserId || undefined;
+            const assignedContactId = allocationsForLocation.find(a => a.assignedContactId)?.assignedContactId || undefined;
 
             if (contactIds.length > 0) {
               const ptResult = await createPickTicketFromSalesOrder(
@@ -590,7 +643,10 @@ export function ConfirmAllocationsModal({
                 locationId,
                 contactIds,
                 combinedNotes || undefined,
-                assignedUserId // Use assigned user from allocation
+                assignedUserId, // Use assigned user from allocation
+                true, // skipStatusCheck
+                true, // useAllocatedQuantities
+                assignedContactId // Use assigned contact from allocation
               );
 
               if (ptResult.success) {
@@ -632,6 +688,88 @@ export function ConfirmAllocationsModal({
 
   const allCompleted = Array.from(actions.values()).every((a) => a.status === 'completed');
 
+  // Toggle group expansion
+  function toggleGroupExpansion(groupKey: string) {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupKey)) {
+        next.delete(groupKey);
+      } else {
+        next.add(groupKey);
+      }
+      return next;
+    });
+  }
+
+  // Get unique group key
+  function getGroupKey(allocation: FulfillmentAllocationWithDetails): string {
+    if (allocation.fulfillmentSource === 'gdc_inventory') {
+      return `warehouse-${allocation.locationId}`;
+    } else if (
+      allocation.fulfillmentSource === 'platinum_dealer_inventory' ||
+      allocation.fulfillmentSource === 'platinum_dealer_fulfillment'
+    ) {
+      return `dealer-${allocation.platinumDealerId}`;
+    }
+    return `direct-${allocation.id}`;
+  }
+
+  // Group allocations to avoid duplicate buttons:
+  // - GDC Inventory: Group by warehouse (location_id)
+  // - Dealer allocations: Group by dealer (platinum_dealer_id)
+  const groupedAllocations = React.useMemo(() => {
+    const warehouseGroups = new Map<string, FulfillmentAllocationWithDetails[]>();
+    const dealerGroups = new Map<string, FulfillmentAllocationWithDetails[]>();
+    const otherAllocations: FulfillmentAllocationWithDetails[] = [];
+
+    allocations.forEach((allocation) => {
+      // Group GDC Inventory by warehouse
+      if (allocation.fulfillmentSource === 'gdc_inventory') {
+        const locationId = allocation.locationId || 'unknown';
+        if (!warehouseGroups.has(locationId)) {
+          warehouseGroups.set(locationId, []);
+        }
+        warehouseGroups.get(locationId)!.push(allocation);
+      }
+      // Group Dealer allocations by dealer
+      else if (
+        allocation.fulfillmentSource === 'platinum_dealer_inventory' ||
+        allocation.fulfillmentSource === 'platinum_dealer_fulfillment'
+      ) {
+        const dealerId = allocation.platinumDealerId || 'unknown';
+        if (!dealerGroups.has(dealerId)) {
+          dealerGroups.set(dealerId, []);
+        }
+        dealerGroups.get(dealerId)!.push(allocation);
+      }
+      // Direct allocations (Manufacturer) - no grouping needed
+      else {
+        otherAllocations.push(allocation);
+      }
+    });
+
+    const result: FulfillmentAllocationWithDetails[] = [];
+
+    // Add direct allocations (no grouping)
+    result.push(...otherAllocations);
+
+    // Add one allocation per warehouse group
+    warehouseGroups.forEach((groupAllocations) => {
+      if (groupAllocations[0]) {
+        result.push(groupAllocations[0]); // Show first allocation as representative
+      }
+    });
+
+    // Add one allocation per dealer group
+    dealerGroups.forEach((groupAllocations) => {
+      if (groupAllocations[0]) {
+        result.push(groupAllocations[0]); // Show first allocation as representative
+      }
+    });
+
+    return result;
+  }, [allocations]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -669,12 +807,124 @@ export function ConfirmAllocationsModal({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {allocations.map((allocation) => {
+                  {groupedAllocations.map((allocation) => {
                     const action = actions.get(allocation.id);
                     if (!action) return null;
 
                     const Icon = action.icon;
 
+                    // Group logic: Get all allocations in this group
+                    const isWarehouseAllocation = allocation.fulfillmentSource === 'gdc_inventory';
+                    const isDealerAllocation =
+                      allocation.fulfillmentSource === 'platinum_dealer_inventory' ||
+                      allocation.fulfillmentSource === 'platinum_dealer_fulfillment';
+
+                    // Get all allocations in the group
+                    const groupAllocations = isWarehouseAllocation
+                      ? allocations.filter(
+                          (a) =>
+                            a.fulfillmentSource === 'gdc_inventory' &&
+                            a.locationId === allocation.locationId
+                        )
+                      : isDealerAllocation
+                      ? allocations.filter(
+                          (a) =>
+                            a.platinumDealerId === allocation.platinumDealerId &&
+                            (a.fulfillmentSource === 'platinum_dealer_inventory' ||
+                             a.fulfillmentSource === 'platinum_dealer_fulfillment')
+                        )
+                      : [allocation];
+
+                    const totalQuantity = groupAllocations.reduce((sum, a) => sum + a.quantity, 0);
+                    const itemCount = groupAllocations.length;
+                    const groupKey = getGroupKey(allocation);
+                    const isExpanded = expandedGroups.has(groupKey);
+
+                    // If expanded, show all items in separate rows
+                    if (isExpanded && itemCount > 1) {
+                      return (
+                        <React.Fragment key={allocation.id}>
+                          {groupAllocations.map((item, index) => (
+                            <TableRow key={item.id}>
+                              <TableCell className="font-medium">
+                                {index === 0 && getSourceLabel(allocation.fulfillmentSource)}
+                              </TableCell>
+                              <TableCell>
+                                <div className="text-sm">
+                                  <div className="font-medium">{item.salesOrderItem?.sku || '-'}</div>
+                                  <div className="text-xs text-muted-foreground truncate max-w-[200px]">
+                                    {item.salesOrderItem?.description || ''}
+                                  </div>
+                                  {index === groupAllocations.length - 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleGroupExpansion(groupKey)}
+                                      className="text-xs text-blue-600 hover:text-blue-800 font-medium mt-1 cursor-pointer"
+                                    >
+                                      Show less
+                                    </button>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell>{item.quantity} units</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {index === 0 &&
+                                  (allocation.location?.name ||
+                                    allocation.platinumDealer?.dealerName ||
+                                    allocation.containerId ||
+                                    '-')}
+                              </TableCell>
+                              <TableCell>
+                                {index === 0 && (
+                                  <>
+                                    {action.status === 'pending' && (
+                                      <Badge variant="secondary">Pending</Badge>
+                                    )}
+                                    {action.status === 'processing' && (
+                                      <Badge variant="default" className="bg-blue-500">
+                                        <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                        Processing
+                                      </Badge>
+                                    )}
+                                    {action.status === 'completed' && (
+                                      <Badge variant="default" className="bg-green-500">
+                                        <CheckCircle className="mr-1 h-3 w-3" />
+                                        Assigned
+                                      </Badge>
+                                    )}
+                                    {action.status === 'failed' && (
+                                      <Badge variant="destructive">Failed</Badge>
+                                    )}
+                                  </>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {index === 0 && (
+                                  <Button
+                                    size="sm"
+                                    variant={action.status === 'completed' ? 'outline' : 'default'}
+                                    onClick={() => handleAction(allocation.id)}
+                                    disabled={
+                                      action.status === 'processing' || action.status === 'completed'
+                                    }
+                                  >
+                                    {action.status === 'processing' ? (
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Icon className="mr-2 h-4 w-4" />
+                                    )}
+                                    {action.label}
+                                    {itemCount > 1 && ` (${itemCount} items)`}
+                                  </Button>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </React.Fragment>
+                      );
+                    }
+
+                    // Collapsed view (single row)
                     return (
                       <TableRow key={allocation.id}>
                         <TableCell className="font-medium">
@@ -686,9 +936,18 @@ export function ConfirmAllocationsModal({
                             <div className="text-xs text-muted-foreground truncate max-w-[200px]">
                               {allocation.salesOrderItem?.description || ''}
                             </div>
+                            {(isWarehouseAllocation || isDealerAllocation) && itemCount > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => toggleGroupExpansion(groupKey)}
+                                className="text-xs text-blue-600 hover:text-blue-800 font-medium mt-1 cursor-pointer"
+                              >
+                                +{itemCount - 1} more item{itemCount > 2 ? 's' : ''}
+                              </button>
+                            )}
                           </div>
                         </TableCell>
-                        <TableCell>{allocation.quantity} units</TableCell>
+                        <TableCell>{totalQuantity} units</TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {allocation.location?.name ||
                             allocation.platinumDealer?.dealerName ||
@@ -730,6 +989,7 @@ export function ConfirmAllocationsModal({
                               <Icon className="mr-2 h-4 w-4" />
                             )}
                             {action.label}
+                            {(isWarehouseAllocation || isDealerAllocation) && itemCount > 1 && ` (${itemCount} items)`}
                           </Button>
                         </TableCell>
                       </TableRow>

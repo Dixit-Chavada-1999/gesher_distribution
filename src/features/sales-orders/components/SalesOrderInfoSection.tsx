@@ -139,6 +139,7 @@ function SalesOrderInfoSectionComponent({
           <Input
             id="requestedDeliveryDate"
             type="date"
+            min={new Date().toISOString().split('T')[0]}
             className={errors.requestedDeliveryDate ? 'border-destructive' : ''}
             {...register('requestedDeliveryDate')}
           />

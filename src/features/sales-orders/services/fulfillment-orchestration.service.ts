@@ -897,9 +897,34 @@ export async function getAllocationsForItem(salesOrderItemId: string): Promise<{
       .from('fulfillment_allocations')
       .select(`
         *,
-        location:locations!fulfillment_allocations_location_id_fkey(name),
-        dealer:platinum_dealers!fulfillment_allocations_platinum_dealer_id_fkey(dealer_name),
-        dealerLocation:platinum_dealer_locations!fulfillment_allocations_dealer_location_id_fkey(location_name)
+        location:locations!fulfillment_allocations_location_id_fkey(
+          id,
+          location_code,
+          name
+        ),
+        assignedContact:location_contacts!fulfillment_allocations_assigned_contact_id_fkey(
+          id,
+          name,
+          email,
+          phone
+        ),
+        platinumDealer:platinum_dealers!fulfillment_allocations_platinum_dealer_id_fkey(
+          id,
+          dealer_name,
+          code,
+          email,
+          contact_name
+        ),
+        dealerLocation:platinum_dealer_locations!fulfillment_allocations_dealer_location_id_fkey(
+          id,
+          dealer_id,
+          location_name,
+          location_code,
+          address_street,
+          address_city,
+          address_state,
+          address_postal_code
+        )
       `)
       .eq('sales_order_item_id', salesOrderItemId)
       .order('created_at', { ascending: false });
@@ -917,12 +942,8 @@ export async function getAllocationsForItem(salesOrderItemId: string): Promise<{
       locationId: a.location_id,
       assignedContactId: a.assigned_contact_id,
       assignedUserId: a.assigned_user_id || null,
-      locationName: a.location?.name || null,
       platinumDealerId: a.platinum_dealer_id,
-      platinumDealerName: a.dealer?.dealer_name || null,
-      dealerName: a.dealer?.dealer_name || null,
       dealerLocationId: a.dealer_location_id,
-      dealerLocationName: a.dealerLocation?.location_name || null,
       containerQty: a.container_qty,
       containerRemaining: a.container_remaining,
       containerId: a.container_id,
@@ -931,6 +952,35 @@ export async function getAllocationsForItem(salesOrderItemId: string): Promise<{
       createdAt: a.created_at,
       updatedAt: a.updated_at,
       createdBy: a.created_by,
+      // Nested objects matching FulfillmentAllocationWithDetails
+      location: a.location ? {
+        id: a.location.id,
+        locationCode: a.location.location_code,
+        name: a.location.name,
+      } : undefined,
+      assignedContact: a.assignedContact ? {
+        id: a.assignedContact.id,
+        name: a.assignedContact.name,
+        email: a.assignedContact.email,
+        phone: a.assignedContact.phone,
+      } : undefined,
+      platinumDealer: a.platinumDealer ? {
+        id: a.platinumDealer.id,
+        dealerName: a.platinumDealer.dealer_name,
+        code: a.platinumDealer.code,
+        email: a.platinumDealer.email,
+        contactName: a.platinumDealer.contact_name,
+      } : undefined,
+      dealerLocation: a.dealerLocation ? {
+        id: a.dealerLocation.id,
+        dealerId: a.dealerLocation.dealer_id,
+        locationName: a.dealerLocation.location_name,
+        locationCode: a.dealerLocation.location_code,
+        addressStreet: a.dealerLocation.address_street,
+        addressCity: a.dealerLocation.address_city,
+        addressState: a.dealerLocation.address_state,
+        addressPostalCode: a.dealerLocation.address_postal_code,
+      } : undefined,
     }));
 
     const totalAllocated = allocs.reduce((sum, a) => sum + a.quantity, 0);

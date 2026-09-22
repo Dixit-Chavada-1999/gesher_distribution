@@ -497,6 +497,7 @@ export async function expireQuote(id: string): Promise<ActionResult<Quote>> {
 /**
  * Convert an approved quote to a sales order (approved -> converted)
  * Requires quotes.convert_to_order permission
+ * Super Admin can convert from any status (bypasses approval workflow)
  */
 export async function convertQuoteToSalesOrder(
   id: string
@@ -506,7 +507,11 @@ export async function convertQuoteToSalesOrder(
     return auth.result;
   }
 
-  const result = await quoteService.convertToSalesOrder(id, auth.user.id);
+  // Check if user is Super Admin (can bypass status validation)
+  const { isSuperAdmin } = await import('@/shared/lib/auth');
+  const bypassValidation = isSuperAdmin(auth.user);
+
+  const result = await quoteService.convertToSalesOrder(id, auth.user.id, bypassValidation);
 
   if (result.success) {
     revalidatePath('/quotes');

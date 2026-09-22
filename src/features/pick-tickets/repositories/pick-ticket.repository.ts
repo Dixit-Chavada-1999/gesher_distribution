@@ -29,6 +29,7 @@ interface DbPickTicket {
   sales_order_id: string;
   warehouse_id: string;
   assigned_to: string | null;
+  assigned_contact_id: string | null;
   assigned_at: string | null;
   priority: PickTicketPriority;
   status: PickTicketStatus;
@@ -73,7 +74,7 @@ function mapToPickTicket(row: DbPickTicket): PickTicket {
     salesOrderId: row.sales_order_id,
     warehouseId: row.warehouse_id,
     assignedTo: row.assigned_to,
-    assignedContactId: null, // Column not yet created - will be added via migration
+    assignedContactId: row.assigned_contact_id,
     assignedAt: row.assigned_at ? new Date(row.assigned_at) : null,
     priority: row.priority,
     status: row.status,
@@ -89,14 +90,18 @@ function mapToPickTicket(row: DbPickTicket): PickTicket {
   };
 }
 
-function mapToPickTicketItem(row: DbPickTicketItem): PickTicketItem {
+function mapToPickTicketItem(
+  row: DbPickTicketItem,
+  skuOverride?: string,
+  descriptionOverride?: string
+): PickTicketItem {
   return {
     id: row.id,
     pickTicketId: row.pick_ticket_id,
     salesOrderItemId: row.sales_order_item_id,
     productId: row.product_id,
-    sku: row.sku,
-    description: row.description,
+    sku: skuOverride || row.sku,
+    description: descriptionOverride || row.description,
     binLocation: row.bin_location,
     quantityToPick: row.quantity_to_pick,
     quantityPicked: row.quantity_picked,
@@ -145,6 +150,7 @@ class PickTicketRepositoryImpl {
         sales_order_id,
         warehouse_id,
         assigned_to,
+        assigned_contact_id,
         priority,
         status,
         created_at,
@@ -227,6 +233,24 @@ class PickTicketRepositoryImpl {
       });
     }
 
+    // Collect all location contact IDs for batch lookup
+    const contactIds = (data || [])
+      .map((pt: Record<string, unknown>) => pt.assigned_contact_id)
+      .filter((id): id is string => !!id);
+
+    // Fetch location contacts in batch
+    const contactMap: Record<string, { name: string; email: string }> = {};
+
+    if (contactIds.length > 0) {
+      const { data: contactsData } = await db
+        .from('location_contacts')
+        .select('id, name, email')
+        .in('id', contactIds);
+      (contactsData || []).forEach((c: { id: string; name: string; email: string }) => {
+        contactMap[c.id] = { name: c.name, email: c.email };
+      });
+    }
+
     const listItems: PickTicketListItem[] = (data || []).map((row: Record<string, unknown>) => {
       const salesOrder = row.sales_orders as Record<string, unknown>;
       const customer = salesOrder?.customers as Record<string, unknown>;
@@ -242,6 +266,15 @@ class PickTicketRepositoryImpl {
         assignedUserName = `${user.firstName} ${user.lastName}`.trim();
       }
 
+      // Get assigned location contact name
+      let assignedContactName: string | null = null;
+      const assignedContactId = row.assigned_contact_id as string | null;
+
+      if (assignedContactId && contactMap[assignedContactId]) {
+        const contact = contactMap[assignedContactId];
+        assignedContactName = contact.name;
+      }
+
       return {
         id: row.id as string,
         pickTicketNumber: row.pick_ticket_number as string,
@@ -252,6 +285,8 @@ class PickTicketRepositoryImpl {
         warehouseName: warehouse?.name as string,
         assignedTo: assignedUserId,
         assignedUserName,
+        assignedContactId,
+        assignedContactName,
         priority: row.priority as PickTicketPriority,
         status: row.status as PickTicketStatus,
         itemCount: counts.itemCount,
@@ -323,7 +358,7 @@ class PickTicketRepositoryImpl {
       .select(
         `
         *,
-        items:pick_ticket_items(*),
+        items:pick_ticket_items(*, products:product_id(sku, name, description)),
         sales_orders(id, order_number, status, customers(name)),
         locations(id, location_code, name),
         packing_lists(id, packing_list_number, status, deleted_at)
@@ -357,7 +392,14 @@ class PickTicketRepositoryImpl {
     }
 
     const pickTicket = mapToPickTicket(data as unknown as DbPickTicket);
-    const items = ((data.items as DbPickTicketItem[]) || []).map(mapToPickTicketItem);
+    const items = ((data.items as any[]) || []).map((itemRow) => {
+      // If SKU or description is missing, use product data
+      const productData = itemRow.products;
+      const sku = itemRow.sku || productData?.sku || '';
+      const description = itemRow.description || productData?.description || productData?.name || '';
+
+      return mapToPickTicketItem(itemRow as DbPickTicketItem, sku, description);
+    });
 
     // Fetch assigned user separately if assigned_to is set
     let assignedUser: { id: string; firstName: string; lastName: string; email: string } | undefined;
@@ -374,6 +416,24 @@ class PickTicketRepositoryImpl {
           firstName: userData.first_name,
           lastName: userData.last_name,
           email: userData.email,
+        };
+      }
+    }
+
+    // Fetch assigned contact separately if assigned_contact_id is set
+    let assignedContact: { id: string; name: string; email: string } | undefined;
+    if (data.assigned_contact_id) {
+      const { data: contactData } = await db
+        .from('location_contacts')
+        .select('id, name, email')
+        .eq('id', data.assigned_contact_id)
+        .single();
+
+      if (contactData) {
+        assignedContact = {
+          id: contactData.id,
+          name: contactData.name,
+          email: contactData.email,
         };
       }
     }
@@ -397,6 +457,7 @@ class PickTicketRepositoryImpl {
           }
         : undefined,
       assignedUser,
+      assignedContact,
       packingList: packingListData
         ? {
             id: (packingListData as Record<string, unknown>).id as string,
@@ -475,9 +536,10 @@ class PickTicketRepositoryImpl {
         sales_order_id: dto.salesOrderId,
         warehouse_id: dto.warehouseId,
         assigned_to: dto.assignedTo || null,
-        assigned_at: dto.assignedTo ? new Date().toISOString() : null,
+        assigned_contact_id: dto.assignedContactId || null,
+        assigned_at: (dto.assignedTo || dto.assignedContactId) ? new Date().toISOString() : null,
         priority: dto.priority || 'normal',
-        status: dto.assignedTo ? 'assigned' : 'pending',
+        status: (dto.assignedTo || dto.assignedContactId) ? 'assigned' : 'pending',
         notes: dto.notes || null,
         special_instructions: dto.specialInstructions || null,
         notified_contact_ids: dto.notifiedContactIds || [],
@@ -541,7 +603,12 @@ class PickTicketRepositoryImpl {
       }
     }
 
-    // Note: assignedContactId will be supported after migration 097 is applied
+    if (dto.assignedContactId !== undefined) {
+      updateData.assigned_contact_id = dto.assignedContactId;
+      if (dto.assignedContactId) {
+        updateData.assigned_at = new Date().toISOString();
+      }
+    }
 
     if (dto.warehouseId !== undefined) {
       updateData.warehouse_id = dto.warehouseId;

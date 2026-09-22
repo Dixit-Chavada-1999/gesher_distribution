@@ -298,7 +298,10 @@ class QuoteRepositoryImpl {
       .select(`
         *,
         products:product_id (
-          item_type
+          item_type,
+          sku,
+          name,
+          description
         )
       `)
       .eq('quote_id', quoteId)
@@ -309,8 +312,14 @@ class QuoteRepositoryImpl {
     }
 
     return (data || []).map((row) => {
-      const productData = row.products as { item_type: string } | null;
-      return this.mapToQuoteItem(row as DbQuoteItem, productData?.item_type);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const productData = row.products as any;
+
+      // If SKU or description is missing, use product data
+      const sku = row.sku || productData?.sku || '';
+      const description = row.description || productData?.description || productData?.name || '';
+
+      return this.mapToQuoteItem(row as DbQuoteItem, productData?.item_type, sku, description);
     });
   }
 
@@ -876,13 +885,18 @@ class QuoteRepositoryImpl {
     };
   }
 
-  private mapToQuoteItem(data: DbQuoteItem, itemType?: string): QuoteItem {
+  private mapToQuoteItem(
+    data: DbQuoteItem,
+    itemType?: string,
+    skuOverride?: string,
+    descriptionOverride?: string
+  ): QuoteItem {
     return {
       id: data.id,
       quoteId: data.quote_id,
       productId: data.product_id,
-      sku: data.sku,
-      description: data.description,
+      sku: skuOverride || data.sku,
+      description: descriptionOverride || data.description,
       quantity: data.quantity,
       unitCode: data.unit_code,
       unitPrice: data.unit_price,

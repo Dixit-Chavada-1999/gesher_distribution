@@ -27,6 +27,7 @@ interface ColumnOptions {
   onSubmitForApproval?: (quote: QuoteListItem) => void;
   onApprove?: (quote: QuoteListItem) => void;
   onReject?: (quote: QuoteListItem) => void;
+  isSuperAdmin?: boolean;
 }
 
 // ============================================
@@ -202,7 +203,8 @@ export function getQuotesTableColumns(
       id: 'actions',
       cell: ({ row }) => {
         const quote = row.original;
-        const canConvert = quote.status === 'approved';
+        // ONLY Super Admin can convert (from any status)
+        const canConvert = options.isSuperAdmin === true;
         const canEdit = quote.status === 'draft';
         const canDelete = quote.status === 'draft';
         const canSubmitForApproval = quote.status === 'draft';
@@ -246,8 +248,9 @@ export function getQuotesTableColumns(
 
         // Add convert action
         if (canConvert && options.onConvert) {
+          const isBypassingApproval = options.isSuperAdmin && quote.status !== 'approved';
           actions.splice(insertIndex, 0, {
-            label: 'Convert to Order',
+            label: isBypassingApproval ? 'Convert to Order ⚡' : 'Convert to Order',
             onClick: () => options.onConvert?.(quote),
           });
         }

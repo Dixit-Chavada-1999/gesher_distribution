@@ -64,7 +64,7 @@ import type { ProcessedPOData } from '@/features/quotes/types/po-extract.types';
 // ============================================
 
 export function QuotesPageContent() {
-  const { hasPermission, appUser } = useAuthStore();
+  const { hasPermission, appUser, isSuperAdmin } = useAuthStore();
 
   // ----------------------------------------
   // HYDRATION GUARD
@@ -640,6 +640,7 @@ export function QuotesPageContent() {
       <QuotesTable
         data={quotes}
         isLoading={isQuotesLoading}
+        isSuperAdmin={hasMounted && isSuperAdmin()}
         onRowClick={canViewDetail ? handleRowClick : undefined}
         onView={canViewDetail ? handleView : undefined}
         onEdit={canEdit ? handleEdit : undefined}

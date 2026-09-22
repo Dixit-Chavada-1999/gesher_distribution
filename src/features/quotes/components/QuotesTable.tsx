@@ -23,6 +23,7 @@ import type { QuotesTableProps } from '../types';
 export function QuotesTable({
   data,
   isLoading = false,
+  isSuperAdmin = false,
   onRowClick,
   onView,
   onEdit,
@@ -48,8 +49,9 @@ export function QuotesTable({
         onSubmitForApproval,
         onApprove,
         onReject,
+        isSuperAdmin,
       }),
-    [onView, onEdit, onDelete, onConvert, onSubmitForApproval, onApprove, onReject, onRowClick]
+    [onView, onEdit, onDelete, onConvert, onSubmitForApproval, onApprove, onReject, onRowClick, isSuperAdmin]
   );
 
   // ----------------------------------------

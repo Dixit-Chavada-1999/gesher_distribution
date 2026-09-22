@@ -145,7 +145,8 @@ export async function getPickTicketPdfData(
         shipping_address_state,
         shipping_address_postal_code,
         requested_delivery_date,
-        customer_po_number
+        customer_po_number,
+        shipping_method
       `
       )
       .eq('id', pickTicket.salesOrderId)
@@ -301,23 +302,24 @@ export async function updatePickTicket(id: string, data: UpdatePickTicketDTO) {
           console.error('[updatePickTicket] Failed to ship inventory:', error);
         }
 
-        // Create shipment record
+        // NOTE: Warehouse orders no longer create shipments
+        // Delivery tracking is handled in packing list (if created) or directly on pick ticket
+
+        // Update sales order status to 'shipped'
         try {
-          await createShipmentFromCompletedPickTicket(updatedPT.data, auth.user.id);
-          console.log('[updatePickTicket] Shipment created for status transition to "shipped"');
+          if (updatedPT.data.salesOrderId) {
+            await db
+              .from('sales_orders')
+              .update({
+                status: 'shipped',
+                updated_at: new Date().toISOString(),
+                updated_by: auth.user.id || null,
+              })
+              .eq('id', updatedPT.data.salesOrderId);
+            console.log('[updatePickTicket] Sales order status updated to "shipped"');
+          }
         } catch (error) {
-          console.error('[updatePickTicket] Failed to create shipment:', error);
-          // Return success with warning - don't fail the update
-          revalidatePath('/pick-tickets');
-          revalidatePath(`/pick-tickets/${id}`);
-          revalidatePath('/inventory');
-          revalidatePath('/operations');
-          revalidatePath('/shipments');
-          return {
-            success: true,
-            data: result.data,
-            warning: `Status updated to "shipped" but shipment could not be created: ${error instanceof Error ? error.message : String(error)}`,
-          };
+          console.error('[updatePickTicket] Failed to update sales order status:', error);
         }
       }
 
@@ -338,13 +340,13 @@ export async function updatePickTicket(id: string, data: UpdatePickTicketDTO) {
 // ASSIGN PICK TICKET
 // ============================================
 
-export async function assignPickTicket(id: string, assignedTo: string) {
+export async function assignPickTicket(id: string, warehouseId: string, contactId: string) {
   const auth = await authorize('pick_tickets.assign');
   if (!auth.ok) {
     return auth.result;
   }
 
-  const result = await PickTicketService.assignPickTicket(id, assignedTo, auth.user.id);
+  const result = await PickTicketService.assignPickTicketToContact(id, warehouseId, contactId, auth.user.id);
 
   if (result.success) {
     revalidatePath('/pick-tickets');
@@ -456,29 +458,32 @@ export async function completePicking(id: string) {
     // Ship inventory for each picked item
     await shipInventoryForPickTicket(pickTicket, auth.user.id);
 
-    // Auto-create shipment with source='warehouse' for GDC1 Inventory
-    // Shipment is created when items are actually picked and ready to ship
-    // The picking is already committed at this point, so a shipment failure
-    // must not roll it back — but it must never be silent either: without a
-    // shipment the order simply disappears from the Shipments page.
-    let shipmentWarning: string | undefined;
+    // NOTE: Warehouse orders no longer create shipments
+    // Delivery tracking is handled in packing list (if created)
+    // For quick ship (no packing list), pick ticket tracks the shipment
+
+    // Update sales order status to 'shipped'
     try {
-      await createShipmentFromCompletedPickTicket(pickTicket, auth.user.id);
+      if (pickTicket.salesOrderId) {
+        await db
+          .from('sales_orders')
+          .update({
+            status: 'shipped',
+            updated_at: new Date().toISOString(),
+            updated_by: auth.user.id || null,
+          })
+          .eq('id', pickTicket.salesOrderId);
+        console.log('[completePicking] Sales order status updated to "shipped"');
+      }
     } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      console.error('[completePicking] Failed to create warehouse shipment:', error);
-      shipmentWarning = `Picking completed, but the shipment could not be created: ${detail}`;
+      console.error('[completePicking] Failed to update sales order status:', error);
     }
 
     revalidatePath('/pick-tickets');
     revalidatePath(`/pick-tickets/${id}`);
     revalidatePath('/inventory');
     revalidatePath('/operations');
-    revalidatePath('/shipments');
-
-    if (shipmentWarning) {
-      return { ...result, warning: shipmentWarning };
-    }
+    revalidatePath('/sales-orders');
   }
 
   return result;
@@ -628,7 +633,9 @@ export async function createPickTicketFromSalesOrder(
   notifyContactIds?: string[],
   specialInstructions?: string,
   assignedToId?: string,
-  skipStatusCheck?: boolean
+  skipStatusCheck?: boolean,
+  useAllocatedQuantities?: boolean, // NEW: When true, use quantities from allocations table
+  assignedContactId?: string // NEW: Contact ID for warehouse contact assignment
 ): Promise<CreateFromSOResult> {
   const auth = await authorize('pick_tickets.create');
   if (!auth.ok) {
@@ -648,6 +655,7 @@ export async function createPickTicketFromSalesOrder(
         customer_id,
         customer_po_number,
         requested_delivery_date,
+        shipping_method,
         internal_notes,
         shipping_address_street,
         shipping_address_city,
@@ -709,6 +717,25 @@ export async function createPickTicketFromSalesOrder(
     // Each allocation can create its own PT, and the UI prevents duplicate creation
     // via allocation status tracking (buttons disabled after PT created)
 
+    // Fetch allocated quantities if requested (for allocation-based pick tickets)
+    let allocationQuantities: Map<string, number> = new Map();
+    if (useAllocatedQuantities) {
+      const { data: allocations } = await db
+        .from('fulfillment_allocations')
+        .select('sales_order_item_id, quantity')
+        .eq('fulfillment_source', 'gdc_inventory')
+        .eq('location_id', finalWarehouseId)
+        .in('sales_order_item_id', salesOrder.sales_order_items?.map((item: any) => item.id) || []);
+
+      if (allocations) {
+        allocations.forEach((alloc: any) => {
+          const existing = allocationQuantities.get(alloc.sales_order_item_id) || 0;
+          allocationQuantities.set(alloc.sales_order_item_id, existing + alloc.quantity);
+        });
+      }
+      console.log('📊 [createPickTicketFromSalesOrder] Allocation quantities:', Object.fromEntries(allocationQuantities));
+    }
+
     // Prepare items for pick ticket - ONLY include physical inventory items
     // Service and non-inventory items don't need to be picked from warehouse
     // Note: Supabase returns products as array due to join, so we access first element
@@ -722,20 +749,31 @@ export async function createPickTicketFromSalesOrder(
     }) => {
       // Handle both array (Supabase default) and single object cases
       const productData = Array.isArray(item.products) ? item.products[0] : item.products;
+
+      // Use allocated quantity if available, otherwise use customer quantity
+      const quantityToPick = useAllocatedQuantities && allocationQuantities.has(item.id)
+        ? allocationQuantities.get(item.id)!
+        : item.quantity;
+
       return {
         salesOrderItemId: item.id,
         productId: item.product_id || '',
         sku: item.sku,
         description: item.description,
-        quantityToPick: item.quantity,
+        quantityToPick,
         itemType: productData?.item_type || 'inventory', // Default to inventory if not set
       };
     }) || [];
 
     // Filter to only include physical inventory items (exclude service and non_inventory)
+    // Also exclude items with zero allocated quantity when using allocation-based quantities
     const items = allItems.filter((item) => {
       if (item.itemType === 'service' || item.itemType === 'non_inventory') {
         console.log(`[createPickTicketFromSalesOrder] Excluding ${item.sku} from pick ticket (${item.itemType} - not a physical item)`);
+        return false;
+      }
+      if (useAllocatedQuantities && item.quantityToPick === 0) {
+        console.log(`[createPickTicketFromSalesOrder] Excluding ${item.sku} from pick ticket (no allocated quantity for this warehouse)`);
         return false;
       }
       return true;
@@ -790,15 +828,20 @@ export async function createPickTicketFromSalesOrder(
     }
 
     // Create pick ticket
+    console.log('🎯 [createPickTicketFromSalesOrder] assignedToId parameter received:', assignedToId);
+    console.log('🎯 [createPickTicketFromSalesOrder] assignedContactId parameter received:', assignedContactId);
     const createDTO: CreatePickTicketDTO = {
       salesOrderId,
       warehouseId: warehouseId || salesOrder.warehouse_id,
       assignedTo: assignedToId || null,
+      assignedContactId: assignedContactId || null,
       priority: 'normal',
       specialInstructions: specialInstructions || null,
       notifiedContactIds: notifyContactIds || [],
       items,
     };
+    console.log('🎯 [createPickTicketFromSalesOrder] createDTO.assignedTo:', createDTO.assignedTo);
+    console.log('🎯 [createPickTicketFromSalesOrder] createDTO.assignedContactId:', createDTO.assignedContactId);
 
     const result = await PickTicketService.createPickTicket(createDTO, userId);
 
@@ -847,6 +890,7 @@ export async function createPickTicketFromSalesOrder(
             customerName,
             shipToAddress: shipToAddress || 'N/A',
             requiredDate: salesOrder.requested_delivery_date,
+            shippingMethod: salesOrder.shipping_method || null,
             customerPoNumber: salesOrder.customer_po_number,
             notes: specialInstructions || salesOrder.internal_notes,
             // Only include physical inventory items in email (same as pick ticket)
@@ -909,117 +953,8 @@ export async function createPickTicketFromSalesOrder(
   }
 }
 
-/**
- * Helper: Auto-create shipment from COMPLETED Pick Ticket for GDC1 Inventory (source='warehouse')
- * Called when Pick Ticket is completed (items picked, ready to ship)
- */
-async function createShipmentFromCompletedPickTicket(
-  pickTicket: PickTicketWithItems,
-  userId?: string
-): Promise<void> {
-  if (!pickTicket.salesOrderId) {
-    console.log('[completePicking] No sales order linked, skipping shipment creation');
-    return;
-  }
-
-  // Generate shipment number
-  const { data: shipmentNumber, error: numError } = await db.rpc('generate_shipment_number');
-  if (numError) {
-    throw new Error(`Failed to generate shipment number: ${numError.message}`);
-  }
-
-  // Get sales order with customer info.
-  // Note: the ship-to columns on sales_orders are named shipping_address_*
-  // (migration 012). There is no ship_to_name — the recipient is the customer.
-  const { data: salesOrder, error: soError } = await db
-    .from('sales_orders')
-    .select(`
-      id,
-      order_number,
-      shipping_address_street,
-      shipping_address_city,
-      shipping_address_state,
-      shipping_address_postal_code,
-      shipping_address_country,
-      customer_po_number,
-      requested_delivery_date,
-      customers(id, name)
-    `)
-    .eq('id', pickTicket.salesOrderId)
-    .single();
-
-  if (soError || !salesOrder) {
-    throw new Error(
-      `Failed to load sales order ${pickTicket.salesOrderId} for shipment creation: ${soError?.message || 'not found'}`
-    );
-  }
-
-  const customer = Array.isArray(salesOrder.customers)
-    ? salesOrder.customers[0]
-    : salesOrder.customers;
-
-  // Calculate total quantity from picked items
-  const totalQty = (pickTicket.items || []).reduce((sum, item) => {
-    return sum + (item.quantityPicked || item.quantityToPick);
-  }, 0);
-
-  // Create shipment with source='warehouse'
-  const { data: shipment, error: shipmentError } = await db
-    .from('shipments')
-    .insert({
-      shipment_number: shipmentNumber,
-      shipment_date: new Date().toISOString().split('T')[0],
-      sales_order_id: salesOrder.id,
-      from_location_id: pickTicket.warehouseId,
-      source: 'warehouse',
-      load_status: 'in_transit', // Items are picked and ready to ship
-      total_qty: totalQty,
-      outstanding_qty: totalQty,
-      ship_to_name: customer?.name || null,
-      ship_to_address_street: salesOrder.shipping_address_street || null,
-      ship_to_address_city: salesOrder.shipping_address_city || null,
-      ship_to_address_state: salesOrder.shipping_address_state || null,
-      ship_to_address_postal_code: salesOrder.shipping_address_postal_code || null,
-      ship_to_address_country: salesOrder.shipping_address_country || null,
-      customer_expected_delivery: salesOrder.requested_delivery_date || null,
-      status: 'in_transit',
-      created_by: userId || null,
-      updated_by: userId || null,
-    })
-    .select()
-    .single();
-
-  if (shipmentError) {
-    throw new Error(`Failed to create shipment: ${shipmentError.message}`);
-  }
-
-  // Create shipment items from pick ticket items
-  const shipmentItems = (pickTicket.items || []).map((item, index: number) => ({
-    shipment_id: shipment.id,
-    product_id: item.productId,
-    sales_order_item_id: item.salesOrderItemId || null,
-    sku: item.sku || '',
-    description: item.description || null,
-    quantity_shipped: item.quantityPicked || item.quantityToPick,
-    sort_order: index,
-    created_by: userId || null,
-    updated_by: userId || null,
-  }));
-
-  if (shipmentItems.length > 0) {
-    const { error: itemsError } = await db
-      .from('shipment_items')
-      .insert(shipmentItems);
-
-    if (itemsError) {
-      // Clean up shipment if items insertion fails
-      await db.from('shipments').delete().eq('id', shipment.id);
-      throw new Error(`Failed to create shipment items: ${itemsError.message}`);
-    }
-  }
-
-  console.log(`[Pick Ticket COMPLETE] Auto-created shipment ${shipmentNumber} with source='warehouse' for PT ${pickTicket.pickTicketNumber}`);
-}
+// NOTE: Removed createShipmentFromCompletedPickTicket function
+// Warehouse orders no longer create shipments - pick ticket/packing list tracks delivery directly
 
 
 // ============================================
