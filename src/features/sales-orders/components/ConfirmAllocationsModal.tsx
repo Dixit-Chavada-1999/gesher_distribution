@@ -1059,19 +1059,14 @@ export function ConfirmAllocationsModal({
                             size="sm"
                             variant={action.status === 'completed' ? 'outline' : 'default'}
                             onClick={() => {
-                              // For warehouse allocations: Pass ONLY this allocation ID
-                              // Server will automatically fetch all pending allocations for same warehouse
-                              if (isWarehouseAllocation) {
-                                handleAction(allocation.id, [allocation.id]); // Single ID only
-                              }
-                              // For dealer/manufacturer: Pass all group IDs (grouped behavior)
-                              else {
-                                const pendingGroupAllocations = groupAllocations.filter(a => {
-                                  const groupAction = actions.get(a.id);
-                                  return groupAction?.status === 'pending';
-                                });
-                                handleAction(allocation.id, pendingGroupAllocations.map(a => a.id));
-                              }
+                              // For ALL grouped allocations (warehouse, dealer, manufacturer):
+                              // Pass ALL pending allocation IDs from the same group
+                              // This ensures the action includes exactly what user sees in the UI
+                              const pendingGroupAllocations = groupAllocations.filter(a => {
+                                const groupAction = actions.get(a.id);
+                                return groupAction?.status === 'pending';
+                              });
+                              handleAction(allocation.id, pendingGroupAllocations.map(a => a.id));
                             }}
                             disabled={
                               action.status === 'processing' || action.status === 'completed'

@@ -8,10 +8,10 @@
  * Only draft POs can be edited.
  */
 
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useState, useTransition, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -48,8 +48,9 @@ import { Label } from '@/shared/components/ui/label';
 
 import { poFormSchema } from '../lib/schemas';
 import { getPurchaseOrder, updatePurchaseOrder, getSuppliersForDropdown } from '../actions';
-import type { PurchaseOrderWithItems, SupplierSummary, EditPurchaseOrderDrawerProps } from '../types';
+import type { PurchaseOrderWithItems, SupplierSummary, EditPurchaseOrderDrawerProps, CreatePOItemDTO } from '../types';
 import { ORDER_SERIES } from '@/shared/lib/global-data';
+import { AddPOItemDialog } from './AddPOItemDialog';
 
 // ============================================
 // COMPONENT
@@ -74,6 +75,14 @@ export function EditPurchaseOrderDrawer({
 
   // Items with individual supplier assignments
   const [itemSuppliers, setItemSuppliers] = useState<Record<string, string>>({});
+
+  // Editable items state (local copy for add/edit/delete)
+  const [editableItems, setEditableItems] = useState<POItem[]>([]);
+
+  // Item editing dialogs
+  const [showAddItemDialog, setShowAddItemDialog] = useState(false);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editingItemData, setEditingItemData] = useState<POItem | null>(null);
 
   const form = useForm({
     resolver: zodResolver(poFormSchema),
@@ -111,6 +120,10 @@ export function EditPurchaseOrderDrawer({
       setUseSingleSupplier(true);
       setSingleSupplierId('');
       setItemSuppliers({});
+      setEditableItems([]);
+      setShowAddItemDialog(false);
+      setEditingItemId(null);
+      setEditingItemData(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, poId]);
@@ -172,6 +185,9 @@ export function EditPurchaseOrderDrawer({
           if (hasPerItemSuppliers) {
             setUseSingleSupplier(false);
           }
+
+          // Initialize editable items (local copy for editing)
+          setEditableItems([...result.data.items]);
         }
       } else {
         setError(result.error || 'Failed to load purchase order');
@@ -207,6 +223,94 @@ export function EditPurchaseOrderDrawer({
     }));
   };
 
+  // Item management handlers
+  const handleAddItem = (newItem: CreatePOItemDTO) => {
+    const item: POItem = {
+      id: `temp_${Date.now()}`, // Temporary ID for new items
+      purchaseOrderId: poId || '',
+      productId: newItem.productId,
+      salesOrderItemId: null,
+      sku: newItem.sku,
+      description: newItem.description || '',
+      quantityOrdered: newItem.quantityOrdered,
+      quantityReceived: 0,
+      unitCode: newItem.unitCode,
+      unitPrice: newItem.unitPrice,
+      taxRate: newItem.taxRate || 0,
+      lineTotal: newItem.quantityOrdered * newItem.unitPrice,
+      itemType: newItem.itemType || 'inventory',
+      supplierId: null,
+      supplierName: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setEditableItems((prev) => [...prev, item]);
+    toast.success('Item added');
+  };
+
+  const handleEditItem = (itemId: string) => {
+    const item = editableItems.find((i) => i.id === itemId);
+    if (item) {
+      setEditingItemId(itemId);
+      setEditingItemData(item);
+    }
+  };
+
+  const handleUpdateItem = (itemId: string, updates: Partial<POItem>, showToast = false) => {
+    setEditableItems((prev) =>
+      prev.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              ...updates,
+              lineTotal: (updates.quantityOrdered || item.quantityOrdered) * (updates.unitPrice || item.unitPrice),
+            }
+          : item
+      )
+    );
+    if (showToast) {
+      toast.success('Item updated');
+    }
+    setEditingItemId(null);
+    setEditingItemData(null);
+  };
+
+  const handleRemoveItem = (itemId: string) => {
+    setEditableItems((prev) => prev.filter((item) => item.id !== itemId));
+    // Also remove from item suppliers if exists
+    setItemSuppliers((prev) => {
+      const updated = { ...prev };
+      delete updated[itemId];
+      return updated;
+    });
+    toast.success('Item removed');
+  };
+
+  const handleInlineQuantityChange = (itemId: string, quantity: string) => {
+    const qty = parseInt(quantity, 10);
+    if (!isNaN(qty) && qty > 0) {
+      handleUpdateItem(itemId, { quantityOrdered: qty }, false); // Don't show toast for inline edits
+    }
+  };
+
+  const handleInlinePriceChange = (itemId: string, price: string) => {
+    const priceValue = parseFloat(price);
+    if (!isNaN(priceValue) && priceValue >= 0) {
+      handleUpdateItem(itemId, { unitPrice: Math.round(priceValue * 100) }, false); // Don't show toast for inline edits
+    }
+  };
+
+  // Calculate totals from editable items
+  const calculatedTotals = useMemo(() => {
+    const subtotal = editableItems.reduce((sum, item) => sum + item.lineTotal, 0);
+    const tax = editableItems.reduce(
+      (sum, item) => sum + (item.lineTotal * (item.taxRate / 100)),
+      0
+    );
+    const total = subtotal + tax;
+    return { subtotal, tax, total };
+  }, [editableItems]);
+
   const onSubmit = async (data: Record<string, unknown>) => {
     if (!poId || !po) {
       return;
@@ -218,8 +322,8 @@ export function EditPurchaseOrderDrawer({
       ? suppliers.find((s) => s.id === selectedSupplierId)
       : null;
 
-    // Build items array with supplier info
-    const itemsWithSuppliers = po.items.map((item) => {
+    // Build items array with supplier info (use editableItems instead of po.items)
+    const itemsWithSuppliers = editableItems.map((item) => {
       // Determine the supplier for this item
       let itemSupplierId: string | null = null;
       let itemSupplierName: string | null = null;
@@ -414,7 +518,19 @@ export function EditPurchaseOrderDrawer({
                   {/* Items with Supplier Assignment */}
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-medium">Items ({po.items.length})</h3>
+                      <div className="flex items-center gap-3">
+                        <h3 className="text-sm font-medium">Items ({editableItems.length})</h3>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setShowAddItemDialog(true)}
+                          disabled={isPending}
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add Item
+                        </Button>
+                      </div>
 
                       {/* Toggle and Single Supplier Dropdown */}
                       <div className="flex items-center gap-4">
@@ -451,63 +567,122 @@ export function EditPurchaseOrderDrawer({
                     </div>
 
                     {/* Items Table */}
-                    <div className="border rounded-lg overflow-hidden">
-                      <table className="w-full text-sm">
-                        <thead className="bg-muted/50">
-                          <tr>
-                            <th className="text-left p-3 font-medium">Product</th>
-                            <th className="text-left p-3 font-medium">Qty</th>
-                            <th className="text-right p-3 font-medium">Unit Price</th>
-                            {!useSingleSupplier && (
-                              <th className="text-left p-3 font-medium">Supplier</th>
-                            )}
-                            <th className="text-right p-3 font-medium">Total</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y">
-                          {po.items.map((item) => {
-                            const isServiceOrNonInventory = item.itemType === 'service' || item.itemType === 'non_inventory';
-                            return (
-                              <tr key={item.id} className="hover:bg-muted/30">
-                                <td className="p-3">
-                                  <p className="font-medium">{item.sku}</p>
-                                  {item.description && (
-                                    <p className="text-xs text-muted-foreground">{item.description}</p>
-                                  )}
-                                </td>
-                                <td className="p-3">
-                                  {isServiceOrNonInventory ? '-' : item.quantityOrdered}
-                                </td>
-                                <td className="p-3 text-right">${(item.unitPrice / 100).toFixed(2)}</td>
-                                {!useSingleSupplier && (
+                    {editableItems.length === 0 ? (
+                      <div className="border rounded-lg p-8 text-center text-muted-foreground">
+                        <p>No items added. Click "Add Item" to get started.</p>
+                      </div>
+                    ) : (
+                      <div className="border rounded-lg overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted/50">
+                            <tr>
+                              <th className="text-left p-3 font-medium">Product</th>
+                              <th className="text-left p-3 font-medium">Qty</th>
+                              <th className="text-right p-3 font-medium">Unit Price</th>
+                              {!useSingleSupplier && (
+                                <th className="text-left p-3 font-medium">Supplier</th>
+                              )}
+                              <th className="text-right p-3 font-medium">Total</th>
+                              <th className="text-center p-3 font-medium w-[100px]">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y">
+                            {editableItems.map((item) => {
+                              const isServiceOrNonInventory = item.itemType === 'service' || item.itemType === 'non_inventory';
+                              return (
+                                <tr key={item.id} className="hover:bg-muted/30">
                                   <td className="p-3">
-                                    <Select
-                                      value={itemSuppliers[item.id] || ''}
-                                      onValueChange={(value) => handleItemSupplierChange(item.id, value)}
-                                      disabled={isLoadingSuppliers}
-                                    >
-                                      <SelectTrigger className="w-[160px]">
-                                        <SelectValue placeholder="Select supplier" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {suppliers.map((supplier) => (
-                                          <SelectItem key={supplier.id} value={supplier.id}>
-                                            {supplier.name}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
+                                    <p className="font-medium">{item.sku}</p>
+                                    {item.description && (
+                                      <p className="text-xs text-muted-foreground">{item.description}</p>
+                                    )}
                                   </td>
-                                )}
-                                <td className="p-3 text-right font-medium">
-                                  ${(item.lineTotal / 100).toFixed(2)}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                                  <td className="p-3">
+                                    {isServiceOrNonInventory ? (
+                                      '-'
+                                    ) : (
+                                      <Input
+                                        type="number"
+                                        min={1}
+                                        value={item.quantityOrdered}
+                                        onChange={(e) => handleInlineQuantityChange(item.id, e.target.value)}
+                                        className="w-20 h-8 text-sm"
+                                      />
+                                    )}
+                                  </td>
+                                  <td className="p-3">
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      step={0.01}
+                                      value={(item.unitPrice / 100).toFixed(2)}
+                                      onChange={(e) => handleInlinePriceChange(item.id, e.target.value)}
+                                      className="w-24 h-8 text-sm text-right"
+                                    />
+                                  </td>
+                                  {!useSingleSupplier && (
+                                    <td className="p-3">
+                                      <Select
+                                        value={itemSuppliers[item.id] || ''}
+                                        onValueChange={(value) => handleItemSupplierChange(item.id, value)}
+                                        disabled={isLoadingSuppliers}
+                                      >
+                                        <SelectTrigger className="w-[160px] h-8">
+                                          <SelectValue placeholder="Select supplier" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {suppliers.map((supplier) => (
+                                            <SelectItem key={supplier.id} value={supplier.id}>
+                                              {supplier.name}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </td>
+                                  )}
+                                  <td className="p-3 text-right font-medium">
+                                    ${(item.lineTotal / 100).toFixed(2)}
+                                  </td>
+                                  <td className="p-3">
+                                    <div className="flex items-center justify-center gap-1">
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => handleRemoveItem(item.id)}
+                                        disabled={isPending}
+                                      >
+                                        <Trash2 className="h-4 w-4 text-destructive" />
+                                      </Button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {/* Totals Summary */}
+                    {editableItems.length > 0 && (
+                      <div className="bg-muted/30 rounded-lg p-4 space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Subtotal:</span>
+                          <span className="font-medium">${(calculatedTotals.subtotal / 100).toFixed(2)}</span>
+                        </div>
+                        {calculatedTotals.tax > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Tax:</span>
+                            <span className="font-medium">${(calculatedTotals.tax / 100).toFixed(2)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between text-base font-semibold pt-2 border-t">
+                          <span>Total:</span>
+                          <span>${(calculatedTotals.total / 100).toFixed(2)}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <Separator />
@@ -661,6 +836,13 @@ export function EditPurchaseOrderDrawer({
           </>
         )}
       </DialogContent>
+
+      {/* Add Item Dialog */}
+      <AddPOItemDialog
+        open={showAddItemDialog}
+        onClose={() => setShowAddItemDialog(false)}
+        onAdd={handleAddItem}
+      />
     </Dialog>
   );
 }
