@@ -45,6 +45,24 @@ export function PurchaseOrdersTableColumns(options: ColumnsOptions = {}): Column
       },
     },
     {
+      accessorKey: 'salesOrderNumber',
+      header: 'Sales Order',
+      cell: ({ row }) => (
+        <span className="font-mono text-sm">
+          {row.original.salesOrderNumber || '-'}
+        </span>
+      ),
+    },
+    {
+      accessorKey: 'customerName',
+      header: 'Customer',
+      cell: ({ row }) => (
+        <span className="text-sm font-medium">
+          {row.original.customerName || '-'}
+        </span>
+      ),
+    },
+    {
       accessorKey: 'suppliers',
       header: 'Suppliers',
       cell: ({ row }) => {

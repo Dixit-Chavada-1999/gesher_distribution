@@ -120,7 +120,11 @@ class PurchaseOrderRepositoryImpl {
         currency_code,
         created_at,
         sales_order_id,
-        sales_orders:sales_order_id (order_series)
+        sales_orders:sales_order_id (
+          order_series,
+          order_number,
+          customers:customer_id (name)
+        )
       `,
         { count: 'exact' }
       )
@@ -703,6 +707,8 @@ class PurchaseOrderRepositoryImpl {
       itemCount: itemCounts[data.id] || 0,
       createdAt: new Date(data.created_at),
       suppliers: itemSuppliers[data.id] || [],
+      salesOrderNumber: data.sales_orders?.order_number || null,
+      customerName: data.sales_orders?.customers?.name || null,
     };
   }
 

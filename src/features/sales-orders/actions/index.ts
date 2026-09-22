@@ -1150,6 +1150,187 @@ export async function createPurchaseOrderFromAllocation(
 }
 
 /**
+ * Create a single Purchase Order from multiple allocations (for manufacturer/direct allocations)
+ */
+export async function createPurchaseOrderFromMultipleAllocations(
+  salesOrderId: string,
+  allocationIds: string[]
+): Promise<ActionResult<{ poNumber: string; poId: string }>> {
+  const auth = await authorize('purchase_orders.create');
+  if (!auth.ok) {
+    return auth.result;
+  }
+
+  try {
+    console.log('🔄 [createPurchaseOrderFromMultipleAllocations] Creating PO from allocations:', allocationIds);
+
+    if (allocationIds.length === 0) {
+      return { success: false, error: 'No allocations provided' };
+    }
+
+    // Get all allocations with details
+    const { data: allocations, error: allocError } = await db
+      .from('fulfillment_allocations')
+      .select('id, sales_order_item_id, quantity, container_qty, notes')
+      .in('id', allocationIds)
+      .eq('fulfillment_source', 'direct');
+
+    if (allocError || !allocations || allocations.length === 0) {
+      return { success: false, error: 'Allocations not found or not direct allocations' };
+    }
+
+    // Get sales order items for all allocations
+    const soItemIds = allocations.map(a => a.sales_order_item_id);
+    const { data: soItems, error: soItemsError } = await db
+      .from('sales_order_items')
+      .select('id, product_id, sku, description, unit_price, sales_order_id')
+      .in('id', soItemIds);
+
+    if (soItemsError || !soItems || soItems.length === 0) {
+      return { success: false, error: 'Sales order items not found' };
+    }
+
+    // Get sales order
+    const { data: salesOrder, error: soError } = await db
+      .from('sales_orders')
+      .select('order_number, customer_id, currency_code, warehouse_id, shipping_address_street, shipping_address_city, shipping_address_state, shipping_address_postal_code, shipping_address_country, requested_delivery_date')
+      .eq('id', salesOrderId)
+      .single();
+
+    if (soError || !salesOrder) {
+      return { success: false, error: 'Sales order not found' };
+    }
+
+    // Get product IDs to fetch suppliers
+    const productIds = soItems.map(item => item.product_id).filter(Boolean) as string[];
+    const { data: products } = await db
+      .from('products')
+      .select('id, supplier_id, suppliers(name)')
+      .in('id', productIds);
+
+    const productMap = new Map(products?.map(p => [p.id, p]) || []);
+
+    // Generate PO number
+    const { data: poNumber, error: poNumberError } = await db.rpc('generate_po_number');
+    if (poNumberError || !poNumber) {
+      return { success: false, error: 'Failed to generate PO number' };
+    }
+
+    console.log('📝 [createPurchaseOrderFromMultipleAllocations] Creating PO:', poNumber);
+
+    // Calculate combined total
+    let combinedSubtotal = 0;
+    const poItemsData: any[] = [];
+
+    allocations.forEach((allocation, index) => {
+      const soItem = soItems.find(si => si.id === allocation.sales_order_item_id);
+      if (!soItem) return;
+
+      const quantity = allocation.container_qty || allocation.quantity;
+      const lineTotal = soItem.unit_price * quantity;
+      combinedSubtotal += lineTotal;
+
+      const product = soItem.product_id ? productMap.get(soItem.product_id) : null;
+      const supplierId = product?.supplier_id || null;
+      const supplierName = (product?.suppliers as any)?.name || null;
+
+      poItemsData.push({
+        product_id: soItem.product_id || null,
+        sku: soItem.sku,
+        description: soItem.description,
+        quantity_ordered: quantity,
+        quantity_received: 0,
+        unit_code: 'EA',
+        unit_price: soItem.unit_price,
+        tax_rate: 0,
+        line_total: lineTotal,
+        sort_order: index,
+        supplier_id: supplierId,
+        supplier_name: supplierName,
+      });
+    });
+
+    // Combine notes from all allocations
+    const allNotes = allocations
+      .map(a => a.notes)
+      .filter(Boolean)
+      .join('\n');
+
+    // Create PO
+    const { data: newPO, error: poError } = await db
+      .from('purchase_orders')
+      .insert({
+        po_number: poNumber,
+        sales_order_id: salesOrderId,
+        po_date: new Date().toISOString().split('T')[0],
+        expected_delivery_date: salesOrder.requested_delivery_date
+          ? new Date(salesOrder.requested_delivery_date).toISOString().split('T')[0]
+          : null,
+        status: 'draft',
+        currency_code: salesOrder.currency_code || 'USD',
+        warehouse_id: salesOrder.warehouse_id,
+        subtotal: combinedSubtotal,
+        tax_total: 0,
+        shipping_cost: 0,
+        grand_total: combinedSubtotal,
+        vendor_address_street: '',
+        vendor_address_city: '',
+        vendor_address_state: '',
+        vendor_address_postal_code: '',
+        vendor_address_country: 'USA',
+        ship_to_address_street: salesOrder.shipping_address_street || '',
+        ship_to_address_city: salesOrder.shipping_address_city || '',
+        ship_to_address_state: salesOrder.shipping_address_state || '',
+        ship_to_address_postal_code: salesOrder.shipping_address_postal_code || '',
+        ship_to_address_country: salesOrder.shipping_address_country || 'USA',
+        internal_notes: `Auto-created from SO: ${salesOrder.order_number} (${allocations.length} items)${allNotes ? '\n\nNotes: ' + allNotes : ''}`,
+        created_by: auth.user.id,
+        updated_by: auth.user.id,
+      })
+      .select('id')
+      .single();
+
+    if (poError || !newPO) {
+      console.error('❌ Failed to create PO:', poError);
+      return { success: false, error: 'Failed to create Purchase Order' };
+    }
+
+    console.log('✅ [createPurchaseOrderFromMultipleAllocations] PO created:', poNumber);
+
+    // Create all PO items
+    const poItemsWithPOId = poItemsData.map(item => ({
+      ...item,
+      purchase_order_id: newPO.id,
+    }));
+
+    const { error: itemsError } = await db
+      .from('purchase_order_items')
+      .insert(poItemsWithPOId);
+
+    if (itemsError) {
+      console.error('❌ Failed to create PO items:', itemsError);
+      return { success: false, error: 'Failed to create PO items' };
+    }
+
+    console.log(`✅ [createPurchaseOrderFromMultipleAllocations] ${poItemsData.length} PO items created`);
+
+    revalidatePath('/purchase-orders');
+    revalidatePath(`/purchase-orders/${newPO.id}`);
+
+    return {
+      success: true,
+      data: { poNumber, poId: newPO.id },
+    };
+  } catch (error) {
+    console.error('❌ [createPurchaseOrderFromMultipleAllocations] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to create Purchase Order',
+    };
+  }
+}
+
+/**
  * Start processing an order (confirmed -> processing)
  */
 export async function processSalesOrder(id: string): Promise<ActionResult<SalesOrder>> {

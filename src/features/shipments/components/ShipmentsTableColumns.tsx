@@ -68,6 +68,15 @@ export function ShipmentsTableColumns(options: ColumnsOptions = {}): ColumnDef<S
       ),
     },
     {
+      accessorKey: 'customerName',
+      header: 'Customer',
+      cell: ({ row }) => (
+        <span className="text-sm font-medium">
+          {row.original.customerName || '-'}
+        </span>
+      ),
+    },
+    {
       accessorKey: 'status',
       header: 'Status',
       cell: ({ row }) => {

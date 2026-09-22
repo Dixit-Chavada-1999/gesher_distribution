@@ -303,6 +303,9 @@ export interface POListItem {
   createdAt: Date;
   // Computed from items - shows unique suppliers
   suppliers: string[];
+  // Linked Sales Order info
+  salesOrderNumber: string | null;
+  customerName: string | null;
 }
 
 export interface PaginatedResult<T> {

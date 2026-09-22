@@ -25,7 +25,6 @@ import { toast } from 'sonner';
 import type { FulfillmentAllocation, FulfillmentAllocationWithDetails, FulfillmentSource } from '@/features/sales-orders/types';
 import {
   getAllocationsForItemAction,
-  suggestAllocationsAction,
   cancelAllocationAction,
 } from '@/features/sales-orders/actions/fulfillment-allocation.actions';
 import { CreateAllocationDialog } from './CreateAllocationDialog';
@@ -59,16 +58,6 @@ interface AllocationSummary {
   customerQty: number;
   remainingToAllocate: number;
   fullyAllocated: boolean;
-}
-
-interface AllocationSuggestion {
-  fulfillmentSource: FulfillmentSource;
-  quantity: number;
-  available: number;
-  locationId?: string;
-  locationName?: string;
-  dealerId?: string;
-  dealerName?: string;
 }
 
 // ============================================
@@ -123,9 +112,7 @@ export function AllocationManager({
 
   // State
   const [summary, setSummary] = useState<AllocationSummary | null>(null);
-  const [suggestions, setSuggestions] = useState<AllocationSuggestion[]>([]);
   const [loading, setLoading] = useState(true);
-  const [, setLoadingSuggestions] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Dialogs
@@ -155,28 +142,8 @@ export function AllocationManager({
     }
   }
 
-  async function loadSuggestions() {
-    try {
-      setLoadingSuggestions(true);
-      const result = await suggestAllocationsAction({
-        salesOrderItemId,
-        productId,
-        customerQty,
-      });
-
-      if (result.success && result.data) {
-        setSuggestions(result.data.suggestions);
-      }
-    } catch (error) {
-      console.error('Error loading suggestions:', error);
-    } finally {
-      setLoadingSuggestions(false);
-    }
-  }
-
   useEffect(() => {
     loadAllocations();
-    loadSuggestions();
   }, [salesOrderItemId]);
 
   // ============================================
@@ -186,7 +153,6 @@ export function AllocationManager({
   function handleCreateSuccess() {
     setCreateDialogOpen(false);
     loadAllocations();
-    loadSuggestions();
     // Removed onAllocationsChange - no need to reload entire drawer
     toast.success('Allocation created successfully');
   }
@@ -195,7 +161,6 @@ export function AllocationManager({
     setEditDialogOpen(false);
     setSelectedAllocation(null);
     loadAllocations();
-    loadSuggestions();
     // Removed onAllocationsChange - no need to reload entire drawer
     toast.success('Allocation updated successfully');
   }
@@ -222,7 +187,6 @@ export function AllocationManager({
         setDeleteDialogOpen(false);
         setSelectedAllocation(null);
         loadAllocations();
-        loadSuggestions();
         // Removed onAllocationsChange - no need to reload entire drawer
       } else {
         toast.error(result.error || 'Failed to cancel allocation');
@@ -384,32 +348,6 @@ export function AllocationManager({
                   ))}
                 </TableBody>
               </Table>
-            </div>
-          )}
-
-          {/* Smart Suggestions */}
-          {!fullyAllocated && suggestions.length > 0 && (
-            <div className="mt-6">
-              <h4 className="text-sm font-medium mb-3">Suggested Allocations</h4>
-              <div className="space-y-2">
-                {suggestions.map((suggestion, index) => (
-                  <Alert key={index}>
-                    <Info className="h-4 w-4" />
-                    <AlertDescription>
-                      <strong>{getSourceLabel(suggestion.fulfillmentSource)}</strong>: Allocate{' '}
-                      {suggestion.quantity} units
-                      {suggestion.locationName && ` from ${suggestion.locationName}`}
-                      {suggestion.dealerName && ` from ${suggestion.dealerName}`}
-                      {suggestion.available > 0 && (
-                        <span className="text-muted-foreground">
-                          {' '}
-                          ({suggestion.available} available)
-                        </span>
-                      )}
-                    </AlertDescription>
-                  </Alert>
-                ))}
-              </div>
             </div>
           )}
         </CardContent>

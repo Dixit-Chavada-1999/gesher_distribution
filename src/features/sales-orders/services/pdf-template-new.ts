@@ -399,7 +399,7 @@ export function generateSalesOrderHtml(data: SalesOrderPdfData): string {
                 <div class="company-name">Gesher Distribution, Inc</div>
                 <div class="company-address">
                   11511 E Caley Ave<br>
-                  Attn: Travis Van<br>
+                  Attn: Travis Vap<br>
                   Centennial, CO 80111-6935
                 </div>
               </div>

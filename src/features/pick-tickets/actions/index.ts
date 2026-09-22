@@ -635,7 +635,8 @@ export async function createPickTicketFromSalesOrder(
   assignedToId?: string,
   skipStatusCheck?: boolean,
   useAllocatedQuantities?: boolean, // NEW: When true, use quantities from allocations table
-  assignedContactId?: string // NEW: Contact ID for warehouse contact assignment
+  assignedContactId?: string, // NEW: Contact ID for warehouse contact assignment
+  specificAllocationIds?: string[] // NEW: When provided, only include items from these specific allocations
 ): Promise<CreateFromSOResult> {
   const auth = await authorize('pick_tickets.create');
   if (!auth.ok) {
@@ -720,12 +721,60 @@ export async function createPickTicketFromSalesOrder(
     // Fetch allocated quantities if requested (for allocation-based pick tickets)
     let allocationQuantities: Map<string, number> = new Map();
     if (useAllocatedQuantities) {
-      const { data: allocations } = await db
+      // AUTO-FETCH: If single allocation ID provided, automatically fetch ALL pending allocations for same warehouse
+      // This allows frontend to pass single ID, but backend combines all warehouse allocations into one Pick Ticket
+      if (specificAllocationIds && specificAllocationIds.length === 1) {
+        console.log('🔍 [createPickTicketFromSalesOrder] Single allocation provided, auto-fetching all pending warehouse allocations...');
+
+        // Step 1: Get location_id from the provided allocation
+        const { data: sourceAllocation } = await db
+          .from('fulfillment_allocations')
+          .select('location_id')
+          .eq('id', specificAllocationIds[0])
+          .eq('fulfillment_source', 'gdc_inventory')
+          .single();
+
+        if (sourceAllocation?.location_id) {
+          console.log('📍 [createPickTicketFromSalesOrder] Source location:', sourceAllocation.location_id);
+
+          // Step 2: Fetch ALL pending allocations for same warehouse + same sales order
+          // IMPORTANT: Only fetch allocations with status 'pending' (not 'allocated' or 'completed')
+          const { data: allWarehouseAllocations } = await db
+            .from('fulfillment_allocations')
+            .select('id, status')
+            .eq('location_id', sourceAllocation.location_id)
+            .eq('fulfillment_source', 'gdc_inventory')
+            .eq('status', 'pending')  // ← Only pending allocations
+            .in('sales_order_item_id', salesOrder.sales_order_items?.map((item: any) => item.id) || []);
+
+          if (allWarehouseAllocations && allWarehouseAllocations.length > 0) {
+            // Replace single ID with ALL warehouse allocation IDs
+            specificAllocationIds = allWarehouseAllocations.map(a => a.id);
+            console.log(`✅ [createPickTicketFromSalesOrder] Auto-fetched ${allWarehouseAllocations.length} allocations for warehouse`);
+            console.log('📋 [createPickTicketFromSalesOrder] Combined allocation IDs:', specificAllocationIds);
+          }
+        }
+      }
+
+      // Build query to fetch allocations
+      let allocQuery = db
         .from('fulfillment_allocations')
         .select('sales_order_item_id, quantity')
         .eq('fulfillment_source', 'gdc_inventory')
-        .eq('location_id', finalWarehouseId)
-        .in('sales_order_item_id', salesOrder.sales_order_items?.map((item: any) => item.id) || []);
+        .eq('location_id', finalWarehouseId);
+
+      // If specific allocation IDs provided, only fetch those allocations
+      // This ensures pick ticket includes ONLY items from specific allocations (grouped by warehouse)
+      if (specificAllocationIds && specificAllocationIds.length > 0) {
+        allocQuery = allocQuery.in('id', specificAllocationIds);
+        console.log('🎯 [createPickTicketFromSalesOrder] Filtering by specific allocation IDs:', specificAllocationIds);
+      } else {
+        // Otherwise, fetch all allocations for this warehouse and SO items
+        allocQuery = allocQuery.in('sales_order_item_id', salesOrder.sales_order_items?.map((item: any) => item.id) || []);
+        console.log('📦 [createPickTicketFromSalesOrder] Fetching all allocations for warehouse');
+      }
+
+      const { data: allocations } = await allocQuery;
 
       if (allocations) {
         allocations.forEach((alloc: any) => {

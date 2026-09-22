@@ -60,7 +60,31 @@ export function generatePickTicketTemplateHtml(data: PickTicketPdfTemplateData):
   };
 
   const formatAddress = (address: string): string => {
+    // Format: "Street\nCity, State,\nZIP"
+    // Keep city and state on same line, only break before ZIP
+    const parts = address.split(',').map(p => p.trim());
+
+    if (parts.length >= 3) {
+      // Street, City, State ZIP format
+      const street = parts[0];
+      const city = parts[1];
+      const stateZip = parts.slice(2).join(', ');
+      return `${street}<br>${city}, ${stateZip}`;
+    }
+
+    // Fallback: replace all commas with breaks
     return address.replace(/,\s*/g, '<br>');
+  };
+
+  const extractShipToLocation = (address: string): string => {
+    // Extract city and state for brief display
+    const parts = address.split(',').map(p => p.trim());
+    if (parts.length >= 3 && parts[2]) {
+      // Return "City, State" (e.g., "Omaha, NE")
+      const statePart = parts[2].split(' ')[0];
+      return `${parts[1]}, ${statePart}`;
+    }
+    return parts.length >= 2 && parts[1] ? parts[1] : '-';
   };
 
   // Items table rows
@@ -370,7 +394,7 @@ export function generatePickTicketTemplateHtml(data: PickTicketPdfTemplateData):
               <div class="company-name">Gesher Distribution, Inc</div>
               <div class="company-address">
                 11511 E Caley Ave<br>
-                Attn: Travis Van<br>
+                Attn: Travis Vap<br>
                 Centennial, CO 80111-6935
               </div>
             </div>
@@ -424,7 +448,7 @@ export function generatePickTicketTemplateHtml(data: PickTicketPdfTemplateData):
                 Sales Order: ${data.salesOrderNumber}<br>
                 Customer: ${data.customerName}<br>
                 ${data.customerPoNumber ? `Customer PO: ${data.customerPoNumber}<br>` : ''}
-                Ship To: ${formatAddress(data.shipToAddress)}
+                Customer address: ${formatAddress(data.shipToAddress)}
               </div>
             </div>
           </div>
@@ -448,8 +472,9 @@ export function generatePickTicketTemplateHtml(data: PickTicketPdfTemplateData):
           <div class="col-4">
             <div class="details-box">
               <div class="details-title">Shipping Info</div>
-              <div class="details-row">Method: ${data.shippingMethod || '-'}</div>
-              <div class="details-row">Required Date: ${formatDate(data.requiredDate)}</div>
+              <div class="details-row">Ship To: ${extractShipToLocation(data.shipToAddress)}</div>
+              <div class="details-row">Method: ${data.shippingMethod || 'Standard'}</div>
+              <div class="details-row">Delivery: ${formatDate(data.requiredDate)}</div>
             </div>
           </div>
 

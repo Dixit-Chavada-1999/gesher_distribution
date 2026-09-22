@@ -460,7 +460,7 @@ function generateDealerAllocationHtml(data: DealerAllocationPdfData): string {
                 <div class="company-name">Gesher Distribution, Inc</div>
                 <div class="company-address">
                   11511 E Caley Ave<br>
-                  Attn: Travis Van<br>
+                  Attn: Travis Vap<br>
                   Centennial, CO 80111-6935
                 </div>
               </div>
@@ -493,8 +493,21 @@ function generateDealerAllocationHtml(data: DealerAllocationPdfData): string {
     <div class="info-section">
       <div class="customer-section">
         <div class="row">
-          <!-- Col-6: Dealer Info -->
-          <div class="col-6">
+          <!-- Col-4: Bill To (Gesher) -->
+          <div class="col-4">
+            <div class="customer-box">
+              <div class="customer-box-title">Bill To</div>
+              <div class="customer-box-content">
+                <strong>Travis Vap</strong><br>
+                Gesher Distribution, Inc<br>
+                11511 E Caley Ave<br>
+                Centennial, CO 80111-6935
+              </div>
+            </div>
+          </div>
+
+          <!-- Col-4: Dealer Info -->
+          <div class="col-4">
             <div class="customer-box">
               <div class="customer-box-title">Assigned Dealer</div>
               <div class="customer-box-content">
@@ -505,8 +518,8 @@ function generateDealerAllocationHtml(data: DealerAllocationPdfData): string {
             </div>
           </div>
 
-          <!-- Col-6: Customer Info -->
-          <div class="col-6">
+          <!-- Col-4: Customer Info -->
+          <div class="col-4">
             <div class="customer-box">
               <div class="customer-box-title">End Customer</div>
               <div class="customer-box-content">

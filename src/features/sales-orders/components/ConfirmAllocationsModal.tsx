@@ -200,7 +200,7 @@ export function ConfirmAllocationsModal({
     }
   }
 
-  async function handleAction(allocationId: string) {
+  async function handleAction(allocationId: string, groupAllocationIds?: string[]) {
     const action = actions.get(allocationId);
     if (!action) return;
 
@@ -211,9 +211,15 @@ export function ConfirmAllocationsModal({
       return;
     }
 
-    // Update action status to processing
+    // Update action status to processing for ALL allocations in group
     const processingActions = new Map(actions);
-    processingActions.set(allocationId, { ...action, status: 'processing' });
+    const idsToUpdate = groupAllocationIds || [allocationId];
+    idsToUpdate.forEach((id) => {
+      const groupAction = actions.get(id);
+      if (groupAction) {
+        processingActions.set(id, { ...groupAction, status: 'processing' });
+      }
+    });
     setActions(processingActions);
 
     try {
@@ -222,11 +228,13 @@ export function ConfirmAllocationsModal({
       // Execute action based on type
       switch (action.type) {
         case 'create_po':
-          result = await handleCreatePO(allocation);
+          // Pass all allocation IDs in the group for PO creation
+          result = await handleCreatePO(allocation, groupAllocationIds);
           break;
 
         case 'create_pick_ticket':
-          result = await handleCreatePickTicket(allocation);
+          // Pass all allocation IDs in the group for Pick Ticket creation
+          result = await handleCreatePickTicket(allocation, groupAllocationIds);
           break;
 
         case 'send_email':
@@ -238,9 +246,14 @@ export function ConfirmAllocationsModal({
       }
 
       if (result.success) {
-        // Update status to completed
+        // Update status to completed for ALL allocations in group
         const completedActions = new Map(actions);
-        completedActions.set(allocationId, { ...action, status: 'completed' });
+        idsToUpdate.forEach((id) => {
+          const groupAction = actions.get(id);
+          if (groupAction) {
+            completedActions.set(id, { ...groupAction, status: 'completed' });
+          }
+        });
         setActions(completedActions);
 
         // Show success message with details from result
@@ -252,10 +265,15 @@ export function ConfirmAllocationsModal({
     } catch (error) {
       console.error(`Error executing ${action.type}:`, error);
       const failedActions = new Map(actions);
-      failedActions.set(allocationId, {
-        ...action,
-        status: 'failed',
-        error: error instanceof Error ? error.message : 'Unknown error',
+      idsToUpdate.forEach((id) => {
+        const groupAction = actions.get(id);
+        if (groupAction) {
+          failedActions.set(id, {
+            ...groupAction,
+            status: 'failed',
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
       });
       setActions(failedActions);
       toast.error(`Failed to ${action.label}`);
@@ -265,44 +283,87 @@ export function ConfirmAllocationsModal({
   /**
    * Validate Purchase Order data for Manufacturer (Direct) allocation
    */
-  async function handleCreatePO(allocation: FulfillmentAllocationWithDetails) {
+  async function handleCreatePO(
+    allocation: FulfillmentAllocationWithDetails,
+    groupAllocationIds?: string[]
+  ) {
     try {
       console.log('🔄 [handleCreatePO] Creating PO for allocation:', allocation.id);
-
-      // Validate allocation has container quantity
-      if (!allocation.containerQty || allocation.containerQty <= 0) {
-        throw new Error('Container quantity is required for manufacturer orders');
-      }
-
-      // Get the sales order item to extract product details
-      const soItemId = allocation.salesOrderItemId;
-      console.log('📦 [handleCreatePO] SO Item ID:', soItemId);
+      console.log('🔄 [handleCreatePO] Group allocation IDs:', groupAllocationIds);
 
       // Import required actions
       const { updateAllocationStatus } = await import('../actions/fulfillment-allocation.actions');
-      const { createPurchaseOrderFromAllocation } = await import('../actions');
+      const {
+        createPurchaseOrderFromAllocation,
+        createPurchaseOrderFromMultipleAllocations
+      } = await import('../actions');
 
-      // Create the Purchase Order immediately
-      console.log('🏭 [handleCreatePO] Creating PO from allocation...');
-      const poResult = await createPurchaseOrderFromAllocation(salesOrderId, allocation.id);
+      // Get all allocations in group (or just this one)
+      const allocationIdsToProcess = groupAllocationIds || [allocation.id];
 
-      if (!poResult.success) {
-        throw new Error(poResult.error || 'Failed to create Purchase Order');
+      let poResult;
+
+      // If multiple allocations (manufacturer/direct), create ONE combined PO
+      if (allocationIdsToProcess.length > 1) {
+        console.log('🏭 [handleCreatePO] Creating combined PO from', allocationIdsToProcess.length, 'allocations');
+
+        poResult = await createPurchaseOrderFromMultipleAllocations(
+          salesOrderId,
+          allocationIdsToProcess
+        );
+
+        if (!poResult.success) {
+          throw new Error(poResult.error || 'Failed to create Purchase Order');
+        }
+
+        console.log('✅ [handleCreatePO] Combined PO created:', poResult.data);
+
+        // Update all allocation statuses to 'allocated'
+        for (const allocId of allocationIdsToProcess) {
+          await updateAllocationStatus(allocId, 'allocated');
+        }
+
+        return {
+          success: true,
+          data: {
+            message: `Purchase Order ${poResult.data?.poNumber || ''} created with ${allocationIdsToProcess.length} items`,
+            poNumber: poResult.data?.poNumber,
+            poNumbers: [poResult.data?.poNumber],
+          },
+        };
       }
+      // Single allocation - use existing function
+      else {
+        const allocationId = allocationIdsToProcess[0];
+        if (!allocationId) {
+          throw new Error('No allocation ID found');
+        }
 
-      console.log('✅ [handleCreatePO] PO created:', poResult.data);
+        console.log('🏭 [handleCreatePO] Creating PO from single allocation:', allocationId);
 
-      // Update allocation status to 'allocated'
-      await updateAllocationStatus(allocation.id, 'allocated');
+        poResult = await createPurchaseOrderFromAllocation(
+          salesOrderId,
+          allocationId
+        );
 
-      return {
-        success: true,
-        data: {
-          message: `Purchase Order ${poResult.data?.poNumber || ''} created successfully`,
-          poNumber: poResult.data?.poNumber,
-          poId: poResult.data?.poId,
-        },
-      };
+        if (!poResult.success) {
+          throw new Error(poResult.error || 'Failed to create Purchase Order');
+        }
+
+        console.log('✅ [handleCreatePO] PO created:', poResult.data);
+
+        // Update allocation status to 'allocated'
+        await updateAllocationStatus(allocationId, 'allocated');
+
+        return {
+          success: true,
+          data: {
+            message: `Purchase Order ${poResult.data?.poNumber || ''} created successfully`,
+            poNumber: poResult.data?.poNumber,
+            poNumbers: [poResult.data?.poNumber],
+          },
+        };
+      }
     } catch (error) {
       console.error('❌ [handleCreatePO] Error:', error);
       return {
@@ -315,9 +376,13 @@ export function ConfirmAllocationsModal({
   /**
    * Create Pick Ticket for GDC Inventory allocation
    */
-  async function handleCreatePickTicket(allocation: FulfillmentAllocationWithDetails) {
+  async function handleCreatePickTicket(
+    allocation: FulfillmentAllocationWithDetails,
+    groupAllocationIds?: string[]
+  ) {
     try {
       console.log('🔄 [handleCreatePickTicket] Creating Pick Ticket for allocation:', allocation.id);
+      console.log('🔄 [handleCreatePickTicket] Group allocation IDs:', groupAllocationIds);
 
       // Validate required fields
       if (!allocation.location?.id) {
@@ -330,39 +395,19 @@ export function ConfirmAllocationsModal({
 
       console.log('📦 [handleCreatePickTicket] Location:', allocation.location.name);
       console.log('👤 [handleCreatePickTicket] Contact:', allocation.assignedContact.name);
-      console.log('📧 [handleCreatePickTicket] Contact Email:', allocation.assignedContact.email);
-      console.log('👷 [handleCreatePickTicket] Allocation.assignedUserId:', allocation.assignedUserId);
+      console.log('📧 [handleCreatePickTicket] Contact ID:', allocation.assignedContact.id);
 
       // Import required actions
       const { updateAllocationStatus } = await import('../actions/fulfillment-allocation.actions');
       const { createPickTicketFromSalesOrder } = await import('@/features/pick-tickets/actions');
-      const { findUserByEmail } = await import('@/features/users/actions');
-
-      // Find matching user by contact email (warehouse user and contact are same person)
-      let assignedUserId = allocation.assignedUserId || undefined;
-      console.log('🎯 [handleCreatePickTicket] Initial assignedUserId:', assignedUserId);
-
-      if (!assignedUserId && allocation.assignedContact?.email) {
-        console.log('🔍 [handleCreatePickTicket] Finding user by contact email:', allocation.assignedContact.email);
-        const userResult = await findUserByEmail(allocation.assignedContact.email);
-        console.log('🔍 [handleCreatePickTicket] findUserByEmail result:', JSON.stringify(userResult));
-
-        if (userResult.success && userResult.data) {
-          assignedUserId = userResult.data.id;
-          console.log('✅ [handleCreatePickTicket] Found matching user:', userResult.data.id, 'Name:', userResult.data.name);
-        } else {
-          console.log('⚠️ [handleCreatePickTicket] No matching user found for contact email. Result:', userResult);
-        }
-      }
-
-      console.log('🎯 [handleCreatePickTicket] Final assignedUserId to pass:', assignedUserId);
 
       // Create the Pick Ticket immediately
       console.log('📋 [handleCreatePickTicket] Creating Pick Ticket with params:', {
         salesOrderId,
         warehouseId: allocation.location.id,
         contactIds: [allocation.assignedContact.id],
-        assignedUserId,
+        assignedContactId: allocation.assignedContact.id,
+        allocationId: allocation.id,
       });
 
       const ptResult = await createPickTicketFromSalesOrder(
@@ -370,9 +415,11 @@ export function ConfirmAllocationsModal({
         allocation.location.id,
         [allocation.assignedContact.id],
         allocation.notes || undefined,
-        assignedUserId,
+        undefined, // assignedToId - not needed for warehouse contacts (they're in location_contacts, not users)
         true, // skipStatusCheck - allow PT creation for draft orders
-        true  // useAllocatedQuantities - use quantities from allocations, not customer qty
+        true, // useAllocatedQuantities - use quantities from allocations, not customer qty
+        allocation.assignedContact.id, // assignedContactId - warehouse contact from location_contacts table
+        groupAllocationIds || [allocation.id] // specificAllocationIds - include items from these allocations
       );
 
       if (!ptResult.success) {
@@ -633,8 +680,7 @@ export function ConfirmAllocationsModal({
               .map(a => a.notes)
               .join('\n---\n');
 
-            // Get assigned user ID and contact ID from first allocation (if any)
-            const assignedUserId = allocationsForLocation.find(a => a.assignedUserId)?.assignedUserId || undefined;
+            // Get assigned contact ID from first allocation (if any)
             const assignedContactId = allocationsForLocation.find(a => a.assignedContactId)?.assignedContactId || undefined;
 
             if (contactIds.length > 0) {
@@ -643,10 +689,10 @@ export function ConfirmAllocationsModal({
                 locationId,
                 contactIds,
                 combinedNotes || undefined,
-                assignedUserId, // Use assigned user from allocation
+                undefined, // assignedToId - not needed for warehouse contacts (they're in location_contacts, not users)
                 true, // skipStatusCheck
                 true, // useAllocatedQuantities
-                assignedContactId // Use assigned contact from allocation
+                assignedContactId // Use assigned contact from allocation (location_contacts table)
               );
 
               if (ptResult.success) {
@@ -703,24 +749,32 @@ export function ConfirmAllocationsModal({
 
   // Get unique group key
   function getGroupKey(allocation: FulfillmentAllocationWithDetails): string {
+    // Warehouse allocations: Group by warehouse location
     if (allocation.fulfillmentSource === 'gdc_inventory') {
-      return `warehouse-${allocation.locationId}`;
-    } else if (
+      return `warehouse-${allocation.locationId}`; // Group by warehouse
+    }
+    // Dealer allocations: Group by dealer
+    else if (
       allocation.fulfillmentSource === 'platinum_dealer_inventory' ||
       allocation.fulfillmentSource === 'platinum_dealer_fulfillment'
     ) {
       return `dealer-${allocation.platinumDealerId}`;
     }
-    return `direct-${allocation.id}`;
+    // Manufacturer allocations: Group all together
+    else if (allocation.fulfillmentSource === 'direct') {
+      return 'manufacturer-all'; // Group all manufacturer allocations together
+    }
+    return `other-${allocation.id}`;
   }
 
   // Group allocations to avoid duplicate buttons:
   // - GDC Inventory: Group by warehouse (location_id)
   // - Dealer allocations: Group by dealer (platinum_dealer_id)
+  // - Manufacturer (Direct): Group all together (same supplier)
   const groupedAllocations = React.useMemo(() => {
     const warehouseGroups = new Map<string, FulfillmentAllocationWithDetails[]>();
     const dealerGroups = new Map<string, FulfillmentAllocationWithDetails[]>();
-    const otherAllocations: FulfillmentAllocationWithDetails[] = [];
+    const manufacturerAllocations: FulfillmentAllocationWithDetails[] = [];
 
     allocations.forEach((allocation) => {
       // Group GDC Inventory by warehouse
@@ -742,16 +796,18 @@ export function ConfirmAllocationsModal({
         }
         dealerGroups.get(dealerId)!.push(allocation);
       }
-      // Direct allocations (Manufacturer) - no grouping needed
-      else {
-        otherAllocations.push(allocation);
+      // Group Manufacturer (Direct) allocations together
+      else if (allocation.fulfillmentSource === 'direct') {
+        manufacturerAllocations.push(allocation);
       }
     });
 
     const result: FulfillmentAllocationWithDetails[] = [];
 
-    // Add direct allocations (no grouping)
-    result.push(...otherAllocations);
+    // Add manufacturer allocations (grouped as one)
+    if (manufacturerAllocations.length > 0 && manufacturerAllocations[0]) {
+      result.push(manufacturerAllocations[0]); // Show first allocation as representative
+    }
 
     // Add one allocation per warehouse group
     warehouseGroups.forEach((groupAllocations) => {
@@ -818,6 +874,7 @@ export function ConfirmAllocationsModal({
                     const isDealerAllocation =
                       allocation.fulfillmentSource === 'platinum_dealer_inventory' ||
                       allocation.fulfillmentSource === 'platinum_dealer_fulfillment';
+                    const isManufacturerAllocation = allocation.fulfillmentSource === 'direct';
 
                     // Get all allocations in the group
                     const groupAllocations = isWarehouseAllocation
@@ -833,10 +890,19 @@ export function ConfirmAllocationsModal({
                             (a.fulfillmentSource === 'platinum_dealer_inventory' ||
                              a.fulfillmentSource === 'platinum_dealer_fulfillment')
                         )
+                      : isManufacturerAllocation
+                      ? allocations.filter((a) => a.fulfillmentSource === 'direct')
                       : [allocation];
 
                     const totalQuantity = groupAllocations.reduce((sum, a) => sum + a.quantity, 0);
                     const itemCount = groupAllocations.length;
+
+                    // Count only pending allocations (not already processed)
+                    const pendingItemCount = groupAllocations.filter(a => {
+                      const groupAction = actions.get(a.id);
+                      return groupAction?.status === 'pending';
+                    }).length;
+
                     const groupKey = getGroupKey(allocation);
                     const isExpanded = expandedGroups.has(groupKey);
 
@@ -903,7 +969,21 @@ export function ConfirmAllocationsModal({
                                   <Button
                                     size="sm"
                                     variant={action.status === 'completed' ? 'outline' : 'default'}
-                                    onClick={() => handleAction(allocation.id)}
+                                    onClick={() => {
+                                      // For warehouse allocations: Pass ONLY this allocation ID
+                                      // Server will automatically fetch all pending allocations for same warehouse
+                                      if (isWarehouseAllocation) {
+                                        handleAction(allocation.id, [allocation.id]); // Single ID only
+                                      }
+                                      // For dealer/manufacturer: Pass all group IDs (grouped behavior)
+                                      else {
+                                        const pendingGroupAllocations = groupAllocations.filter(a => {
+                                          const groupAction = actions.get(a.id);
+                                          return groupAction?.status === 'pending';
+                                        });
+                                        handleAction(allocation.id, pendingGroupAllocations.map(a => a.id));
+                                      }
+                                    }}
                                     disabled={
                                       action.status === 'processing' || action.status === 'completed'
                                     }
@@ -914,7 +994,7 @@ export function ConfirmAllocationsModal({
                                       <Icon className="mr-2 h-4 w-4" />
                                     )}
                                     {action.label}
-                                    {itemCount > 1 && ` (${itemCount} items)`}
+                                    {pendingItemCount > 1 && ` (${pendingItemCount} items)`}
                                   </Button>
                                 )}
                               </TableCell>
@@ -936,7 +1016,7 @@ export function ConfirmAllocationsModal({
                             <div className="text-xs text-muted-foreground truncate max-w-[200px]">
                               {allocation.salesOrderItem?.description || ''}
                             </div>
-                            {(isWarehouseAllocation || isDealerAllocation) && itemCount > 1 && (
+                            {(isWarehouseAllocation || isDealerAllocation || isManufacturerAllocation) && itemCount > 1 && (
                               <button
                                 type="button"
                                 onClick={() => toggleGroupExpansion(groupKey)}
@@ -978,7 +1058,21 @@ export function ConfirmAllocationsModal({
                           <Button
                             size="sm"
                             variant={action.status === 'completed' ? 'outline' : 'default'}
-                            onClick={() => handleAction(allocation.id)}
+                            onClick={() => {
+                              // For warehouse allocations: Pass ONLY this allocation ID
+                              // Server will automatically fetch all pending allocations for same warehouse
+                              if (isWarehouseAllocation) {
+                                handleAction(allocation.id, [allocation.id]); // Single ID only
+                              }
+                              // For dealer/manufacturer: Pass all group IDs (grouped behavior)
+                              else {
+                                const pendingGroupAllocations = groupAllocations.filter(a => {
+                                  const groupAction = actions.get(a.id);
+                                  return groupAction?.status === 'pending';
+                                });
+                                handleAction(allocation.id, pendingGroupAllocations.map(a => a.id));
+                              }
+                            }}
                             disabled={
                               action.status === 'processing' || action.status === 'completed'
                             }
@@ -989,7 +1083,7 @@ export function ConfirmAllocationsModal({
                               <Icon className="mr-2 h-4 w-4" />
                             )}
                             {action.label}
-                            {(isWarehouseAllocation || isDealerAllocation) && itemCount > 1 && ` (${itemCount} items)`}
+                            {(isWarehouseAllocation || isDealerAllocation || isManufacturerAllocation) && pendingItemCount > 1 && ` (${pendingItemCount} items)`}
                           </Button>
                         </TableCell>
                       </TableRow>

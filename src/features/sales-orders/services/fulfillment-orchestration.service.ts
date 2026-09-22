@@ -124,6 +124,7 @@ export async function createSingleAllocation(
       quantity: params.quantity,
       locationId: params.locationId || null,
       assignedContactId: params.assignedContactId || null,
+      assignedUserId: null, // Not needed - we use assignedContactId for warehouse contacts
       platinumDealerId: params.platinumDealerId || null,
       dealerLocationId: params.dealerLocationId || null,
       purchaseOrderId: params.purchaseOrderId || null,
@@ -214,6 +215,8 @@ export async function createMultiSourceAllocation(
       fulfillmentSource: a.fulfillmentSource,
       quantity: a.quantity,
       locationId: a.locationId || null,
+      assignedContactId: a.assignedContactId || null,
+      assignedUserId: null, // Not needed - we use assignedContactId for warehouse contacts
       platinumDealerId: a.platinumDealerId || null,
       dealerLocationId: a.dealerLocationId || null,
       purchaseOrderId: a.purchaseOrderId || null,
@@ -224,6 +227,7 @@ export async function createMultiSourceAllocation(
       createdBy: params.createdBy || null,
     }));
 
+    // Create all allocations
     const { data: allocations, error: createError } =
       await createBatchAllocations(allocationData);
 
