@@ -48,6 +48,7 @@ export function CreateSalesOrderDrawer({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [_isFormValid, setIsFormValid] = useState(false);
+  const [serverErrors, setServerErrors] = useState<Record<string, string[]> | undefined>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const formRef = useRef<{ getFormData: () => any | null }>(null);
 
@@ -70,6 +71,7 @@ export function CreateSalesOrderDrawer({
     }
 
     setIsSavingDraft(true);
+    setServerErrors(undefined);
     try {
       const result = await createSalesOrderFromData({
         ...formData,
@@ -82,10 +84,9 @@ export function CreateSalesOrderDrawer({
       } else {
         toast.error(result.error || 'Failed to save draft');
         if (result.errors) {
-          const errorMessages = Object.entries(result.errors)
-            .map(([field, messages]) => `${field}: ${messages.join(', ')}`)
-            .join('; ');
-          toast.error(errorMessages);
+          setServerErrors(result.errors);
+          const errorCount = Object.keys(result.errors).length;
+          toast.error(`Validation failed: ${errorCount} field${errorCount > 1 ? 's' : ''} need correction`);
         }
       }
     } catch (error) {
@@ -105,6 +106,7 @@ export function CreateSalesOrderDrawer({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const createSingleOrder = async (formData: any) => {
     setIsSubmitting(true);
+    setServerErrors(undefined);
     try {
       const result = await createSalesOrderFromData({
         ...formData,
@@ -117,10 +119,9 @@ export function CreateSalesOrderDrawer({
       } else {
         toast.error(result.error || 'Failed to create sales order');
         if (result.errors) {
-          const errorMessages = Object.entries(result.errors)
-            .map(([field, messages]) => `${field}: ${messages.join(', ')}`)
-            .join('; ');
-          toast.error(errorMessages);
+          setServerErrors(result.errors);
+          const errorCount = Object.keys(result.errors).length;
+          toast.error(`Validation failed: ${errorCount} field${errorCount > 1 ? 's' : ''} need correction`);
         }
       }
     } catch (error) {
@@ -160,6 +161,7 @@ export function CreateSalesOrderDrawer({
                 onSaveDraft={handleSaveDraft}
                 onSubmit={handleCreate}
                 onValidationChange={setIsFormValid}
+                serverErrors={serverErrors}
               />
             </div>
           </ScrollArea>

@@ -30,7 +30,7 @@ import { NotesSection } from './NotesSection';
 import { CreditWarning } from '@/shared/components/ui/credit-warning';
 
 import type { SalesOrderFormProps } from '../types';
-import { salesOrderFormSchema } from '../lib/schemas';
+import { salesOrderFormSchema, type SalesOrderFormInput } from '../lib/schemas';
 import { getCustomerAddresses, getProductPrice } from '../actions';
 import { createEmptyOrderItem } from '../lib/mock-data';
 
@@ -81,6 +81,7 @@ function SalesOrderFormComponent({
   onSaveDraft: _onSaveDraft,
   mode = 'create',
   onValidationChange,
+  serverErrors,
 }: SalesOrderFormProps) {
   // ----------------------------------------
   // FORM SETUP
@@ -95,7 +96,7 @@ function SalesOrderFormComponent({
     mode: 'onTouched', // Validates after field is touched, then continues with onChange
   });
 
-  const { watch, setValue, handleSubmit, reset, clearErrors, formState: { isValid, errors } } = methods;
+  const { watch, setValue, handleSubmit, reset, clearErrors, setError, formState: { isValid, errors } } = methods;
 
   // ----------------------------------------
   // VALIDATION STATE TRACKING
@@ -107,6 +108,24 @@ function SalesOrderFormComponent({
       onValidationChange(isValid);
     }
   }, [isValid, onValidationChange]);
+
+  // ----------------------------------------
+  // SERVER ERRORS
+  // ----------------------------------------
+
+  // Apply server-side validation errors to form fields
+  useEffect(() => {
+    if (serverErrors) {
+      Object.entries(serverErrors).forEach(([field, messages]) => {
+        if (messages && messages.length > 0) {
+          setError(field as keyof SalesOrderFormInput, {
+            type: 'server',
+            message: messages[0],
+          });
+        }
+      });
+    }
+  }, [serverErrors, setError]);
 
   // ----------------------------------------
   // FORM RESET (Edit Mode)

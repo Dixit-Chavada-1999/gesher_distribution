@@ -70,7 +70,6 @@ export function CreateQuoteDrawer({ open, onClose, onSuccess }: CreateQuoteDrawe
   const [masterData, setMasterData] = useState<MasterData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSavingDraft, _setIsSavingDraft] = useState(false);
   const [serverErrors, setServerErrors] = useState<Record<string, string[]> | undefined>(undefined);
   const [_isFormValid, setIsFormValid] = useState(false);
 
@@ -131,19 +130,11 @@ export function CreateQuoteDrawer({ open, onClose, onSuccess }: CreateQuoteDrawe
     }
   };
 
-  const handleSaveDraft = async () => {
-    // For now, use same logic as create with draft status
-    // Future: Auto-save without validation
-    toast.info('Draft functionality coming soon');
-  };
-
   const handleClose = () => {
-    if (!isSubmitting && !isSavingDraft) {
+    if (!isSubmitting) {
       onClose();
     }
   };
-
-  const isFormLoading = isSubmitting || isSavingDraft;
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
@@ -198,7 +189,7 @@ export function CreateQuoteDrawer({ open, onClose, onSuccess }: CreateQuoteDrawe
                 salesReps={masterData.salesReps}
                 onSubmit={handleSubmit}
                 onCancel={handleClose}
-                isSubmitting={isFormLoading}
+                isSubmitting={isSubmitting}
                 serverErrors={serverErrors}
                 onValidationChange={setIsFormValid}
               />
@@ -225,23 +216,14 @@ export function CreateQuoteDrawer({ open, onClose, onSuccess }: CreateQuoteDrawe
                   type="button"
                   variant="outline"
                   onClick={handleClose}
-                  disabled={isFormLoading}
+                  disabled={isSubmitting}
                 >
                   Cancel
                 </Button>
                 <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={handleSaveDraft}
-                  disabled={isFormLoading}
-                >
-                  {isSavingDraft && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Draft
-                </Button>
-                <Button
                   type="submit"
                   form="quote-form"
-                  disabled={isFormLoading}
+                  disabled={isSubmitting}
                 >
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Create Quote

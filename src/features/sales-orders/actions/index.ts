@@ -416,7 +416,7 @@ export async function updateSalesOrderFromDTO(
     salesRepId: string | null;
     warehouseId: string | null;
     currencyCode: string;
-    customerPoNumber: string | null;
+    customerPoNumber: string;
     orderSeries: string | null;
     status: OrderStatus;
     billingAddress: {

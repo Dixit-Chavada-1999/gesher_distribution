@@ -757,6 +757,7 @@ export interface SalesOrderFormProps {
   onSaveDraft?: (data: SalesOrderFormData) => void;
   mode?: 'create' | 'edit';
   onValidationChange?: (isValid: boolean) => void;
+  serverErrors?: Record<string, string[]>;
 }
 
 export interface CreateSalesOrderDrawerProps {

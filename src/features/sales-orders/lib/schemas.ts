@@ -113,7 +113,7 @@ export const createSalesOrderSchema = z.object({
   salesRepId: z.string().uuid().nullable().optional(),
   warehouseId: z.string().uuid().nullable().optional(),
   currencyCode: z.string().length(3).default('USD'),
-  customerPoNumber: z.string().max(100).nullable().optional(),
+  customerPoNumber: z.string().min(1, 'Customer PO number is required.').max(100),
   status: orderStatusSchema.default('draft'),
   productSource: productSourceSchema.optional(),
   orderSeries: z.string().max(20).nullable().optional(), // GDC 1, GDC 2, GDC 3
@@ -132,7 +132,7 @@ export const updateSalesOrderSchema = z.object({
   salesRepId: z.string().uuid().nullable().optional(),
   warehouseId: z.string().uuid().nullable().optional(),
   currencyCode: z.string().length(3).optional(),
-  customerPoNumber: z.string().max(100).nullable().optional(),
+  customerPoNumber: z.string().min(1, 'Customer PO number is required.').max(100).optional(),
   productSource: productSourceSchema.optional(),
   orderSeries: z.string().max(20).nullable().optional(), // GDC 1, GDC 2, GDC 3
   billingAddress: addressSchema.optional(),
@@ -154,7 +154,7 @@ export const salesOrderFormSchema = z.object({
   salesRepId: z.string().optional().default(''),
   warehouseId: z.string().optional().default(''),
   currencyId: z.string().optional().default('USD'),
-  customerPoNumber: z.string().optional().default(''),
+  customerPoNumber: z.string().min(1, 'Customer PO number is required.'),
   orderSeries: z.string().min(1, 'Order series is required'),
   status: orderStatusSchema.default('draft'),
   billingAddress: addressFormSchema,
@@ -248,7 +248,7 @@ export function formToCreateDTO(form: SalesOrderFormInput) {
     salesRepId: form.salesRepId || null,
     warehouseId: form.warehouseId || null,
     currencyCode: form.currencyId || 'USD',
-    customerPoNumber: form.customerPoNumber || null,
+    customerPoNumber: form.customerPoNumber,
     orderSeries: form.orderSeries || null,
     status: form.status as OrderStatus,
     billingAddress: {

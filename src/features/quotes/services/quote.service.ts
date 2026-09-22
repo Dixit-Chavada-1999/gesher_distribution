@@ -666,6 +666,14 @@ export const quoteService = {
         };
       }
 
+      // Validate required fields for conversion
+      if (!existing.customerPoNumber) {
+        return {
+          success: false,
+          error: 'Quote must have a Customer PO number before conversion to Sales Order',
+        };
+      }
+
       // Check if transition is valid (skip for Super Admin)
       if (!bypassValidation && !isValidStatusTransition(existing.status, 'converted')) {
         return {
@@ -718,7 +726,7 @@ export const quoteService = {
           })),
           customerNotes: existing.customerNotes,
           internalNotes: existing.internalNotes,
-          customerPoNumber: existing.customerPoNumber,  // Copy PO number from quote
+          customerPoNumber: existing.customerPoNumber!,  // Copy PO number from quote (validated during quote creation)
         },
         userId
       );
