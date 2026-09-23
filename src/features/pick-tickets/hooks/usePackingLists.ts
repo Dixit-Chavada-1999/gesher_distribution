@@ -65,7 +65,7 @@ export function usePackingLists(
     } finally {
       setIsLoading(false);
     }
-  }, [JSON.stringify(params)]);
+  }, [params]);
 
   useEffect(() => {
     fetchData();

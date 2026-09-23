@@ -7,7 +7,7 @@
  * Part of the Pick -> Pack -> Ship fulfillment workflow.
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -70,16 +70,19 @@ export default function PackingListsPage() {
   // DATA HOOKS
   // ----------------------------------------
 
+  // Memoize params to prevent unnecessary re-renders
+  const packingListsParams = useMemo(() => ({
+    ...(statusFilter !== 'all' && { status: statusFilter }),
+    page,
+    limit: pageSize,
+  }), [statusFilter, page, pageSize]);
+
   const {
     data: packingLists,
     meta,
     isLoading: isPackingListsLoading,
     refetch: refetchPackingLists,
-  } = usePackingLists({
-    ...(statusFilter !== 'all' && { status: statusFilter }),
-    page,
-    limit: pageSize,
-  });
+  } = usePackingLists(packingListsParams);
 
   // ----------------------------------------
   // HANDLERS

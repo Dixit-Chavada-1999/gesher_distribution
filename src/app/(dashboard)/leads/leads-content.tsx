@@ -6,7 +6,7 @@
  * Client component for managing leads from Pipedrive.
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { UserPlus, Download } from 'lucide-react';
@@ -75,12 +75,13 @@ export function LeadsPageContent() {
   // DATA HOOKS
   // ----------------------------------------
 
-  const params: LeadListParams = {
+  // Memoize params to prevent unnecessary re-renders
+  const params: LeadListParams = useMemo(() => ({
     status: statusFilter !== 'all' ? statusFilter : undefined,
     source: sourceFilter !== 'all' ? sourceFilter : undefined,
     page,
     limit: pageSize,
-  };
+  }), [statusFilter, sourceFilter, page, pageSize]);
 
   const { data: leads, meta, isLoading, refetch } = useLeads(params);
   const { data: stats, refetch: refetchStats } = useLeadStats();

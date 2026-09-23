@@ -770,10 +770,12 @@ export async function createPickTicketFromSalesOrder(
       // Handle both array (Supabase default) and single object cases
       const productData = Array.isArray(item.products) ? item.products[0] : item.products;
 
-      // Use allocated quantity if available, otherwise use customer quantity
-      const quantityToPick = useAllocatedQuantities && allocationQuantities.has(item.id)
-        ? allocationQuantities.get(item.id)!
-        : item.quantity;
+      // Use allocated quantity if available
+      // IMPORTANT: When using allocation-based quantities, items NOT in allocation should get quantity 0
+      // This ensures pick ticket only includes items from the specific allocations
+      const quantityToPick = useAllocatedQuantities
+        ? (allocationQuantities.get(item.id) || 0)  // Use allocation qty or 0 if not allocated
+        : item.quantity;  // Use customer quantity when not using allocations
 
       return {
         salesOrderItemId: item.id,

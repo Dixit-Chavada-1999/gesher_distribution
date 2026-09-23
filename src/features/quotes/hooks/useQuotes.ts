@@ -70,8 +70,13 @@ export function useQuotes(
     // Create a stable key from params
     const paramsKey = JSON.stringify(params);
 
-    // Skip if already fetching or params haven't changed (unless forced)
-    if (!force && (isFetchingRef.current || paramsKey === lastParamsRef.current)) {
+    // Skip if already fetching (but allow if params changed or forced)
+    if (isFetchingRef.current && paramsKey === lastParamsRef.current && !force) {
+      return;
+    }
+
+    // Skip if params haven't changed and not forced
+    if (!force && paramsKey === lastParamsRef.current) {
       return;
     }
 
@@ -100,7 +105,7 @@ export function useQuotes(
       setIsLoading(false);
       isFetchingRef.current = false;
     }
-  }, [enabled, params.status, params.page, params.limit, params.search, params.customerId, params.sortBy, params.sortOrder]);
+  }, [enabled, params]);
 
   // Fetch on mount and when params change
   useEffect(() => {

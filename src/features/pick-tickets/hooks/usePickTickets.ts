@@ -28,7 +28,7 @@ export function usePickTickets(params: PickTicketListParams = {}) {
     } finally {
       setIsLoading(false);
     }
-  }, [JSON.stringify(params)]);
+  }, [params]);
 
   useEffect(() => {
     fetchPickTickets();

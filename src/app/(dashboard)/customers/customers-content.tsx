@@ -12,7 +12,7 @@
  * - Data flows down via props
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, RefreshCw, Download } from 'lucide-react';
 
@@ -86,17 +86,20 @@ export function CustomersPageContent() {
   // DATA HOOKS
   // ----------------------------------------
 
+  // Memoize params to prevent unnecessary re-renders
+  const customersParams = useMemo(() => ({
+    ...(statusFilter !== 'all' && { status: statusFilter }),
+    page,
+    limit: pageSize,
+  }), [statusFilter, page, pageSize]);
+
   // Customers list with status filter
   const {
     data: customers,
     meta,
     isLoading: isCustomersLoading,
     refetch: refetchCustomers,
-  } = useCustomers({
-    ...(statusFilter !== 'all' && { status: statusFilter }),
-    page,
-    limit: pageSize,
-  });
+  } = useCustomers(customersParams);
 
   // ----------------------------------------
   // HANDLERS

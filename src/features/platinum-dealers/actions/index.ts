@@ -590,3 +590,92 @@ export async function checkDealerInventoryAvailableAction(params: {
     };
   }
 }
+
+// ============================================
+// ALLOCATIONS
+// ============================================
+
+/**
+ * Get all fulfillment allocations for a dealer
+ * Server-side action to bypass RLS policy issues
+ *
+ * @example
+ * const result = await getDealerAllocationsAction('dealer-123');
+ * if (result.success) {
+ *   console.log('Allocations:', result.data);
+ * }
+ */
+export async function getDealerAllocationsAction(
+  dealerId: string
+): Promise<ActionResult<any[]>> {
+  try {
+    const { getAllocationsByDealer } = await import(
+      '@/features/sales-orders/repositories/fulfillment-allocations.repository'
+    );
+
+    const { data, error } = await getAllocationsByDealer(dealerId);
+
+    if (error) {
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch allocations',
+      };
+    }
+
+    return {
+      success: true,
+      data: data || [],
+    };
+  } catch (error) {
+    console.error('Error in getDealerAllocationsAction:', error);
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : 'An unexpected error occurred',
+    };
+  }
+}
+
+/**
+ * Update allocation status
+ *
+ * @example
+ * const result = await updateAllocationStatusAction({
+ *   allocationId: 'allocation-123',
+ *   status: 'fulfilled',
+ * });
+ */
+export async function updateAllocationStatusAction(params: {
+  allocationId: string;
+  status: 'pending' | 'allocated' | 'partially_fulfilled' | 'fulfilled' | 'cancelled';
+}): Promise<ActionResult<any>> {
+  try {
+    const { updateAllocation } = await import(
+      '@/features/sales-orders/repositories/fulfillment-allocations.repository'
+    );
+
+    const { data, error } = await updateAllocation({
+      id: params.allocationId,
+      status: params.status,
+    });
+
+    if (error || !data) {
+      return {
+        success: false,
+        error: error?.message || 'Failed to update allocation status',
+      };
+    }
+
+    return {
+      success: true,
+      data,
+    };
+  } catch (error) {
+    console.error('Error in updateAllocationStatusAction:', error);
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : 'An unexpected error occurred',
+    };
+  }
+}

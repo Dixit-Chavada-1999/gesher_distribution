@@ -316,7 +316,19 @@ export interface FulfillmentAllocation {
  */
 export interface FulfillmentAllocationWithDetails
   extends FulfillmentAllocation {
-  salesOrderItem?: Pick<SalesOrderItem, 'sku' | 'description'>;
+  salesOrderItem?: {
+    id: string;
+    sku: string | null;
+    description: string | null;
+    salesOrder?: {
+      id: string;
+      orderNumber: string;
+      customer?: {
+        id: string;
+        companyName: string;
+      };
+    };
+  };
   location?: LocationSummary;
   assignedContact?: LocationContactSummary;
   platinumDealer?: PlatinumDealerSummary;

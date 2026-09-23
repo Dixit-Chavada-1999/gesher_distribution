@@ -342,3 +342,38 @@ input:focus, textarea:focus, select:focus {
     transform: translateY(-50%) scale(1.2);
   }
 }
+
+/* ==============================================
+   CUSTOM SCROLLBAR STYLES
+   ============================================== */
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 #e2e8f0;
+}
+
+/* Chrome, Edge, Safari */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #e2e8f0;
+  border-radius: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 10px;
+  border: 2px solid #e2e8f0;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background: #475569;
+}

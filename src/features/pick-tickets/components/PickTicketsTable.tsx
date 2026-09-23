@@ -1,23 +1,15 @@
 'use client';
 
-import { useState } from 'react';
-import {
-  useReactTable,
-  getCoreRowModel,
-  getPaginationRowModel,
-  flexRender,
-} from '@tanstack/react-table';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/shared/components/ui/table';
-import { Skeleton } from '@/shared/components/ui/skeleton';
-import { Button } from '@/shared/components/ui/button';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+/**
+ * PickTicketsTable Component
+ *
+ * Data table for displaying the list of pick tickets.
+ * Uses the shared DataTable component with custom columns.
+ *
+ * All data is received via props - no internal data fetching.
+ */
+
+import { useMemo, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,8 +20,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/shared/components/ui/alert-dialog';
+
+import { DataTable } from '@/shared/components/data-table';
+
 import { PickTicketsTableColumns } from './PickTicketsTableColumns';
 import type { PickTicketsTableProps, PickTicketListItem } from '../types';
+
+// ============================================
+// COMPONENT
+// ============================================
 
 export function PickTicketsTable({
   data,
@@ -46,6 +45,10 @@ export function PickTicketsTable({
   const [showShippedEditConfirm, setShowShippedEditConfirm] = useState(false);
   const [pendingEditPickTicket, setPendingEditPickTicket] = useState<PickTicketListItem | null>(null);
 
+  // ----------------------------------------
+  // HANDLERS
+  // ----------------------------------------
+
   // Wrap onEdit to check for shipped status and show confirmation
   const handleEdit = onEdit
     ? (pickTicket: PickTicketListItem) => {
@@ -58,162 +61,82 @@ export function PickTicketsTable({
       }
     : undefined;
 
-  const columns = PickTicketsTableColumns({ onView, onEdit: handleEdit, onDelete, onAssign, onStartPicking });
+  // ----------------------------------------
+  // COLUMNS
+  // ----------------------------------------
 
-  const table = useReactTable({
-    data,
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    // Server-side pagination
-    manualPagination: !!pagination,
-    pageCount: pagination?.totalPages ?? -1,
-    state: pagination
-      ? {
-          pagination: {
-            pageIndex: pagination.page - 1,
-            pageSize: pagination.pageSize,
-          },
-        }
-      : undefined,
-    onPaginationChange: pagination
-      ? (updater) => {
-          if (typeof updater === 'function') {
-            const current = {
-              pageIndex: pagination.page - 1,
-              pageSize: pagination.pageSize,
-            };
-            const newState = updater(current);
-            pagination.onPageChange(newState.pageIndex + 1);
-            if (newState.pageSize !== pagination.pageSize) {
-              pagination.onPageSizeChange(newState.pageSize);
-            }
-          }
-        }
-      : undefined,
-    rowCount: pagination?.total,
-  });
+  const columns = useMemo(
+    () =>
+      PickTicketsTableColumns({
+        onView: onView || onRowClick,
+        onEdit: handleEdit,
+        onDelete,
+        onAssign,
+        onStartPicking,
+      }),
+    [onView, handleEdit, onDelete, onAssign, onStartPicking, onRowClick]
+  );
 
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        {toolbarContent && <div>{toolbarContent}</div>}
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                {columns.map((_, index) => (
-                  <TableHead key={index}>
-                    <Skeleton className="h-4 w-20" />
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {[...Array(5)].map((_, rowIndex) => (
-                <TableRow key={rowIndex}>
-                  {columns.map((_, cellIndex) => (
-                    <TableCell key={cellIndex}>
-                      <Skeleton className="h-4 w-full" />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-    );
-  }
+  // ----------------------------------------
+  // RENDER
+  // ----------------------------------------
 
   return (
     <>
-      <div className="space-y-4">
-        {toolbarContent && <div>{toolbarContent}</div>}
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => (
-                    <TableHead key={header.id}>
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
-              {table.getRowModel().rows?.length ? (
-                table.getRowModel().rows.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    onClick={() => onRowClick?.(row.original)}
-                    className={onRowClick ? 'cursor-pointer' : undefined}
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext()
-                        )}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={columns.length}
-                    className="h-24 text-center"
-                  >
-                    No pick tickets found.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+      <DataTable
+        columns={columns}
+        data={data}
+        loading={isLoading}
+        enableRowSelection
+        enableColumnVisibility
+        enableGlobalFilter
+        filterPlaceholder="Search pick tickets..."
+        searchableColumns={['pickTicketNumber', 'salesOrderNumber', 'customerName']}
+        showPagination
+        pageSizeOptions={[10, 20, 50, 100]}
+        defaultPageSize={10}
+        // Server-side pagination props
+        manualPagination={!!pagination}
+        pageCount={pagination?.totalPages}
+        pageIndex={pagination ? pagination.page - 1 : 0}
+        pageSize={pagination?.pageSize || 10}
+        onPaginationChange={
+          pagination
+            ? (updater: any) => {
+                // Get current state from table
+                const currentState = {
+                  pageIndex: pagination.page - 1,
+                  pageSize: pagination.pageSize,
+                };
 
-        {/* Pagination Controls */}
-        {pagination && (
-          <div className="flex items-center justify-between px-2">
-            <div className="flex-1 text-sm text-muted-foreground">
-              Showing {(pagination.page - 1) * pagination.pageSize + 1} to{' '}
-              {Math.min(pagination.page * pagination.pageSize, pagination.total)} of{' '}
-              {pagination.total} results
-            </div>
-            <div className="flex items-center space-x-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => pagination.onPageChange(pagination.page - 1)}
-                disabled={pagination.page <= 1}
-              >
-                <ChevronLeft className="h-4 w-4" />
-                Previous
-              </Button>
-              <div className="text-sm font-medium">
-                Page {pagination.page} of {pagination.totalPages}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => pagination.onPageChange(pagination.page + 1)}
-                disabled={pagination.page >= pagination.totalPages}
-              >
-                Next
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+                // Calculate new state
+                const newState = typeof updater === 'function'
+                  ? updater(currentState)
+                  : updater;
+
+                // Only call callbacks if values actually changed
+                if (newState.pageIndex !== currentState.pageIndex) {
+                  pagination.onPageChange(newState.pageIndex + 1);
+                }
+                if (newState.pageSize !== currentState.pageSize) {
+                  pagination.onPageSizeChange(newState.pageSize);
+                }
+              }
+            : undefined
+        }
+        rowCount={pagination?.total}
+        onRowClick={onRowClick}
+        getRowId={(row) => row.id}
+        toolbarContent={toolbarContent}
+        emptyState={
+          <div className="flex flex-col items-center justify-center py-8">
+            <p className="text-muted-foreground">No pick tickets found.</p>
+            <p className="text-sm text-muted-foreground">
+              Pick tickets will appear here when sales orders are ready for warehouse fulfillment.
+            </p>
           </div>
-        )}
-      </div>
+        }
+      />
 
       {/* Confirmation dialog for editing shipped pick tickets */}
       <AlertDialog open={showShippedEditConfirm} onOpenChange={setShowShippedEditConfirm}>

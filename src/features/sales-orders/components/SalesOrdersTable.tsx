@@ -73,15 +73,23 @@ export function SalesOrdersTable({
       onPaginationChange={
         pagination
           ? (updater: any) => {
-              if (typeof updater === 'function') {
-                const newState = updater({
-                  pageIndex: pagination.page - 1,
-                  pageSize: pagination.pageSize,
-                });
+              // Get current state from table
+              const currentState = {
+                pageIndex: pagination.page - 1,
+                pageSize: pagination.pageSize,
+              };
+
+              // Calculate new state
+              const newState = typeof updater === 'function'
+                ? updater(currentState)
+                : updater;
+
+              // Only call callbacks if values actually changed
+              if (newState.pageIndex !== currentState.pageIndex) {
                 pagination.onPageChange(newState.pageIndex + 1);
-                if (newState.pageSize !== pagination.pageSize) {
-                  pagination.onPageSizeChange(newState.pageSize);
-                }
+              }
+              if (newState.pageSize !== currentState.pageSize) {
+                pagination.onPageSizeChange(newState.pageSize);
               }
             }
           : undefined

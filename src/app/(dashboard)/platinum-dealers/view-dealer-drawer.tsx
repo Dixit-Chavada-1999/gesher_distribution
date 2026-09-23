@@ -8,7 +8,7 @@
  * - Tab 2: Locations (manage dealer yards/warehouses)
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   Loader2,
   Building2,
@@ -20,7 +20,8 @@ import {
   MapPinned,
   Plus,
   Package,
-  ExternalLink,
+  MoreVertical,
+  CheckCircle2,
 } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
@@ -47,12 +48,22 @@ import {
   AlertDialogTitle,
 } from '@/shared/components/ui/alert-dialog';
 import { toast } from 'sonner';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/shared/components/ui/dropdown-menu';
 
 import {
   getDealerByIdAction,
   getLocationsByDealerIdAction,
   deleteDealerLocationAction,
   getAllInventoryForDealerAction,
+  getDealerAllocationsAction,
+  updateAllocationStatusAction,
 } from '@/features/platinum-dealers/actions';
 import type {
   PlatinumDealer,
@@ -149,6 +160,7 @@ export function ViewDealerDrawer({
   >({});
   const [allocations, setAllocations] = useState<DealerAllocation[]>([]);
   const [isLoadingAllocations, setIsLoadingAllocations] = useState(false);
+  const [expandedSalesOrders, setExpandedSalesOrders] = useState<Set<string>>(new Set());
 
   // Dialog states
   const [addLocationDialogOpen, setAddLocationDialogOpen] = useState(false);
@@ -268,98 +280,50 @@ export function ViewDealerDrawer({
       return;
     }
 
+    console.log('🔍 [loadAllocations] Fetching allocations via server action for dealer:', dealerId);
+
     setIsLoadingAllocations(true);
     try {
-      const { createClient } = await import('@/shared/lib/supabase/client');
-      const supabase = createClient();
+      // Use server action instead of client-side query (bypasses RLS)
+      const result = await getDealerAllocationsAction(dealerId);
 
-      // Fetch allocations for this dealer with simplified query
-      const { data, error } = await supabase
-        .from('fulfillment_allocations')
-        .select(`
-          id,
-          sales_order_item_id,
-          quantity,
-          status,
-          fulfillment_source,
-          created_at,
-          dealer_location_id
-        `)
-        .eq('platinum_dealer_id', dealerId)
-        .order('created_at', { ascending: false });
+      console.log('🔍 [loadAllocations] Server action result:', {
+        success: result.success,
+        count: result.data?.length || 0,
+        error: result.error,
+      });
 
-      if (error) {
-        console.error('Error loading allocations:', error);
-        toast.error('Failed to load allocations');
+      if (!result.success || !result.data) {
+        console.error('Error loading allocations:', result.error);
+        toast.error(result.error || 'Failed to load allocations');
         setAllocations([]);
         return;
       }
 
-      if (!data || data.length === 0) {
+      if (result.data.length === 0) {
+        console.warn('🔍 [loadAllocations] No allocations found for dealer:', dealerId);
         setAllocations([]);
         return;
       }
 
-      // Fetch related data separately
-      const itemIds = data.map((a: any) => a.sales_order_item_id);
-      const locationIds = data.map((a: any) => a.dealer_location_id).filter(Boolean);
-
-      // Get sales order items
-      const { data: itemsData } = await supabase
-        .from('sales_order_items')
-        .select('id, sku, description, sales_order_id')
-        .in('id', itemIds);
-
-      // Get sales orders
-      const orderIds = itemsData?.map((i: any) => i.sales_order_id) || [];
-      const { data: ordersData } = await supabase
-        .from('sales_orders')
-        .select('id, order_number, customer_id')
-        .in('id', orderIds);
-
-      // Get customers
-      const customerIds = ordersData?.map((o: any) => o.customer_id).filter(Boolean) || [];
-      const { data: customersData } = await supabase
-        .from('customers')
-        .select('id, company_name')
-        .in('id', customerIds);
-
-      // Get dealer locations
-      const { data: locationsData } = locationIds.length > 0
-        ? await supabase
-            .from('platinum_dealer_locations')
-            .select('id, location_name')
-            .in('id', locationIds)
-        : { data: [] };
-
-      // Build lookup maps
-      const itemsMap = new Map(itemsData?.map((i: any) => [i.id, i]) || []);
-      const ordersMap = new Map(ordersData?.map((o: any) => [o.id, o]) || []);
-      const customersMap = new Map(customersData?.map((c: any) => [c.id, c]) || []);
-      const locationsMap = new Map(locationsData?.map((l: any) => [l.id, l]) || []);
-
-      // Format allocations
-      const formattedAllocations: DealerAllocation[] = data.map((item: any) => {
-        const soItem = itemsMap.get(item.sales_order_item_id);
-        const order = soItem ? ordersMap.get(soItem.sales_order_id) : null;
-        const customer = order ? customersMap.get(order.customer_id) : null;
-        const location = item.dealer_location_id ? locationsMap.get(item.dealer_location_id) : null;
-
+      // Format allocations from server response
+      const formattedAllocations: DealerAllocation[] = result.data.map((allocation: any) => {
         return {
-          id: item.id,
-          salesOrderId: order?.id || '',
-          salesOrderNumber: order?.order_number || 'N/A',
-          customerName: customer?.company_name || 'Unknown',
-          productSku: soItem?.sku || 'N/A',
-          productDescription: soItem?.description || '',
-          quantity: item.quantity,
-          status: item.status,
-          fulfillmentSource: item.fulfillment_source,
-          dealerLocationName: location?.location_name,
-          createdAt: item.created_at,
+          id: allocation.id,
+          salesOrderId: allocation.salesOrderItem?.salesOrder?.id || '',
+          salesOrderNumber: allocation.salesOrderItem?.salesOrder?.orderNumber || 'N/A',
+          customerName: allocation.salesOrderItem?.salesOrder?.customer?.companyName || 'Unknown',
+          productSku: allocation.salesOrderItem?.sku || 'N/A',
+          productDescription: allocation.salesOrderItem?.description || '',
+          quantity: allocation.quantity,
+          status: allocation.status,
+          fulfillmentSource: allocation.fulfillmentSource,
+          dealerLocationName: allocation.dealerLocation?.locationName,
+          createdAt: allocation.createdAt,
         };
       });
 
+      console.log('🔍 [loadAllocations] Formatted allocations:', formattedAllocations);
       setAllocations(formattedAllocations);
     } catch (error) {
       console.error('Error loading allocations:', error);
@@ -455,6 +419,54 @@ export function ViewDealerDrawer({
     setInventoryDrawerOpen(true);
   };
 
+  const handleUpdateAllocationStatus = async (
+    allocationId: string,
+    newStatus: 'pending' | 'allocated' | 'partially_fulfilled' | 'fulfilled' | 'cancelled',
+    currentStatus: string
+  ) => {
+    if (newStatus === currentStatus) return;
+
+    try {
+      const result = await updateAllocationStatusAction({
+        allocationId,
+        status: newStatus,
+      });
+
+      if (result.success) {
+        toast.success(`Allocation status updated to ${newStatus.replace('_', ' ')}`);
+        // Reload allocations to reflect the change
+        loadAllocations();
+      } else {
+        toast.error(result.error || 'Failed to update allocation status');
+      }
+    } catch (error) {
+      console.error('Error updating allocation status:', error);
+      toast.error('Failed to update allocation status');
+    }
+  };
+
+  const toggleSalesOrder = (salesOrderNumber: string) => {
+    setExpandedSalesOrders((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(salesOrderNumber)) {
+        newSet.delete(salesOrderNumber);
+      } else {
+        newSet.add(salesOrderNumber);
+      }
+      return newSet;
+    });
+  };
+
+  // Group allocations by sales order
+  const groupedAllocations = allocations.reduce((acc, allocation) => {
+    const soNumber = allocation.salesOrderNumber;
+    if (!acc[soNumber]) {
+      acc[soNumber] = [];
+    }
+    acc[soNumber].push(allocation);
+    return acc;
+  }, {} as Record<string, DealerAllocation[]>);
+
   // ----------------------------------------
   // RENDER
   // ----------------------------------------
@@ -468,7 +480,7 @@ export function ViewDealerDrawer({
       <Sheet open={open} onOpenChange={onClose}>
         <SheetContent
           side="right"
-          className="flex w-full flex-col p-0 sm:max-w-[800px]"
+          className="flex w-full flex-col p-0 sm:max-w-[900px]"
         >
           {/* Header */}
           <SheetHeader className="flex-shrink-0 border-b px-6 py-4">
@@ -489,7 +501,7 @@ export function ViewDealerDrawer({
             <Tabs
               value={activeTab}
               onValueChange={setActiveTab}
-              className="flex-1 flex flex-col"
+              className="flex-1 flex flex-col min-h-0 overflow-hidden"
             >
               <div className="border-b px-6">
                 <TabsList className="h-10">
@@ -684,104 +696,417 @@ export function ViewDealerDrawer({
               </TabsContent>
 
               {/* Tab 3: Allocations */}
-              <TabsContent value="allocations" className="flex-1 mt-0">
-                <ScrollArea className="h-full">
-                  <div className="px-6 py-6">
-                    <div className="space-y-4">
-                      {/* Header */}
-                      <div>
-                        <h3 className="text-base font-semibold">Sales Order Allocations</h3>
-                        <p className="text-sm text-muted-foreground">
-                          Items assigned to this dealer from sales orders
-                        </p>
-                      </div>
+              <TabsContent value="allocations" className="flex-1 mt-0 flex flex-col min-h-0">
+                <div className="px-6 py-4 border-b flex-shrink-0">
+                  <h3 className="text-base font-semibold">Sales Order Allocations</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Items assigned to this dealer from sales orders
+                  </p>
+                </div>
+                <div
+                  className="flex-1 min-h-0 overflow-y-scroll px-6 py-4"
+                  style={{ maxHeight: 'calc(100vh - 280px)' }}
+                >
+                  {/* Allocations Table */}
+                  {isLoadingAllocations ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : allocations.length > 0 ? (
+                    <div className="border rounded-lg overflow-hidden">
+                      <table className="w-full">
+                            <thead className="bg-muted/50 border-b">
+                              <tr>
+                                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground">
+                                  Sales Order
+                                </th>
+                                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground">
+                                  Customer
+                                </th>
+                                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground">
+                                  Product
+                                </th>
+                                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground">
+                                  Location
+                                </th>
+                                <th className="text-right py-3 px-4 text-xs font-semibold text-muted-foreground">
+                                  Qty
+                                </th>
+                                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground">
+                                  Source
+                                </th>
+                                <th className="text-center py-3 px-4 text-xs font-semibold text-muted-foreground">
+                                  Status
+                                </th>
+                                <th className="text-center py-3 px-4 text-xs font-semibold text-muted-foreground">
+                                  Actions
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y">
+                              {Object.entries(groupedAllocations).map(([soNumber, soAllocations]) => {
+                                const isExpanded = expandedSalesOrders.has(soNumber);
+                                const firstAllocation = soAllocations[0];
+                                const totalQty = soAllocations.reduce((sum, alloc) => sum + alloc.quantity, 0);
+                                const hasMultipleItems = soAllocations.length > 1;
 
-                      <Separator />
+                                // Skip if no allocations
+                                if (!firstAllocation) return null;
 
-                      {/* Allocations List */}
-                      {isLoadingAllocations ? (
-                        <div className="flex items-center justify-center py-8">
-                          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                        </div>
-                      ) : allocations.length > 0 ? (
-                        <div className="space-y-3">
-                          {allocations.map((allocation) => (
-                            <Card key={allocation.id}>
-                              <CardContent className="p-4">
-                                <div className="flex items-start justify-between gap-4">
-                                  <div className="flex-1 space-y-2">
-                                    {/* Sales Order & Customer */}
-                                    <div className="flex items-center gap-2">
-                                      <a
-                                        href={`/sales-orders/${allocation.salesOrderId}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="font-semibold text-sm hover:underline flex items-center gap-1"
-                                      >
-                                        {allocation.salesOrderNumber}
-                                        <ExternalLink className="h-3 w-3" />
-                                      </a>
-                                      <span className="text-xs text-muted-foreground">•</span>
-                                      <span className="text-sm text-muted-foreground">
-                                        {allocation.customerName}
-                                      </span>
-                                    </div>
-
-                                    {/* Product Details */}
-                                    <div className="flex items-start gap-2">
-                                      <Package className="h-4 w-4 text-muted-foreground mt-0.5" />
-                                      <div>
-                                        <p className="text-sm font-medium">
-                                          {allocation.productSku}
-                                        </p>
-                                        {allocation.productDescription && (
-                                          <p className="text-xs text-muted-foreground">
-                                            {allocation.productDescription}
-                                          </p>
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    {/* Location & Quantity */}
-                                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                                      {allocation.dealerLocationName && (
-                                        <>
-                                          <div className="flex items-center gap-1">
-                                            <MapPin className="h-3 w-3" />
-                                            <span>{allocation.dealerLocationName}</span>
+                                return (
+                                  <React.Fragment key={soNumber}>
+                                    {/* Main row - Sales Order summary */}
+                                    <tr
+                                      key={soNumber}
+                                      className="hover:bg-muted/30 transition-colors"
+                                    >
+                                      <td className="py-3 px-4">
+                                        <span className="text-sm font-medium text-foreground">
+                                          {soNumber}
+                                        </span>
+                                      </td>
+                                      <td className="py-3 px-4">
+                                        <span className="text-sm text-foreground">
+                                          {firstAllocation.customerName}
+                                        </span>
+                                      </td>
+                                      <td className="py-3 px-4">
+                                        {hasMultipleItems ? (
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              toggleSalesOrder(soNumber);
+                                            }}
+                                            className="text-sm font-medium text-primary hover:underline text-left"
+                                          >
+                                            Multiple items available ({soAllocations.length})
+                                          </button>
+                                        ) : (
+                                          <div>
+                                            <p className="text-sm font-medium">{firstAllocation.productSku}</p>
+                                            {firstAllocation.productDescription && (
+                                              <p className="text-xs text-muted-foreground truncate max-w-[200px]">
+                                                {firstAllocation.productDescription}
+                                              </p>
+                                            )}
                                           </div>
-                                          <span>•</span>
-                                        </>
-                                      )}
-                                      <span className="font-medium">Qty: {allocation.quantity}</span>
-                                      <span>•</span>
-                                      <span className="capitalize">
-                                        {allocation.fulfillmentSource.replace(/_/g, ' ')}
-                                      </span>
-                                    </div>
-                                  </div>
+                                        )}
+                                      </td>
+                                      <td className="py-3 px-4">
+                                        {firstAllocation.dealerLocationName ? (
+                                          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                            <MapPin className="h-3 w-3" />
+                                            <span>{firstAllocation.dealerLocationName}</span>
+                                          </div>
+                                        ) : (
+                                          <span className="text-sm text-muted-foreground">-</span>
+                                        )}
+                                      </td>
+                                      <td className="py-3 px-4 text-right">
+                                        <span className="text-sm font-medium">{hasMultipleItems ? totalQty : firstAllocation.quantity}</span>
+                                      </td>
+                                      <td className="py-3 px-4">
+                                        <span className="text-xs text-muted-foreground capitalize">
+                                          {(() => {
+                                            const source = firstAllocation.fulfillmentSource.split('_').pop();
+                                            return source ? source.charAt(0).toUpperCase() + source.slice(1) : 'N/A';
+                                          })()}
+                                        </span>
+                                      </td>
+                                      <td className="py-3 px-4 text-center">
+                                        <Badge
+                                          className={
+                                            firstAllocation.status === 'allocated'
+                                              ? 'bg-blue-100 text-blue-800 border-blue-200'
+                                              : firstAllocation.status === 'fulfilled'
+                                              ? 'bg-green-100 text-green-800 border-green-200'
+                                              : firstAllocation.status === 'partially_fulfilled'
+                                              ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                                              : 'bg-gray-100 text-gray-800 border-gray-200'
+                                          }
+                                        >
+                                          {firstAllocation.status === 'partially_fulfilled'
+                                            ? 'Partial'
+                                            : firstAllocation.status.charAt(0).toUpperCase() +
+                                              firstAllocation.status.slice(1)}
+                                        </Badge>
+                                      </td>
+                                      <td className="py-3 px-4 text-center">
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-8 w-8 p-0"
+                                                onClick={(e) => e.stopPropagation()}
+                                              >
+                                                <MoreVertical className="h-4 w-4" />
+                                              </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                              <DropdownMenuLabel>Update Status</DropdownMenuLabel>
+                                              <DropdownMenuSeparator />
+                                              <DropdownMenuItem
+                                                onClick={() =>
+                                                  handleUpdateAllocationStatus(
+                                                    firstAllocation.id,
+                                                    'pending',
+                                                    firstAllocation.status
+                                                  )
+                                                }
+                                                disabled={firstAllocation.status === 'pending'}
+                                              >
+                                                <span className="flex items-center gap-2">
+                                                  {firstAllocation.status === 'pending' && (
+                                                    <CheckCircle2 className="h-4 w-4 text-amber-600" />
+                                                  )}
+                                                  Pending
+                                                </span>
+                                              </DropdownMenuItem>
+                                              <DropdownMenuItem
+                                                onClick={() =>
+                                                  handleUpdateAllocationStatus(
+                                                    firstAllocation.id,
+                                                    'allocated',
+                                                    firstAllocation.status
+                                                  )
+                                                }
+                                                disabled={firstAllocation.status === 'allocated'}
+                                              >
+                                                <span className="flex items-center gap-2">
+                                                  {firstAllocation.status === 'allocated' && (
+                                                    <CheckCircle2 className="h-4 w-4 text-blue-600" />
+                                                  )}
+                                                  Allocated
+                                                </span>
+                                              </DropdownMenuItem>
+                                              <DropdownMenuItem
+                                                onClick={() =>
+                                                  handleUpdateAllocationStatus(
+                                                    firstAllocation.id,
+                                                    'partially_fulfilled',
+                                                    firstAllocation.status
+                                                  )
+                                                }
+                                                disabled={firstAllocation.status === 'partially_fulfilled'}
+                                              >
+                                                <span className="flex items-center gap-2">
+                                                  {firstAllocation.status === 'partially_fulfilled' && (
+                                                    <CheckCircle2 className="h-4 w-4 text-yellow-600" />
+                                                  )}
+                                                  Partially Fulfilled
+                                                </span>
+                                              </DropdownMenuItem>
+                                              <DropdownMenuItem
+                                                onClick={() =>
+                                                  handleUpdateAllocationStatus(
+                                                    firstAllocation.id,
+                                                    'fulfilled',
+                                                    firstAllocation.status
+                                                  )
+                                                }
+                                                disabled={firstAllocation.status === 'fulfilled'}
+                                              >
+                                                <span className="flex items-center gap-2">
+                                                  {firstAllocation.status === 'fulfilled' && (
+                                                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                                  )}
+                                                  Fulfilled
+                                                </span>
+                                              </DropdownMenuItem>
+                                              <DropdownMenuSeparator />
+                                              <DropdownMenuItem
+                                                onClick={() =>
+                                                  handleUpdateAllocationStatus(
+                                                    firstAllocation.id,
+                                                    'cancelled',
+                                                    firstAllocation.status
+                                                  )
+                                                }
+                                                disabled={firstAllocation.status === 'cancelled'}
+                                                className="text-red-600"
+                                              >
+                                                <span className="flex items-center gap-2">
+                                                  {firstAllocation.status === 'cancelled' && (
+                                                    <CheckCircle2 className="h-4 w-4 text-red-600" />
+                                                  )}
+                                                  Cancelled
+                                                </span>
+                                              </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                          </DropdownMenu>
+                                      </td>
+                                    </tr>
 
-                                  {/* Status Badge */}
-                                  <Badge
-                                    className={
-                                      allocation.status === 'allocated'
-                                        ? 'bg-blue-100 text-blue-800 border-blue-200'
-                                        : allocation.status === 'fulfilled'
-                                        ? 'bg-green-100 text-green-800 border-green-200'
-                                        : allocation.status === 'partially_fulfilled'
-                                        ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
-                                        : 'bg-gray-100 text-gray-800 border-gray-200'
-                                    }
-                                  >
-                                    {allocation.status === 'partially_fulfilled'
-                                      ? 'Partial'
-                                      : allocation.status.charAt(0).toUpperCase() +
-                                        allocation.status.slice(1)}
-                                  </Badge>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          ))}
+                                    {/* Expanded rows - Individual allocation items */}
+                                    {hasMultipleItems && isExpanded && soAllocations.map((allocation) => (
+                                <tr key={allocation.id} className="hover:bg-muted/30 transition-colors bg-muted/20">
+                                  <td className="py-3 px-4 pl-12">
+                                    <span className="text-xs text-muted-foreground">Item #{soAllocations.indexOf(allocation) + 1}</span>
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <span className="text-sm text-muted-foreground">-</span>
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <div>
+                                      <p className="text-sm font-medium">{allocation.productSku}</p>
+                                      {allocation.productDescription && (
+                                        <p className="text-xs text-muted-foreground truncate max-w-[200px]">
+                                          {allocation.productDescription}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    {allocation.dealerLocationName ? (
+                                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                        <MapPin className="h-3 w-3" />
+                                        <span>{allocation.dealerLocationName}</span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-sm text-muted-foreground">-</span>
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-4 text-right">
+                                    <span className="text-sm font-medium">{allocation.quantity}</span>
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <span className="text-xs text-muted-foreground capitalize">
+                                      {(() => {
+                                        const source = allocation.fulfillmentSource.split('_').pop();
+                                        return source ? source.charAt(0).toUpperCase() + source.slice(1) : 'N/A';
+                                      })()}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4 text-center">
+                                    <Badge
+                                      className={
+                                        allocation.status === 'allocated'
+                                          ? 'bg-blue-100 text-blue-800 border-blue-200'
+                                          : allocation.status === 'fulfilled'
+                                          ? 'bg-green-100 text-green-800 border-green-200'
+                                          : allocation.status === 'partially_fulfilled'
+                                          ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                                          : 'bg-gray-100 text-gray-800 border-gray-200'
+                                      }
+                                    >
+                                      {allocation.status === 'partially_fulfilled'
+                                        ? 'Partial'
+                                        : allocation.status.charAt(0).toUpperCase() +
+                                          allocation.status.slice(1)}
+                                    </Badge>
+                                  </td>
+                                  <td className="py-3 px-4 text-center">
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-8 w-8 p-0"
+                                        >
+                                          <MoreVertical className="h-4 w-4" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        <DropdownMenuLabel>Update Status</DropdownMenuLabel>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                          onClick={() =>
+                                            handleUpdateAllocationStatus(
+                                              allocation.id,
+                                              'pending',
+                                              allocation.status
+                                            )
+                                          }
+                                          disabled={allocation.status === 'pending'}
+                                        >
+                                          <span className="flex items-center gap-2">
+                                            {allocation.status === 'pending' && (
+                                              <CheckCircle2 className="h-4 w-4 text-amber-600" />
+                                            )}
+                                            Pending
+                                          </span>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onClick={() =>
+                                            handleUpdateAllocationStatus(
+                                              allocation.id,
+                                              'allocated',
+                                              allocation.status
+                                            )
+                                          }
+                                          disabled={allocation.status === 'allocated'}
+                                        >
+                                          <span className="flex items-center gap-2">
+                                            {allocation.status === 'allocated' && (
+                                              <CheckCircle2 className="h-4 w-4 text-blue-600" />
+                                            )}
+                                            Allocated
+                                          </span>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onClick={() =>
+                                            handleUpdateAllocationStatus(
+                                              allocation.id,
+                                              'partially_fulfilled',
+                                              allocation.status
+                                            )
+                                          }
+                                          disabled={allocation.status === 'partially_fulfilled'}
+                                        >
+                                          <span className="flex items-center gap-2">
+                                            {allocation.status === 'partially_fulfilled' && (
+                                              <CheckCircle2 className="h-4 w-4 text-yellow-600" />
+                                            )}
+                                            Partially Fulfilled
+                                          </span>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onClick={() =>
+                                            handleUpdateAllocationStatus(
+                                              allocation.id,
+                                              'fulfilled',
+                                              allocation.status
+                                            )
+                                          }
+                                          disabled={allocation.status === 'fulfilled'}
+                                        >
+                                          <span className="flex items-center gap-2">
+                                            {allocation.status === 'fulfilled' && (
+                                              <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                            )}
+                                            Fulfilled
+                                          </span>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                          onClick={() =>
+                                            handleUpdateAllocationStatus(
+                                              allocation.id,
+                                              'cancelled',
+                                              allocation.status
+                                            )
+                                          }
+                                          disabled={allocation.status === 'cancelled'}
+                                          className="text-red-600"
+                                        >
+                                          <span className="flex items-center gap-2">
+                                            {allocation.status === 'cancelled' && (
+                                              <CheckCircle2 className="h-4 w-4 text-red-600" />
+                                            )}
+                                            Cancelled
+                                          </span>
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </td>
+                                </tr>
+                              ))}
+                                  </React.Fragment>
+                                );
+                              })}
+                            </tbody>
+                          </table>
                         </div>
                       ) : (
                         <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -792,9 +1117,7 @@ export function ViewDealerDrawer({
                           </p>
                         </div>
                       )}
-                    </div>
-                  </div>
-                </ScrollArea>
+                </div>
               </TabsContent>
             </Tabs>
           ) : (

@@ -7,7 +7,7 @@
  * Part of the Pick -> Pack -> Ship fulfillment workflow.
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -77,16 +77,19 @@ export default function PickTicketsPage() {
   // DATA HOOKS
   // ----------------------------------------
 
+  // Memoize params to prevent unnecessary re-renders
+  const pickTicketsParams = useMemo(() => ({
+    ...(statusFilter !== 'all' && { status: statusFilter }),
+    page,
+    limit: pageSize,
+  }), [statusFilter, page, pageSize]);
+
   const {
     data: pickTickets,
     meta,
     isLoading: isPickTicketsLoading,
     refetch: refetchPickTickets,
-  } = usePickTickets({
-    ...(statusFilter !== 'all' && { status: statusFilter }),
-    page,
-    limit: pageSize,
-  });
+  } = usePickTickets(pickTicketsParams);
 
   // ----------------------------------------
   // HANDLERS

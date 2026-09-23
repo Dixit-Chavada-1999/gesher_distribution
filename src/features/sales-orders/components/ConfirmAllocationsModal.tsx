@@ -56,12 +56,7 @@ interface AllocationAction {
 }
 
 // Extended allocation type with item details for display
-interface AllocationWithItemDetails extends FulfillmentAllocationWithDetails {
-  salesOrderItem?: {
-    sku: string;
-    description: string | null;
-  };
-}
+type AllocationWithItemDetails = FulfillmentAllocationWithDetails;
 
 // ============================================
 // COMPONENT
@@ -469,15 +464,25 @@ export function ConfirmAllocationsModal({
 
       const dealerId = allocation.platinumDealerId;
 
-      // Find ALL allocations for this dealer in this sales order
+      // Find ONLY PENDING allocations for this dealer in this sales order
+      // Don't include already allocated items in the email (avoid duplicate emails)
       const dealerAllocations = allocations.filter(
         (alloc) =>
           alloc.platinumDealerId === dealerId &&
           (alloc.fulfillmentSource === 'platinum_dealer_inventory' ||
-           alloc.fulfillmentSource === 'platinum_dealer_fulfillment')
+           alloc.fulfillmentSource === 'platinum_dealer_fulfillment') &&
+          alloc.status === 'pending'  // ONLY pending allocations
       );
 
-      console.log(`📋 [handleSendEmail] Found ${dealerAllocations.length} allocations for dealer ${allocation.platinumDealer.dealerName}`);
+      console.log(`📋 [handleSendEmail] Found ${dealerAllocations.length} pending allocations for dealer ${allocation.platinumDealer.dealerName}`);
+
+      // Check if there are any pending allocations to send
+      if (dealerAllocations.length === 0) {
+        return {
+          success: false,
+          error: 'No pending allocations found for this dealer. All items have already been allocated.',
+        };
+      }
 
       // Get sales order details
       const { getSalesOrder } = await import('../actions');

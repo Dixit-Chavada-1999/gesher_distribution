@@ -12,7 +12,7 @@
  * - Data flows down via props
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { Plus, RefreshCw, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -155,17 +155,20 @@ export function QuotesPageContent() {
   // DATA HOOKS
   // ----------------------------------------
 
+  // Memoize params to prevent unnecessary re-renders
+  const quotesParams = useMemo(() => ({
+    ...(statusFilter !== 'all' && { status: statusFilter }),
+    page,
+    limit: pageSize,
+  }), [statusFilter, page, pageSize]);
+
   // Quotes list with status filter and pagination
   const {
     data: quotes,
     meta,
     isLoading: isQuotesLoading,
     refetch: refetchQuotes,
-  } = useQuotes({
-    ...(statusFilter !== 'all' && { status: statusFilter }),
-    page,
-    limit: pageSize,
-  });
+  } = useQuotes(quotesParams);
 
   // ----------------------------------------
   // SHARED PO PROCESSING FUNCTION

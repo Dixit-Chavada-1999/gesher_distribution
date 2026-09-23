@@ -209,8 +209,11 @@ export function DataTable<TData, TValue>({
     enableRowSelection,
     enableMultiRowSelection,
     manualPagination,
-    rowCount,
-    pageCount: pageCount ?? -1,
+    // Only pass rowCount and pageCount for manual (server-side) pagination
+    ...(manualPagination && {
+      rowCount,
+      pageCount: pageCount ?? -1,
+    }),
     state: {
       sorting,
       columnFilters,
@@ -259,7 +262,7 @@ export function DataTable<TData, TValue>({
       )}
 
       {/* Table */}
-      <div className="relative rounded-md border w-full">
+      <div className="relative rounded-md border w-full overflow-x-auto">
         {/* Loading Overlay */}
         {loading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm">

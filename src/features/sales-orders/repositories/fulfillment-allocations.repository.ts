@@ -599,7 +599,20 @@ export async function getAllocationsByDealer(
         location:locations(id, location_code, name),
         platinum_dealer:platinum_dealers(id, dealer_name, code, email, contact_name),
         dealer_location:platinum_dealer_locations(id, location_name, location_code, address_street, address_city, address_state, address_postal_code),
-        purchase_order:purchase_orders(id, po_number, status)
+        purchase_order:purchase_orders(id, po_number, status),
+        sales_order_item:sales_order_items(
+          id,
+          sku,
+          description,
+          sales_order:sales_orders(
+            id,
+            order_number,
+            customer:customers(
+              id,
+              name
+            )
+          )
+        )
       `
       )
       .eq('platinum_dealer_id', dealerId)
@@ -781,6 +794,25 @@ function mapAllocationWithDetailsFromDb(
           id: data.purchase_order.id,
           poNumber: data.purchase_order.po_number,
           status: data.purchase_order.status,
+        }
+      : undefined,
+    salesOrderItem: data.sales_order_item
+      ? {
+          id: data.sales_order_item.id,
+          sku: data.sales_order_item.sku,
+          description: data.sales_order_item.description,
+          salesOrder: data.sales_order_item.sales_order
+            ? {
+                id: data.sales_order_item.sales_order.id,
+                orderNumber: data.sales_order_item.sales_order.order_number,
+                customer: data.sales_order_item.sales_order.customer
+                  ? {
+                      id: data.sales_order_item.sales_order.customer.id,
+                      companyName: data.sales_order_item.sales_order.customer.name,
+                    }
+                  : undefined,
+              }
+            : undefined,
         }
       : undefined,
   };

@@ -47,18 +47,26 @@ export function DataTablePagination<TData>({
   const totalRows = table.getRowCount();
   const selectedCount = table.getFilteredSelectedRowModel().rows.length;
 
+  // Calculate "showing X to Y of Z" text
+  const startRow = totalRows === 0 ? 0 : currentPage * pageSize + 1;
+  const endRow = Math.min((currentPage + 1) * pageSize, totalRows);
+
+  // Check if current page is beyond available data
+  const hasDataOnCurrentPage = totalRows > 0 && startRow <= totalRows;
+
   return (
     <div className="flex flex-col gap-4 px-2 sm:flex-row sm:items-center sm:justify-between">
       {/* Row Info */}
       <div className="flex items-center gap-4 text-sm text-muted-foreground">
-        {showSelectedCount && (
+        {showSelectedCount && selectedCount > 0 ? (
           <span>
             {selectedCount} of {totalRows} row(s) selected
           </span>
-        )}
-        {!showSelectedCount && (
+        ) : (
           <span>
-            {totalRows} total row(s)
+            {hasDataOnCurrentPage
+              ? `Showing ${startRow} to ${endRow} of ${totalRows} results`
+              : 'No results'}
           </span>
         )}
       </div>
@@ -85,46 +93,16 @@ export function DataTablePagination<TData>({
           </Select>
         </div>
 
-        {/* Page Info */}
-        <div className="flex items-center justify-center text-sm text-muted-foreground">
-          Page {currentPage + 1} of {pageCount || 1}
-        </div>
-
         {/* Navigation Buttons */}
-        <div className="flex items-center gap-1">
-          {/* First Page */}
+        <div className="flex items-center gap-2">
+          {/* Previous Page with Text */}
           <Button
             variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => table.setPageIndex(0)}
-            disabled={!table.getCanPreviousPage()}
-          >
-            <span className="sr-only">Go to first page</span>
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5"
-              />
-            </svg>
-          </Button>
-
-          {/* Previous Page */}
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
+            size="sm"
+            className="h-8 gap-1"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
           >
-            <span className="sr-only">Go to previous page</span>
             <svg
               className="h-4 w-4"
               fill="none"
@@ -138,17 +116,23 @@ export function DataTablePagination<TData>({
                 d="M15.75 19.5L8.25 12l7.5-7.5"
               />
             </svg>
+            <span className="hidden sm:inline">Previous</span>
           </Button>
 
-          {/* Next Page */}
+          {/* Page Info */}
+          <div className="flex items-center justify-center text-sm font-medium">
+            Page {currentPage + 1} of {pageCount || 1}
+          </div>
+
+          {/* Next Page with Text */}
           <Button
             variant="outline"
-            size="icon"
-            className="h-8 w-8"
+            size="sm"
+            className="h-8 gap-1"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
           >
-            <span className="sr-only">Go to next page</span>
+            <span className="hidden sm:inline">Next</span>
             <svg
               className="h-4 w-4"
               fill="none"
@@ -160,30 +144,6 @@ export function DataTablePagination<TData>({
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 d="M8.25 4.5l7.5 7.5-7.5 7.5"
-              />
-            </svg>
-          </Button>
-
-          {/* Last Page */}
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => table.setPageIndex(pageCount - 1)}
-            disabled={!table.getCanNextPage()}
-          >
-            <span className="sr-only">Go to last page</span>
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M5.25 4.5l7.5 7.5-7.5 7.5m6-15l7.5 7.5-7.5 7.5"
               />
             </svg>
           </Button>
