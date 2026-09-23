@@ -48,7 +48,7 @@ import { Label } from '@/shared/components/ui/label';
 
 import { poFormSchema } from '../lib/schemas';
 import { getPurchaseOrder, updatePurchaseOrder, getSuppliersForDropdown } from '../actions';
-import type { PurchaseOrderWithItems, SupplierSummary, EditPurchaseOrderDrawerProps, CreatePOItemDTO } from '../types';
+import type { PurchaseOrderWithItems, PurchaseOrderItem, SupplierSummary, EditPurchaseOrderDrawerProps, CreatePOItemDTO } from '../types';
 import { ORDER_SERIES } from '@/shared/lib/global-data';
 import { AddPOItemDialog } from './AddPOItemDialog';
 
@@ -77,12 +77,10 @@ export function EditPurchaseOrderDrawer({
   const [itemSuppliers, setItemSuppliers] = useState<Record<string, string>>({});
 
   // Editable items state (local copy for add/edit/delete)
-  const [editableItems, setEditableItems] = useState<POItem[]>([]);
+  const [editableItems, setEditableItems] = useState<PurchaseOrderItem[]>([]);
 
   // Item editing dialogs
   const [showAddItemDialog, setShowAddItemDialog] = useState(false);
-  const [editingItemId, setEditingItemId] = useState<string | null>(null);
-  const [editingItemData, setEditingItemData] = useState<POItem | null>(null);
 
   const form = useForm({
     resolver: zodResolver(poFormSchema),
@@ -122,8 +120,6 @@ export function EditPurchaseOrderDrawer({
       setItemSuppliers({});
       setEditableItems([]);
       setShowAddItemDialog(false);
-      setEditingItemId(null);
-      setEditingItemData(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, poId]);
@@ -225,7 +221,7 @@ export function EditPurchaseOrderDrawer({
 
   // Item management handlers
   const handleAddItem = (newItem: CreatePOItemDTO) => {
-    const item: POItem = {
+    const item: PurchaseOrderItem = {
       id: `temp_${Date.now()}`, // Temporary ID for new items
       purchaseOrderId: poId || '',
       productId: newItem.productId,
@@ -238,25 +234,20 @@ export function EditPurchaseOrderDrawer({
       unitPrice: newItem.unitPrice,
       taxRate: newItem.taxRate || 0,
       lineTotal: newItem.quantityOrdered * newItem.unitPrice,
+      sortOrder: editableItems.length,
       itemType: newItem.itemType || 'inventory',
       supplierId: null,
       supplierName: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      createdBy: null,
+      updatedBy: null,
     };
     setEditableItems((prev) => [...prev, item]);
     toast.success('Item added');
   };
 
-  const handleEditItem = (itemId: string) => {
-    const item = editableItems.find((i) => i.id === itemId);
-    if (item) {
-      setEditingItemId(itemId);
-      setEditingItemData(item);
-    }
-  };
-
-  const handleUpdateItem = (itemId: string, updates: Partial<POItem>, showToast = false) => {
+  const handleUpdateItem = (itemId: string, updates: Partial<PurchaseOrderItem>, showToast = false) => {
     setEditableItems((prev) =>
       prev.map((item) =>
         item.id === itemId
@@ -271,8 +262,6 @@ export function EditPurchaseOrderDrawer({
     if (showToast) {
       toast.success('Item updated');
     }
-    setEditingItemId(null);
-    setEditingItemData(null);
   };
 
   const handleRemoveItem = (itemId: string) => {
