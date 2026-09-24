@@ -84,10 +84,12 @@ export function getDateRangeFromPreset(preset: DateRangePreset): DateRange {
       endDate = new Date(currentYear - 1, 11, 31);
       break;
     case 'last_6_months':
-      startDate = new Date(currentYear, currentMonth - 6, 1);
+      // Properly calculate 6 months ago from today
+      startDate = new Date(now.getFullYear(), now.getMonth() - 6, 1);
       break;
     case 'last_12_months':
-      startDate = new Date(currentYear - 1, currentMonth, 1);
+      // Calculate exactly 12 months ago from today
+      startDate = new Date(now.getFullYear(), now.getMonth() - 12, 1);
       break;
     case 'custom':
       // For custom, default to this month - actual dates set by picker

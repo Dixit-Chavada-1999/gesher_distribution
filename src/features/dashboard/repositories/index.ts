@@ -468,8 +468,8 @@ export async function getDashboardStats(dateRange?: DateRange): Promise<Dashboar
   const { data: lastMonthOrders } = await supabase
     .from('sales_orders')
     .select('id, grand_total, subtotal')
-    .gte('order_date', lastMonthStart)
-    .lte('order_date', lastMonthEnd)
+    .gte('order_date', formatDateString(lastMonthStart))
+    .lte('order_date', formatDateString(lastMonthEnd))
     .is('deleted_at', null)
     .in('status', ['confirmed', 'processing', 'shipped', 'delivered']);
 
@@ -477,7 +477,7 @@ export async function getDashboardStats(dateRange?: DateRange): Promise<Dashboar
   const { data: ytdOrders } = await supabase
     .from('sales_orders')
     .select('id, grand_total, subtotal')
-    .gte('order_date', currentYearStart)
+    .gte('order_date', formatDateString(currentYearStart))
     .is('deleted_at', null)
     .in('status', ['confirmed', 'processing', 'shipped', 'delivered']);
 
@@ -485,8 +485,8 @@ export async function getDashboardStats(dateRange?: DateRange): Promise<Dashboar
   const { data: lastYearYtdOrders } = await supabase
     .from('sales_orders')
     .select('id, grand_total, subtotal')
-    .gte('order_date', lastYearStart)
-    .lte('order_date', lastYearSameDay)
+    .gte('order_date', formatDateString(lastYearStart))
+    .lte('order_date', formatDateString(lastYearSameDay))
     .is('deleted_at', null)
     .in('status', ['confirmed', 'processing', 'shipped', 'delivered']);
 
@@ -512,12 +512,31 @@ export async function getDashboardStats(dateRange?: DateRange): Promise<Dashboar
       for (const item of itemsData) {
         currentMonthUnits += item.quantity || 0;
         const product = item.products as unknown as { rim_size: string | null; name: string | null } | null;
-        const rimSize = product?.rim_size?.replace(/"/g, '').trim() || '';
-        const name = product?.name?.toLowerCase() || '';
 
-        if (rimSize.includes('38') || name.includes('38')) {
+        // Helper function to detect tire size more accurately
+        const detectTireSize = (rimSize: string | null | undefined, name: string | null | undefined): '38' | '24' | 'other' => {
+          // First try rim_size field (most reliable)
+          if (rimSize) {
+            const cleanSize = rimSize.replace(/"/g, '').trim();
+            if (cleanSize === '38' || cleanSize.startsWith('38')) return '38';
+            if (cleanSize === '24' || cleanSize.startsWith('24')) return '24';
+          }
+
+          // Fallback to name with stricter pattern matching (avoid false positives)
+          if (name) {
+            const lowerName = name.toLowerCase();
+            // Match patterns like "38\"", "38 inch", "38in", "r38" but not "380" or "238"
+            if (/\b38["'\s]|38\s*inch|38in|\sr38\b/i.test(lowerName)) return '38';
+            if (/\b24["'\s]|24\s*inch|24in|\sr24\b/i.test(lowerName)) return '24';
+          }
+
+          return 'other';
+        };
+
+        const tireSize = detectTireSize(product?.rim_size, product?.name);
+        if (tireSize === '38') {
           currentMonthUnits38 += item.quantity || 0;
-        } else if (rimSize.includes('24') || name.includes('24')) {
+        } else if (tireSize === '24') {
           currentMonthUnits24 += item.quantity || 0;
         }
       }
@@ -562,6 +581,25 @@ export async function getDashboardStats(dateRange?: DateRange): Promise<Dashboar
       .in('sales_order_id', ytdOrderIds);
 
     if (ytdItemsData) {
+      // Helper function to detect tire size more accurately
+      const detectTireSize = (rimSize: string | null | undefined, name: string | null | undefined): '38' | '24' | 'other' => {
+        // First try rim_size field (most reliable)
+        if (rimSize) {
+          const cleanSize = rimSize.replace(/"/g, '').trim();
+          if (cleanSize === '38' || cleanSize.startsWith('38')) return '38';
+          if (cleanSize === '24' || cleanSize.startsWith('24')) return '24';
+        }
+
+        // Fallback to name with stricter pattern matching
+        if (name) {
+          const lowerName = name.toLowerCase();
+          if (/\b38["'\s]|38\s*inch|38in|\sr38\b/i.test(lowerName)) return '38';
+          if (/\b24["'\s]|24\s*inch|24in|\sr24\b/i.test(lowerName)) return '24';
+        }
+
+        return 'other';
+      };
+
       for (const item of ytdItemsData) {
         const quantity = item.quantity || 0;
         const unitPrice = item.unit_price || 0;
@@ -572,12 +610,10 @@ export async function getDashboardStats(dateRange?: DateRange): Promise<Dashboar
         ytdTotalRevenue += unitPrice * quantity;
         ytdTotalCost += baseCost * quantity;
 
-        const rimSize = product?.rim_size?.replace(/"/g, '').trim() || '';
-        const name = product?.name?.toLowerCase() || '';
-
-        if (rimSize.includes('38') || name.includes('38')) {
+        const tireSize = detectTireSize(product?.rim_size, product?.name);
+        if (tireSize === '38') {
           ytdUnits38 += quantity;
-        } else if (rimSize.includes('24') || name.includes('24')) {
+        } else if (tireSize === '24') {
           ytdUnits24 += quantity;
         }
       }
@@ -822,6 +858,25 @@ export async function getMarginAnalysis(dateRange?: DateRange): Promise<MarginDa
     };
   }
 
+  // Helper function to detect tire size more accurately
+  const detectTireSize = (rimSize: string | null | undefined, name: string | null | undefined): '38' | '24' | 'other' => {
+    // First try rim_size field (most reliable)
+    if (rimSize) {
+      const cleanSize = rimSize.replace(/"/g, '').trim();
+      if (cleanSize === '38' || cleanSize.startsWith('38')) return '38';
+      if (cleanSize === '24' || cleanSize.startsWith('24')) return '24';
+    }
+
+    // Fallback to name with stricter pattern matching
+    if (name) {
+      const lowerName = name.toLowerCase();
+      if (/\b38["'\s]|38\s*inch|38in|\sr38\b/i.test(lowerName)) return '38';
+      if (/\b24["'\s]|24\s*inch|24in|\sr24\b/i.test(lowerName)) return '24';
+    }
+
+    return 'other';
+  };
+
   // Process results
   if (data) {
     for (const item of data) {
@@ -845,14 +900,12 @@ export async function getMarginAnalysis(dateRange?: DateRange): Promise<MarginDa
       monthlyData[monthKey].totalRevenue += lineRevenue;
       monthlyData[monthKey].totalCost += lineCost;
 
-      // Track 38" and 24" separately
-      const rimSize = product?.rim_size?.replace(/"/g, '').trim() || '';
-      const name = product?.name?.toLowerCase() || '';
-
-      if (rimSize.includes('38') || name.includes('38')) {
+      // Track 38" and 24" separately with improved detection
+      const tireSize = detectTireSize(product?.rim_size, product?.name);
+      if (tireSize === '38') {
         monthlyData[monthKey].revenue38 += lineRevenue;
         monthlyData[monthKey].cost38 += lineCost;
-      } else if (rimSize.includes('24') || name.includes('24')) {
+      } else if (tireSize === '24') {
         monthlyData[monthKey].revenue24 += lineRevenue;
         monthlyData[monthKey].cost24 += lineCost;
       }
@@ -905,8 +958,6 @@ export async function getRevenueTrend(dateRange?: DateRange): Promise<RevenueDat
 
   // Get current date info
   const now = new Date();
-  const currentYear = now.getFullYear();
-  const lastYear = currentYear - 1;
 
   // Determine date range - if provided, use it; otherwise use last 8 months
   let queryStartDate: string;
@@ -936,12 +987,18 @@ export async function getRevenueTrend(dateRange?: DateRange): Promise<RevenueDat
     console.error('Error fetching current year revenue:', currentError);
   }
 
-  // Query last year orders (same months)
+  // Calculate same date range for last year (subtract 1 year from start and end dates)
+  const startDateObj = new Date(queryStartDate);
+  const endDateObj = new Date(queryEndDate);
+  const lastYearStartDate = new Date(startDateObj.getFullYear() - 1, startDateObj.getMonth(), startDateObj.getDate());
+  const lastYearEndDate = new Date(endDateObj.getFullYear() - 1, endDateObj.getMonth(), endDateObj.getDate());
+
+  // Query last year orders (same date range, one year ago)
   const { data: lastYearData, error: lastError } = await supabase
     .from('sales_orders')
     .select('order_date, grand_total')
-    .gte('order_date', `${lastYear}-01-01`)
-    .lt('order_date', `${currentYear}-01-01`)
+    .gte('order_date', formatDateString(lastYearStartDate))
+    .lte('order_date', formatDateString(lastYearEndDate))
     .is('deleted_at', null)
     .in('status', ['confirmed', 'processing', 'shipped', 'delivered']);
 
@@ -988,8 +1045,10 @@ export async function getRevenueTrend(dateRange?: DateRange): Promise<RevenueDat
     }
   }
 
-  // Static monthly target (can be made dynamic later with monthly_targets table)
-  const MONTHLY_TARGET = 220000; // $220,000 per month
+  // TODO: Move to database table (monthly_targets) for dynamic updates
+  // For demo: Update this value here if target changes
+  // Long-term: Create `monthly_targets` table with year/month/target_amount columns
+  const MONTHLY_TARGET = 220000; // $220,000 per month (hardcoded - update here if needed)
 
   // Convert to array format
   const result: RevenueDataPoint[] = Object.keys(monthlyRevenue)
